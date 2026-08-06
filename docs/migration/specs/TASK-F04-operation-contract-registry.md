@@ -3,12 +3,33 @@
 - **Task ID:** F04
 - **Category:** Foundation
 - **Priority / MVP:** P0 / yes
-- **Status:** not-started
+- **Status:** tracked in [migration backlog](../31-migration-backlog.md) (not authoritative here)
 
 ## Purpose
 Define the single contract all analysis operations implement, and the registry that discovers
 them — so UI, workflow, and AI call operations uniformly and adding one never edits a central
 switch (fixes legacy H4: enum+switch dispatch, doc 03/07).
+
+## Registration mechanism — DECIDED (ADR-005): explicit per-module DI registration
+Operations register via **explicit, per-module DI registration** — **not** reflection assembly
+scan, attribute scan, static-constructor side effects, or a central manual list. This keeps the
+"no central switch" goal without introducing a new *implicit* mechanism (hidden reflection / global
+static registration). Pattern:
+
+```csharp
+public static class ImagingAnalysisModule {
+    public static IServiceCollection AddImagingAnalysis(this IServiceCollection services) {
+        services.AddAnalysisOperation<FlattenOperation>();
+        services.AddAnalysisOperation<RoughnessOperation>();
+        return services;
+    }
+}
+// Composition Root explicitly calls each module's Add*(); the registry queries registered ops.
+```
+
+Rules (from ADR-005): no central enum, no central switch, no operation-id branching, **no magic
+reflection auto-discovery**, module-based explicit registration, duplicate operation-id validation
+at registration, and **no execution of an unregistered operation**.
 
 ## User-facing behavior
 Internal — but it directly shapes how every operation later appears in menus (registry
@@ -62,7 +83,9 @@ Consider `Analysis.Abstractions` split later (doc 11).
 - A trivial reference operation (e.g. `NoOp`/`Invert`) implements the contract, registers, is
   discovered by `IOperationRegistry.ApplicableTo`, runs headless, emits provenance, and is
   unit-tested.
-- Registry self-registration works via DI/assembly scan; adding an op requires **no switch edit**.
+- Registration works via **explicit per-module DI** (ADR-005); adding an op edits only its module's
+  `Add*()`, never a switch/enum. Duplicate operation ids are rejected at registration; an
+  unregistered operation cannot be executed.
 - Arch test: no UI/viz/commercial references.
 
 ## Legacy parity

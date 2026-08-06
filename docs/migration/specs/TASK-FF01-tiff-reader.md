@@ -3,7 +3,7 @@
 - **Task ID:** FF01
 - **Category:** FileFormat
 - **Priority / MVP:** P0 / yes
-- **Status:** not-started
+- **Status:** tracked in [migration backlog](../31-migration-backlog.md) (not authoritative here)
 
 ## Purpose
 Read Park Systems PSIA-TIFF scan files into the new immutable domain model. TIFF is the primary
@@ -73,7 +73,7 @@ F01, F03, D01 exist.
 - **Must match:** pixel values, axis origin/step/count, channel unit, and catalogued metadata
   fields.
 - **Different:** domain types, no thumbnail in domain, explicit endianness/encoding.
-- **Comparison:** fixture files + legacy-derived golden values (T01/F06).
+- **Comparison:** fixture files + legacy-derived golden values (MV00/T01).
 
 ## Required test data
 Real PSIA-TIFF samples (legacy has samples under `NSISBuild/Sample`, `FW.UI.Common/Resource` —

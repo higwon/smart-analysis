@@ -57,7 +57,8 @@ Top-level structure:
 ## Status
 
 Preparation phase. See [docs/INDEX.md](docs/INDEX.md) → "Current status" for what is done,
-what is still open, and the recommended first implementation task.
+what is still open, and the recommended first implementation task (**`TASK-F00` — Repository &
+Solution Bootstrap**; the repo has no `.sln` yet, so F00 precedes everything).
 
 ## License / dependency policy (hard rules for new code)
 

@@ -77,9 +77,18 @@ with a rendering spike on real AFM curve sizes (see OPEN).
 | Message box / dialogs | custom (legacy `FW.UI.MessageBox` was themed wrappers) | — |
 
 ### 2D image rendering
-Keep **WPF `WriteableBitmap`** + a reimplemented palette (LUT) and MShape ROI overlay. This is
-already the legacy approach and is fully OSS. Consider SkiaSharp if a unified Skia pipeline
-proves simpler alongside ScottPlot.
+Keep **WPF `WriteableBitmap`** + a reimplemented palette (LUT). This is already the legacy approach
+and is fully OSS. Consider SkiaSharp if a unified Skia pipeline proves simpler alongside the chosen
+chart lib.
+
+**MVP scope split (feedback §5):** the MVP 2D view — **V02 "Basic 2D image view"** — is *render +
+palette + zoom/pan only, no ROI editing*, and depends only on V00/V01 (not on the ROI domain type
+D02). The **MShape/ROI vector overlay + interaction is V06** (post-MVP), depending on D02 + V02.
+This removes the MVP→non-MVP dependency while keeping full-image analysis (e.g. MVP Flatten runs on
+the whole image).
+
+**Library status:** the concrete chart/docking libraries are **Candidate** (doc 20, ADR-006) until
+the **V00** rendering spike promotes them via ADR. Do not install them into product code before then.
 
 ## Colormap / palette
 Reimplement the legacy 256-entry RGB palette LUT (doc 04 TIFF `ColorMap`) as a domain-free

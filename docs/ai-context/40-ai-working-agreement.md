@@ -11,6 +11,12 @@ it — do not silently diverge.
 4. Read the cited `docs/legacy-analysis/*` evidence and the cited legacy source files
    (`Project/File.cs:line`) for numeric-behavior baseline. Do **not** read the whole legacy repo.
 5. Do **not** modify the legacy repo. It is reference only.
+6. **Implement ONLY the one task you were given. Do not start the next task**, even if it seems
+   obvious. Report completion and stop (§14).
+7. **Task status** lives in the **migration backlog** (the single source of truth for status);
+   a spec defines scope/contract, not status (doc 41 §2). Set the task's backlog status on completion.
+8. **The first task is `TASK-F00` (bootstrap)** — no solution/projects exist yet, so F01+ cannot
+   run before F00. Do not skip it.
 
 ## 1. Product in one paragraph
 A headless-capable, UI/UX-redesigned, license-clean AFM analysis app. Validated numeric behavior
@@ -27,8 +33,12 @@ a validated engine, never around it. (Full: `docs/target-design/10-product-visio
 - A dependency-direction test must pass (doc 19). If your change would break it, your design is wrong.
 
 ## 3. Forbidden libraries
-DevExpress, SciChart, and any commercial-licensed core library. Approved OSS stack:
-`docs/target-design/20-library-policy.md`. Adding a dependency requires a license check + ADR.
+Dependencies are classified **Forbidden / Approved / Candidate** (doc 20, ADR-006):
+- **Forbidden** (DevExpress, SciChart, any commercial core lib) — never add.
+- **Approved** (ADR-confirmed OSS, e.g. MathNet, HelixToolkit, EF Core, MS.Extensions.*) — you may use.
+- **Candidate** (e.g. ScottPlot/OxyPlot, AvalonDock, CommunityToolkit.Mvvm, MVVM/theming, workspace
+  container, buffer strategy, LLM SDK) — **do NOT install into product code before its deciding
+  ADR** (e.g. the V00 spike promotes the chart lib). Adding/promoting a dependency = license check + ADR.
 
 ## 4. Coding conventions
 - C#, `net8.0` (windows target only where WPF is required; Domain/Analysis are platform-neutral
@@ -52,10 +62,15 @@ DevExpress, SciChart, and any commercial-licensed core library. Approved OSS sta
 - Buffers have one explicit owner; consumers get read-only views; copy only at boundaries.
 
 ## 7. Analysis operation rules
-- Every operation implements `IAnalysisOperation` and self-registers — **no central enum/switch**
-  (`docs/target-design/13-analysis-operation-contract.md`).
+- Every operation implements `IAnalysisOperation` and is registered by **explicit per-module DI**
+  (`services.AddAnalysisOperation<T>()` in a module's `AddXxxAnalysis(...)`, called from the
+  composition root) — **NOT** reflection/attribute assembly scan, static-ctor side effects, or a
+  central list. **No central enum, no central switch, no operation-id branching, no magic reflection
+  auto-discovery.** Duplicate ids are rejected at registration; unregistered operations cannot run.
+  (ADR-005, `docs/target-design/13-analysis-operation-contract.md`.)
 - Every run emits a `ProvenanceStep`. A result without provenance is a bug.
-- Operations are headless and unit-tested against a legacy numeric baseline (doc 19).
+- Operations are headless and unit-tested against the **frozen legacy golden baseline (MV00/T01)**,
+  which must exist **before** the operation is implemented (doc 19).
 
 ## 8. Provenance & persistence rules
 - Provenance is mandatory and structured (`docs/target-design/16-persistence-and-provenance.md`).
@@ -82,15 +97,23 @@ DevExpress, SciChart, and any commercial-licensed core library. Approved OSS sta
 
 ## 12. Core decisions you must NOT change on your own
 (Only change via an ADR + human review.)
-- The layer/dependency rules (doc 11).
-- The forbidden-library policy (doc 20).
-- The operation contract shape (doc 13).
-- The provenance record shape (doc 16).
+- The layer/dependency rules (doc 11, ADR-002).
+- The forbidden-library policy + Forbidden/Approved/Candidate classification (doc 20, ADR-001/006).
+- The operation contract shape + explicit-DI registration mechanism (doc 13, ADR-003/005).
+- The provenance record shape + mandatory-provenance/workspace (doc 16, ADR-004).
 - The "AI goes through the engine" guardrail (doc 14).
 
-## 13. Decisions still OPEN (verify per task, don't assume)
-Buffer abstraction (pooled vs plain); final XY-chart library; workspace container format; MVVM
-toolkit; native-stitch strategy. See each design doc's "OPEN" section and doc 41 "Open decisions".
+## 13. Decisions still OPEN (do NOT resolve them ad-hoc — ADR + human)
+Buffer strategy (F01-C); final XY-chart library (V00); workspace container format (P01); MVVM
+toolkit; native-stitch strategy; LLM SDK. These are **Candidate** (doc 20). See each design doc's
+"OPEN" section and doc 41 §4 "Open decisions". If your task hits an OPEN decision, resolve it with an
+ADR + human review — never silently pick.
+
+## Start-prompt checklist (what every implementation prompt must include)
+Each task's implementation prompt (see the spec's "Implementation-prompt draft" where present) must
+state: mandatory reading; the exact scope; what NOT to do; "do not resolve OPEN decisions ad-hoc";
+the completion-report format (§14, doc 41 §5); which docs to update; and **"do the current task
+only; do not start the next task."**
 
 ## 14. On completion — report this
 Use the format in `docs/ai-context/41-doc-maintenance-and-adr.md` → "Completion report":

@@ -43,9 +43,11 @@ coverage, method, and gaps.
 
 ### If you are about to implement a feature (AI session)
 1. [`ai-context/40-ai-working-agreement.md`](ai-context/40-ai-working-agreement.md) — mandatory.
-2. The feature's spec in [`migration/specs/`](migration/specs/).
-3. The design docs that spec references (domain model, operation contract, etc.).
-4. The relevant `legacy-analysis/*` doc for numeric-behavior baseline + file:line evidence.
+2. The **migration backlog** row for your task (status + dependencies — the status source of truth).
+3. The feature's spec in [`migration/specs/`](migration/specs/).
+4. The design docs that spec references (domain model, operation contract, etc.).
+5. The relevant `legacy-analysis/*` doc for numeric-behavior baseline + file:line evidence.
+6. Implement **only** that task; do not start the next one (doc 40 §0).
 
 ## 4. Document map
 
@@ -83,43 +85,49 @@ coverage, method, and gaps.
 | [31-migration-backlog](migration/31-migration-backlog.md) | Full task backlog, stable IDs, priority, MVP flag |
 | [32-dependency-roadmap](migration/32-dependency-roadmap.md) | Implementation order, dependency graph, MVP scope |
 | [33-work-spec-template](migration/33-work-spec-template.md) | Template for per-feature work specs |
-| [specs/](migration/specs/) | Foundation + representative high-priority work specs |
+| [specs/](migration/specs/) | Foundation + MVP-boundary work specs: F00, F01, F03, F04, F05, D01, W01, MV00, UX01, V00, FF01, A01, P01 |
 
 ### `ai-context/` — how AI sessions must work
 | Doc | Covers |
 |---|---|
 | [40-ai-working-agreement](ai-context/40-ai-working-agreement.md) | Mandatory common baseline for every implementation session |
 | [41-doc-maintenance-and-adr](ai-context/41-doc-maintenance-and-adr.md) | Which code change updates which doc; ADR process; completion report |
-| [adr/](ai-context/adr/) | Architecture Decision Records (numbered, append-only) |
+| [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..006 recorded (append-only) |
 
 ## 5. Current status
 
+Preparation docs are complete and **revised for pre-implementation consistency** (F00 bootstrap
+added; F01/F02 and V02/D02 dependency contradictions resolved; golden baseline (MV00) sequenced
+before analysis; explicit-DI operation registration; Forbidden/Approved/Candidate dependency
+classification; backlog = status source of truth; MVP split into 4 checkpoints).
+
 | Area | State |
 |---|---|
-| Existing-code analysis (6 subsystems) | ✅ Complete, file:line-cited |
-| Tech-debt register | ✅ Complete |
-| Target architecture principles | ✅ Drafted |
-| Domain model design | ✅ Drafted (some decisions marked OPEN) |
-| Analysis-operation contract | ✅ Drafted |
-| Workflow + AI layer design | ✅ Drafted |
-| Visualization strategy + library selection | ✅ Drafted (final lib pick pending a spike) |
-| Persistence + provenance design | ✅ Drafted |
-| UI/UX principles | ✅ Drafted |
-| ML candidates | ✅ Drafted |
-| Testing/validation strategy | ✅ Drafted |
+| Existing-code analysis (6 subsystems) + tech-debt register | ✅ Complete, file:line-cited |
+| Target design (architecture, domain, operation contract, workflow/AI, viz, persistence, UI/UX, ML, testing, library policy) | ✅ Drafted |
 | Feature inventory | ✅ Complete |
-| Migration backlog + roadmap | ✅ Drafted |
-| Work-spec template + seed specs | ✅ Foundation + representative specs written |
-| AI working agreement + ADRs | ✅ Drafted, seed ADRs recorded |
-| **New product code** | ❌ Not started (out of scope this phase) |
+| Migration backlog + dependency roadmap (F00, MV00, UX01, V06 added; contradictions resolved) | ✅ Revised |
+| Work-spec template + specs (F00, F01, F03, F04, F05, D01, W01, MV00, UX01, V00, FF01, A01, P01) | ✅ Written |
+| AI working agreement + doc-maintenance + ADRs (001–006) | ✅ Recorded |
+| Task status source of truth | ✅ Backlog (single SoT) |
+| **New product code / `.sln`** | ❌ Not started (out of scope this phase; first task = F00) |
 
-Decisions still marked **OPEN** live in the relevant design doc and in
-[`ai-context/41-doc-maintenance-and-adr.md`](ai-context/41-doc-maintenance-and-adr.md) →
-"Open decisions".
+Decisions still **OPEN** (Candidate, need an ADR) are centralized in
+[`ai-context/41-doc-maintenance-and-adr.md`](ai-context/41-doc-maintenance-and-adr.md) §4 →
+"Open decisions" (OD-1..OD-8).
 
 ## 6. Next action after this phase
 
-The recommended first implementation task is **`TASK-F01` (Foundation: units + axes + buffers)**
-— see [`migration/32-dependency-roadmap.md`](migration/32-dependency-roadmap.md) and the spec
-[`migration/specs/TASK-F01-units-axes-buffers.md`](migration/specs/TASK-F01-units-axes-buffers.md).
-Nothing else can be safely built until the unit/axis/buffer foundation exists.
+The recommended first implementation task is **`TASK-F00` (Repository & Solution Bootstrap)** —
+the repo has docs but no `.sln`/projects yet, so nothing (not even F01) can be built until the
+minimal solution skeleton exists. See
+[`migration/specs/TASK-F00-repository-solution-bootstrap.md`](migration/specs/TASK-F00-repository-solution-bootstrap.md)
+and [`migration/32-dependency-roadmap.md`](migration/32-dependency-roadmap.md).
+
+**First implementation-session prompt:**
+> Read `docs/ai-context/40-ai-working-agreement.md` first, then implement
+> `docs/migration/specs/TASK-F00-repository-solution-bootstrap.md`. Do only TASK-F00 — do **not**
+> start F01 or any other task. On completion, update the backlog status + INDEX and report per the
+> working-agreement completion format.
+
+Then F00 → **F01** (units/axes/buffers, checkpoints A/B/C) → F02/F03 → F04/F05 → … per the roadmap.

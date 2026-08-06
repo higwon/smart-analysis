@@ -3,7 +3,7 @@
 - **Task ID:** P01
 - **Category:** Persistence
 - **Priority / MVP:** P0 / yes
-- **Status:** not-started
+- **Status:** tracked in [migration backlog](../31-migration-backlog.md) (not authoritative here)
 
 ## Purpose
 Deliver the capability the legacy app entirely lacks (doc 06, Critical C3): a real workspace file

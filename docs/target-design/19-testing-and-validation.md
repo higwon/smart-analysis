@@ -45,11 +45,27 @@ Every operation's spec states which of its behaviors are parity-locked and which
 - Unit conversions: exact within representable precision.
 - Non-deterministic (ML) ops: metric-based acceptance, not exact match.
 
-## Establishing baselines (a foundation task)
-- Build a small **baseline harness** that drives the legacy `FW.Analysis.Calculate` classes on a
-  fixed input set and dumps JSON results (values + units) → checked into the new repo as golden
-  data (or an env-gated golden dir, mirroring legacy HDF5 tests, doc 04).
-- Each operation task then asserts new output == golden within tolerance.
+## Establishing baselines FIRST (baseline before new analysis code)
+
+The golden baseline must exist **before** a new operation is implemented, so parity is verifiable
+immediately (feedback §6). Order:
+
+```
+Legacy fixture selection → Legacy result generation/extraction → Freeze golden data
+→ new Parser/Domain/Operation → new operation → immediate parity test → UI
+```
+
+Responsibilities are split into distinct tasks (doc 31):
+
+| Task | Responsibility |
+|---|---|
+| **MV00** Legacy baseline extraction | Drive the legacy engine (UI-free `FW.Analysis.Calculate`) on fixtures; dump golden JSON (values+units); record legacy commit/branch, params, input hash, tolerance; normal + edge cases. **Decoupled from the new domain** → runs early, parallel with F00–F05. (Replaces the old F06.) |
+| **T01** Fixture + golden corpus | Curate/commit fixtures + freeze the golden data (or env-gate a golden dir, mirroring legacy HDF5 tests, doc 04). |
+| **T02** Per-operation parity test | Assert new operation output == golden within the op's tolerance; fail on excess. |
+| **MV01** Comparison report | Per-op report of matches vs intentional differences (ADR-backed). |
+
+Because MV00 drives the *legacy* engine (which has its own units), it does **not** depend on the new
+F01 unit model — the new parity test (T02) maps the recorded unit strings via the new unit system.
 
 ## What links where
 - Work spec (doc 33) → "Comparison method" + "Required test data" + "Must-match vs

@@ -15,6 +15,38 @@ directly reusable. But domain/numeric logic *embedded* inside such code is extra
 re-evaluated on its own (this is exactly the doc 03 reuse-grade exercise; e.g. the numeric core
 of `DeglitchProcess.DoRegionDeglitch` is extractable even though the class also touches SciChart).
 
+## Dependency classification: Forbidden / Approved / Candidate (ADR-006)
+
+Every dependency is exactly one of three states. **Implementation sessions may use Approved, must
+never add Forbidden, and must NOT install a Candidate into product code before its deciding ADR.**
+
+| State | Meaning | May a session use it? |
+|---|---|---|
+| **Forbidden** | Commercial / license-violating | Never |
+| **Approved** | ADR-confirmed, license-checked, isolation defined | Yes |
+| **Candidate** | Awaiting spike/comparison + ADR | No — needs a deciding ADR first |
+
+| Dependency | State | Note |
+|---|---|---|
+| DevExpress, SciChart, any commercial core lib | **Forbidden** | ADR-001 |
+| MathNet.Numerics | **Approved** | numerics; MIT |
+| HelixToolkit | **Approved** | 3D; MIT |
+| HDF.PInvoke / HDF5-CSharp | **Approved** | HDF5 import; BSD/MIT |
+| EF Core + SQLitePCLRaw (SQLCipher) | **Approved** | spectrum library; MIT |
+| TIFF library (TiffLibrary) | **Approved** | pending BitMiracle-vs-TiffLibrary confirm in FF01 |
+| Microsoft.Extensions.DependencyInjection | **Approved** | DI; MIT |
+| Microsoft.Extensions.Logging | **Approved** | logging; MIT |
+| xUnit, NetArchTest | **Approved** | tests/arch tests |
+| **ScottPlot 5 vs OxyPlot** (XY charts) | **Candidate** | decide via V00 spike + ADR |
+| **Dirkster.AvalonDock** (docking) | **Candidate** | ADR near U01 |
+| **MahApps.Metro / MaterialDesignInXAML** (theming) | **Candidate** | ADR |
+| **CommunityToolkit.Mvvm** (MVVM base) | **Candidate** | ADR (replaces DevExpress base) |
+| **Workspace container format** | **Candidate** | ADR before P01 |
+| **Buffer strategy** (Memory/ArrayPool/…) | **Candidate** | ADR in F01-C |
+| **LLM SDK** (assistant) | **Candidate** | ADR before AI02 |
+
+Promoting a Candidate → Approved requires an ADR and updates this table + doc 41 open-decisions.
+
 ## Legacy dependency inventory & disposition
 
 | Dependency | License | Legacy use | Disposition |

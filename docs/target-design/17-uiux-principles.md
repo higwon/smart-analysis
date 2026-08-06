@@ -61,6 +61,16 @@ the feature inventory (doc 30) under keep/improve/merge/drop.
 - **Spectrum compare** (legacy: `DXTabItem` overlap VM → SciChart series + DevExpress cursor grid)
   → comparison workspace with OSS curve view, cursor/annotation, and a results table.
 
+## Precedes UI implementation — TASK-UX01
+These principles are turned into a concrete Information Architecture by **`TASK-UX01` (Core AFM
+Workflow & Information Architecture)** — a **design task with no code** that must complete **before**
+`U01` (shell) and `U02` (image page). UX01 defines the active-context model, on-screen entity
+representation, journeys, before/after & comparison entry, parameter-panel behavior, operation
+states, AI intervention points, shell regions, dialog criteria, the MVP screen flow, and low-fidelity
+wireframes. See [`../migration/specs/TASK-UX01-core-workflow-ia.md`](../migration/specs/TASK-UX01-core-workflow-ia.md).
+Without UX01 first, an implementer would re-create the legacy tree/docking/dialog forest in a new
+library instead of the redesigned UX.
+
 ## Note on this phase
-No UI is built now. These principles feed the architecture, feature inventory, and roadmap so the
-UI can be implemented per-feature later without re-litigating IA each time.
+No UI is built now. These principles + UX01 feed the architecture, feature inventory, and roadmap so
+the UI can be implemented per-feature later without re-litigating IA each time.

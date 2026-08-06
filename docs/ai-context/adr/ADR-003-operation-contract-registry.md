@@ -3,7 +3,8 @@
 - **Status:** accepted
 - **Date:** 2026-08-06
 - **Deciders:** project owner
-- **Related:** doc 13, doc 03, doc 07 (H4)
+- **Related:** doc 13, doc 03, doc 07 (H4); **ADR-005 refines the registration mechanism**
+  (explicit per-module DI)
 
 ## Context
 Legacy operations are dispatched by ordinal enums (== tab index) and central `switch` statements
@@ -25,5 +26,6 @@ operation must not edit any shared enum/switch. Every run emits a `ProvenanceSte
 - Follow-up: F04 implements the contract + registry; A01 (Flatten) is the reference implementation.
 
 ## Compliance
-Registry is DI/assembly-scan based; a test asserts no operation requires a central switch edit and
-that every operation emits provenance. Contract shape is "must-not-change-alone" (doc 40 §12).
+Registry is populated by **explicit per-module DI registration** (ADR-005) — not assembly scan; a
+test asserts no operation requires a central switch edit and that every operation emits provenance.
+Contract shape is "must-not-change-alone" (doc 40 §12).

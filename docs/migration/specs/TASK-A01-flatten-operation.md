@@ -3,7 +3,12 @@
 - **Task ID:** A01
 - **Category:** Analysis
 - **Priority / MVP:** P0 / yes
-- **Status:** not-started
+- **Status:** tracked in [migration backlog](../31-migration-backlog.md) (not authoritative here)
+
+> **MVP scope note (feedback §5):** the MVP Flatten operates on the **full image** (the `Region`
+> parameter defaults to whole-image). It does **not** require the ROI domain type (D02) or ROI UI
+> (V06). Region-restricted flatten is a clean follow-up once D02/V06 exist. This keeps A01/V02 free
+> of a non-MVP dependency.
 
 ## Purpose
 The MVP's representative analysis operation: image Flatten, implemented on the operation contract
@@ -48,7 +53,9 @@ Z in the image channel unit; flatten operates on physical Z (via F01), preserves
 Primary is a `ScanImageDataset`; order ≥ 0 and small vs dimension; region within bounds.
 
 ## Dependencies
-- Depends on: F04 (contract), FF01 (a real image to flatten), F01/F03, D02 (ROI type).
+- Depends on: F04 (contract), FF01 (a real image to flatten), F01/F03, **MV00/T01** (golden data to
+  verify against). **D02 (ROI type) is NOT required for the MVP** — full-image flatten only;
+  region-restricted flatten depends on D02 and is a post-MVP follow-up.
 - Enables: U02 (flatten panel), T02 (parity test), and is the template for A03–A16.
 - Parallelizable with: other operations once F04 is stable.
 
@@ -81,7 +88,8 @@ Primary is a `ScanImageDataset`; order ≥ 0 and small vs dimension; region with
 - **Must match:** flattened Z values within relative tolerance (define, e.g. 1e-6) vs legacy
   `Whole/Line/SurfaceFlattenProcess`.
 - **Different:** return type (domain dataset), params typed, provenance recorded.
-- **Comparison:** F06 harness drives legacy processes on fixture images → golden Z arrays.
+- **Comparison:** the **MV00** legacy-baseline harness drives legacy processes on fixture images →
+  frozen golden Z arrays (T01); T02 asserts parity within tolerance.
 
 ## Required test data
 Scan-image fixtures with known tilt/curvature (from FF01/T01 corpus).
@@ -118,9 +126,12 @@ doc 13 (confirm example), doc 30 (mark flatten done), INDEX, T02 entry.
 > **Register** the operation so `IOperationRegistry.ApplicableTo(DataKind.ScanImage)` returns it —
 > **do not** add any enum/switch.
 >
-> **Tests:** unit-test each scope against golden Z arrays produced by the F06 baseline harness
-> from the legacy engine, within the tolerance stated in the spec. Add edge cases (empty/constant
-> image, region too small for order, NaN pixels).
+> **Tests:** unit-test each scope against the frozen golden Z arrays from **TASK-MV00** (the legacy
+> baseline, produced before this task), within the tolerance stated in the spec. Add edge cases
+> (empty/constant image, NaN pixels). MVP flatten is **full-image** — do not implement interactive
+> ROI here (that is D02/V06).
+>
+> **Do NOT start the next task.** Complete only A01.
 >
 > **On completion,** update the docs listed in the spec's "Docs to update" and report per the
 > working agreement's completion format. Flag any deviation from legacy behavior as an ADR.

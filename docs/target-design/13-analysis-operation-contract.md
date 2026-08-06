@@ -91,9 +91,13 @@ public interface IOperationRegistry {
 }
 ```
 
-Operations self-register (assembly scan / DI). UI builds menus from `ApplicableTo(...)`; the AI
-layer searches `All` by `Summary`/`Tags`. Adding an operation = add one class + register; no
-enum, no switch, no God-VM edit.
+Operations are registered by **explicit per-module DI** — **not** reflection/attribute assembly
+scan, static-ctor side effects, or a central list (**ADR-005**). Each analysis module exposes an
+`AddXxxAnalysis(IServiceCollection)` that calls `services.AddAnalysisOperation<TOp>()`; the
+composition root calls each module explicitly. UI builds menus from `ApplicableTo(...)`; the AI
+layer searches `All` by `Summary`/`Tags`. Adding an operation = add one class + one line in its
+module's `Add*()`; **no enum, no switch, no magic reflection, no God-VM edit.** Duplicate operation
+ids are rejected at registration; an unregistered operation cannot be executed.
 
 ## Worked examples (legacy → new)
 

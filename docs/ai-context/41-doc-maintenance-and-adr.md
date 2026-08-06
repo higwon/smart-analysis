@@ -15,13 +15,23 @@ session reports on completion. The docs are a **living development context**, no
 | Workflow / AI behavior | `target-design/14-workflow-and-ai-layer.md` |
 | A dependency added/removed | `target-design/20-library-policy.md` + THIRD-PARTY-NOTICES + ADR |
 | Any architecture/layer rule | `target-design/11-architecture-principles.md` + ADR (these are "must-not-change-alone") |
-| Task completed / re-scoped | `migration/31-migration-backlog.md` status, spec `Status:` field, `docs/INDEX.md` "Current status" |
+| Task completed / re-scoped | `migration/31-migration-backlog.md` **status (the SoT — §2)** and `docs/INDEX.md` "Current status"; the spec updates only its *scope*, never an authoritative status |
 | A legacy fact corrected | the relevant `legacy-analysis/*` doc (keep the `File.cs:line` citation) |
 
 Rule: **a PR/change that touches a documented contract but not its doc is incomplete.**
 
-## 2. Keeping docs and code in sync (detecting drift)
-- **Spec status fields** are the source of truth for task state; the backlog mirrors them.
+## 2. Task status — single Source of Truth (resolves feedback §12)
+- **The migration backlog (`docs/migration/31-migration-backlog.md`) is the single source of truth
+  for TASK STATUS** (`not-started | in-progress | done | superseded`). A **work spec is the source
+  of truth for a task's SCOPE/CONTRACT, not its status** — specs do not carry an authoritative
+  status field (they link back to the backlog).
+- **Why this way:** not every task has a spec, and status duplicated across N places drifts.
+  One status location (the backlog) + one scope location (the spec) removes the "which wins" ambiguity.
+- **Drift reduction:** status is written in exactly one place; the completion report (§5) updates the
+  backlog row and `INDEX.md` "Current status"; specs never restate status. A future `docs-check`
+  can assert no spec contains a contradicting status line.
+
+## 2b. Keeping docs and code in sync (detecting drift)
 - **Architecture tests** (doc 19) enforce the layer/dependency claims in doc 11 — if a doc says
   "Domain references no UI" the test proves it; a failing test means code *or* doc is wrong.
 - **Operation registry** is self-describing; a doc listing operations can be regenerated/checked
@@ -41,16 +51,25 @@ Rule: **a PR/change that touches a documented contract but not its doc is incomp
 - Template: [`adr/ADR-000-template.md`](adr/ADR-000-template.md).
 
 ## 4. Open decisions (central list — keep current)
-| ID | Decision | Where | Status |
-|---|---|---|---|
-| OD-1 | Buffer abstraction: pooled vs plain `Memory<T>` | doc 12/F01 | open |
-| OD-2 | Final XY chart library (ScottPlot vs OxyPlot) | doc 15/V00 | open |
-| OD-3 | Workspace container format | doc 16/P01 | open |
-| OD-4 | MVVM toolkit (CommunityToolkit.Mvvm assumed) | doc 11 | open |
-| OD-5 | Native stitch: wrap vs reimplement | doc 20/A17 | open |
-| OD-6 | LLM provider/hosting for the assistant | doc 14 | open |
+These are **Candidate** decisions (doc 20, ADR-006): do not resolve ad-hoc; each needs an ADR.
 
-Resolving one = add an ADR + set status here to "decided (ADR-NNN)".
+| ID | Decision | Where (task) | Status |
+|---|---|---|---|
+| OD-1 | Buffer strategy: plain array / `Memory<T>` / `IMemoryOwner<T>` / `ArrayPool<T>` / mmap | doc 12 / F01-C | open (ADR required) |
+| OD-2 | Final XY chart library (ScottPlot vs OxyPlot) | doc 15 / V00 | open (spike + ADR) |
+| OD-3 | Workspace container format | doc 16 / P01 | open |
+| OD-4 | MVVM toolkit (CommunityToolkit.Mvvm assumed) | doc 11 / U01 | open |
+| OD-5 | Native stitch: wrap vs reimplement | doc 20 / A17 | open |
+| OD-6 | LLM provider/hosting for the assistant | doc 14 / AI02 | open |
+| OD-7 | Provenance types placement (Domain vs Workflow) | doc 16 / F04+F05 | open |
+| OD-8 | Docking library (AvalonDock) meets multi-doc/auto-hide needs | doc 15 / U01 | open |
+
+Decided so far (ADRs): commercial-lib ban (ADR-001), layered architecture (ADR-002), operation
+contract+registry (ADR-003), mandatory provenance+workspace (ADR-004), explicit-DI operation
+registration (ADR-005), dependency classification (ADR-006).
+
+Resolving an OD = add an ADR + set status here to "decided (ADR-NNN)" + update the owning design doc
++ (for a dependency) move it Candidate→Approved in doc 20.
 
 ## 5. Completion report (paste at end of every implementation session)
 ```

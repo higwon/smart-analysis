@@ -16,7 +16,9 @@ never guess. Keep specs in [`specs/`](specs/) named `TASK-<ID>-<slug>.md`.
 - **Category:** Foundation | Domain | FileFormat | Analysis | Workspace | Persistence |
   Visualization | UI | AI | ML | Testing | MigrationValidation | Documentation
 - **Priority / MVP:** P0..P3 / yes|no
-- **Status:** not-started | in-progress | done | superseded-by-<id>
+- **Status:** tracked in the [migration backlog](31-migration-backlog.md) — the backlog is the
+  single source of truth for status (doc 41 §2). Do **not** restate an authoritative status here;
+  this spec is the source of truth for **scope/contract** only.
 
 ## Purpose
 Why this exists (1–3 sentences).
@@ -75,7 +77,7 @@ Concrete, checkable conditions.
 ## Legacy parity
 - **Must match legacy (within tolerance):** which outputs + tolerance
 - **Intentionally different from legacy:** what and why
-- **Comparison method:** how (golden data via F06 harness, round-trip, etc.)
+- **Comparison method:** how (frozen golden data from MV00/T01, round-trip, etc.)
 
 ## Required test data
 Fixtures / golden datasets needed (doc 19).
