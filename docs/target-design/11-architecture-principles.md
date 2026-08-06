@@ -13,7 +13,7 @@ over-fragment early (no empty projects).
 ```
 SmartAnalysis.Domain          // units, axes, buffers, datasets, channels, metadata, PROVENANCE, ROI — no UI/IO/viz
 SmartAnalysis.Analysis        // operation contract + registry + operations (folders: Image/Spectroscopy/Profile/Pifm) — Domain only
-SmartAnalysis.Infrastructure  // file formats + persistence + external (namespaces FileFormats/Persistence/External) — Domain only
+SmartAnalysis.Infrastructure  // file formats + persistence + external (namespaces FileFormats/Persistence/External) — Domain, Application (implements Application Ports)
 SmartAnalysis.Visualization   // viz adapter interfaces + render-input models (no concrete chart lib) — Domain only
 SmartAnalysis.Application     // workspace, active context, use-cases, PORTS (interfaces) — Domain/Analysis/Visualization (NOT Infrastructure)
 SmartAnalysis.UI              // WPF views + view-models + first-party DesignSystem + concrete WPF viz impl (MVP) — Application/Visualization (NOT Infrastructure)
@@ -36,7 +36,7 @@ Namespaces mirror the future split so a split changes references, not code.
 Initial (consolidated) structure — **dependency-inverted; App is the composition root (ADR-009):**
 ```
 Analysis        → Domain
-Infrastructure  → Domain          // FileFormats + Persistence + External live here; Persistence → Domain only
+Infrastructure  → Domain, Application     // FileFormats + Persistence + External; references Application ONLY to implement Application-owned Ports (ADR-010)
 Visualization   → Domain(read-only render inputs)
 Application     → Domain, Analysis, Visualization        // Ports (interfaces) — NOT Infrastructure
 UI              → Application, Visualization              // uses Use Cases only — NOT Infrastructure
@@ -65,12 +65,20 @@ Visualization.Wpf → Visualization(adapter)   // concrete lib lives ONLY here
 A dependency-direction test (a custom check in F00; full NetArchTest matrix in F02) should fail the
 build on violation — see doc 19.
 
-### Ports & Adapters — interface placement (ADR-009)
+### Ports & Adapters — interface placement (ADR-009 + ADR-010)
+- **Dependency-inversion direction (ADR-010):**
+  **`Infrastructure` may reference `Application` — only to implement Application-owned Ports.**
+  **`Application` must never reference `Infrastructure`.** The reference is one-way (Application ⊄
+  Infrastructure), so there is no cycle. Infrastructure depends on the public **Port contracts**, not
+  on Application internals, and does **not** own Use Cases / orchestration (those stay in Application).
 - **App = composition root.** Only `App` references `Infrastructure`; it wires implementations to
   Ports via DI (`services.AddSingleton<IWorkspaceRepository, WorkspaceRepository>()`).
 - **Application** defines **Use Cases + Ports** (interfaces the use-cases need). **Infrastructure**
   implements them (adapters). **UI** uses Application Use Cases only — never a file system, SQLite,
   or TIFF parser directly. Swapping an Infrastructure implementation requires no Application change.
+- **Port location ⇒ Infrastructure references (ADR-010):** an adapter implementing a **Domain Port**
+  references `Domain` only; an adapter implementing an **Application Port** references `Application`
+  and `Domain`.
 - **Interface placement:**
   - **Domain** — abstractions that are part of the domain meaning (pure contracts tied to the
     analysis model / dataset identity; technology-independent).

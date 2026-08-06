@@ -13,7 +13,7 @@ session reports on completion. The docs are a **living development context**, no
 | Provenance / persistence schema | `target-design/16-persistence-and-provenance.md` (+ bump schema version) + ADR |
 | Visualization adapter / library pick | `target-design/15-visualization-strategy.md`, `20-library-policy.md` + ADR |
 | Design system (tokens/styles/theme) | `target-design/21-design-system.md` + ADR if ADR-008 policy changes |
-| Solution/project structure + reference direction | `target-design/11-architecture-principles.md` + ADR (ADR-007 structure; ADR-009 reference direction / composition root) |
+| Solution/project structure + reference direction | `target-design/11-architecture-principles.md` + ADR (ADR-007 structure; ADR-009 dependency inversion / composition root; ADR-010 Infrastructure → Application for Ports) |
 | Product Epic scope/order | `migration/35-product-epics-roadmap.md` + backlog Task↔Epic mapping |
 | Workflow / AI behavior | `target-design/14-workflow-and-ai-layer.md` |
 | A dependency added/removed | `target-design/20-library-policy.md` + THIRD-PARTY-NOTICES + ADR |
@@ -100,7 +100,8 @@ Decided so far (ADRs): commercial-lib ban (ADR-001), layered architecture (ADR-0
 contract+registry (ADR-003), mandatory provenance+workspace (ADR-004), explicit-DI operation
 registration (ADR-005), dependency classification (ADR-006), **initial solution structure +
 provenance-in-Domain (ADR-007)**, **first-party design system / no external theme (ADR-008)**,
-**dependency inversion / App-composition-root (ADR-009, amends ADR-007's reference direction)**.
+**dependency inversion / App-composition-root (ADR-009, amends ADR-007), completed by ADR-010
+(`Infrastructure → Application` allowed for Port implementation; `Application → Infrastructure` forbidden)**.
 
 Resolving an OD = add an ADR + set status here to "decided (ADR-NNN)" + update the owning design doc
 + (for a dependency) move it Candidate→Approved in doc 20.

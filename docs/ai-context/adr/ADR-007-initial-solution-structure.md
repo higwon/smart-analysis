@@ -45,7 +45,9 @@ Adopt **Plan B**. F00 creates **8 projects**:
 | `SmartAnalysis.Tests` | one test project initially: unit + **architecture** tests | the projects under test |
 
 **Provenance types live in `Domain`** (every dataset/artifact carries provenance). This resolves
-OD-7 and means **`Persistence` (in Infrastructure) depends on `Domain` only — not on Workflow**.
+OD-7 and means **`Persistence` (in Infrastructure) does not depend on `Workflow`**. (Infrastructure
+references `Domain` and — per ADR-010 — `Application`, to implement Application-owned Ports; never
+`Workflow`.)
 
 **Deferred projects (NOT created at F00), with split triggers:**
 - `SmartAnalysis.Workflow` — when the workflow engine (AI01) begins; until then simple use-cases

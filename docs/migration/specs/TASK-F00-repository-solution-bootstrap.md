@@ -32,10 +32,11 @@ None. Internal scaffolding.
   `SmartAnalysis.Domain`, `SmartAnalysis.Analysis`, `SmartAnalysis.Infrastructure`,
   `SmartAnalysis.Visualization`, `SmartAnalysis.Application`, `SmartAnalysis.UI`,
   `SmartAnalysis.App`, `SmartAnalysis.Tests`.
-- **Project reference skeleton** per ADR-007 + **ADR-009** (dependency-inverted; App is the
-  composition root): `Analysis → Domain`, `Infrastructure → Domain`, `Visualization → Domain`,
-  `Application → {Domain, Analysis, Visualization}` (**NOT Infrastructure**),
-  `UI → {Application, Visualization}` (**NOT Infrastructure**),
+- **Project reference skeleton** per ADR-007 + **ADR-009/010** (dependency-inverted; App is the
+  composition root): `Analysis → Domain`, `Visualization → Domain`,
+  `Infrastructure → {Domain, Application}` (**references Application only to implement
+  Application-owned Ports — ADR-010**), `Application → {Domain, Analysis, Visualization}`
+  (**NOT Infrastructure**), `UI → {Application, Visualization}` (**NOT Infrastructure**),
   `App → {UI, Application, Infrastructure}` (composition root wires adapters → Ports),
   `Tests → (under test)`.
 - Namespace folders that mirror the future split (`Analysis/Image|Spectroscopy|Profile|Pifm`,
@@ -82,13 +83,17 @@ n/a.
 
 ## Done-when (acceptance — Architecture Gate, ADR-007 + ADR-009)
 - `dotnet build` succeeds on the new `.sln` with exactly the 8 ADR-007 projects.
-- Project references follow the **dependency-inverted** direction (ADR-009); the forbidden edges are
-  **absent**, specifically:
+- Project references follow the **dependency-inverted** direction (ADR-009/010); the forbidden edges
+  are **absent** and the required one is present, specifically:
   - **`Application` does NOT reference `Infrastructure`**; **`UI` does NOT reference `Infrastructure`**.
-  - `Analysis` does not reference `Infrastructure`; `Visualization` does not reference `UI`;
-    `Infrastructure` does not reference `UI`.
+  - **`Infrastructure → Application` IS allowed** (to implement Application-owned Ports, ADR-010);
+    `Infrastructure` references `{Domain, Application}` and no other product project, and **does not
+    reference `UI`**.
+  - `Analysis` does not reference `Infrastructure`; `Visualization` does not reference `UI`.
   - `Domain` references no other product project; `Analysis` references `Domain` only.
-  - Only **`App`** (composition root) references `Infrastructure`.
+  - Only **`App`** (composition root) references `Infrastructure` and registers its adapters in DI.
+  - **No circular ProjectReference** (Application ⊄ Infrastructure keeps `Infrastructure → Application`
+    one-way).
 - **Minimal architecture guard passes** — verify the reference graph does not violate the above
   (primary: the project references themselves don't create a forbidden edge; optionally a small
   reference-graph test / MSBuild check). **Do NOT** install NetArchTest or any Candidate package —
@@ -138,8 +143,9 @@ solution` under EPIC-MVP01, linking this spec; verify the ID matches the backlog
 > warnings-as-errors for Domain/Analysis), and one test project + one-line role descriptions.
 >
 > Create exactly the **8 ADR-007 projects** with the **dependency-inverted** reference skeleton
-> (ADR-009): `App` is the composition root and the **only** project referencing `Infrastructure`;
-> `Application` and `UI` do **not** reference `Infrastructure`. Add `Directory.Build.props`,
+> (ADR-009/010): `App` is the composition root and the **only** project referencing `Infrastructure`;
+> `Application` and `UI` do **not** reference `Infrastructure`; **`Infrastructure → Application` IS
+> allowed** (to implement Application-owned Ports), one-way, no cycle. Add `Directory.Build.props`,
 > namespace folders for the future per-area split, a test project, and a **minimal architecture guard**
 > (the reference graph must not create a forbidden edge; Domain/Analysis reference no
 > UI/viz/commercial assemblies) — the architecture gate.

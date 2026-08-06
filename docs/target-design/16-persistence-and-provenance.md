@@ -10,7 +10,9 @@ Persistence follows dependency inversion:
 - **Ports (interfaces)** live in **Application** (e.g. `IWorkspaceRepository`, file-open, settings)
   — or in **Domain** if they are pure domain contracts tied to dataset identity.
 - **Adapters (implementations)** live in **Infrastructure** (`Persistence` namespace) — EF Core /
-  SQLite / file-based workspace store, TIFF/HDF5/PS-PPT readers, JSON serialization.
+  SQLite / file-based workspace store, TIFF/HDF5/PS-PPT readers, JSON serialization. To implement an
+  **Application-owned Port**, **Infrastructure references `Application`** (and `Domain`) — one-way,
+  no cycle (ADR-010). A Domain-only Port adapter references `Domain` only.
 - **App** (composition root) is the **only** project that references Infrastructure and wires
   implementations to Ports via DI. **Application and UI never reference Infrastructure**, so a
   persistence implementation can be swapped without touching use-cases or UI.

@@ -84,5 +84,5 @@ Solution Bootstrap**; the repo has no `.sln` yet, so F00 precedes everything).
   internal semantic tokens; UI color ≠ AFM data colormap. See
   [docs/target-design/21-design-system.md](docs/target-design/21-design-system.md) (ADR-008).
 - **Initial solution = 8 consolidated projects** (ADR-007); **dependency-inverted — `App` is the
-  composition root; `Application`/`UI` do not reference `Infrastructure`** (ADR-009). Split later
-  when a real reason appears.
+  composition root; `Application`/`UI` do not reference `Infrastructure`; `Infrastructure` references
+  `Application` only to implement its Ports** (ADR-009/010). Split later when a real reason appears.

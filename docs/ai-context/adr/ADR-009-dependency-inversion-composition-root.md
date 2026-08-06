@@ -1,9 +1,15 @@
 # ADR-009 — Dependency inversion: App is the composition root (Application ⊄ Infrastructure)
 
-- **Status:** accepted — **amends ADR-007** (reference direction only)
+- **Status:** accepted — **amends ADR-007**; **clarified by
+  [ADR-010](ADR-010-infrastructure-references-application-ports.md)** (adds `Infrastructure → Application`)
 - **Date:** 2026-08-06
 - **Deciders:** project owner
-- **Related:** ADR-007 (initial structure — amended here), doc 11, doc 16, F00 spec
+- **Related:** ADR-007 (initial structure — amended here), ADR-010 (completes the table), doc 11, doc 16, F00 spec
+
+> ⚠ **Clarified by ADR-010:** the table below shows `Infrastructure → Domain`; this is **completed**
+> to `Infrastructure → Domain, Application` — an Infrastructure adapter that implements an
+> **Application-owned Port** must reference Application. `Application → Infrastructure` stays
+> forbidden; the reference is one-way, so there is no cycle.
 
 ## Context
 ADR-007 kept the 8-project consolidated structure but listed `Application → Infrastructure` as a
@@ -18,7 +24,7 @@ corrected** here, following Ports & Adapters / dependency inversion.
 ### Corrected project reference direction
 ```
 Analysis        → Domain
-Infrastructure  → Domain
+Infrastructure  → Domain, Application       (Application added — implements Application Ports; ADR-010)
 Visualization   → Domain
 
 Application     → Domain, Analysis, Visualization          (NOT Infrastructure)
