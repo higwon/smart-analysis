@@ -22,28 +22,39 @@ None. Internal scaffolding.
 - Output: a buildable empty solution with the minimal MVP projects, common build props, a test
   project base, and a short README/comment per project describing its role.
 
+> **F00 is an Architecture Gate, not just "make a solution" (ADR-007).** It establishes AND verifies
+> the initial project boundaries. The exact project set is decided by **ADR-007** (the consolidated
+> 8-project structure), not invented here.
+
 ## Scope — INCLUDE only
 - New `.sln`.
-- The **minimum** projects for the MVP path (recommended initial set; confirm names in F02/ADR):
-  `SmartAnalysis.Domain`, `SmartAnalysis.Analysis`, `SmartAnalysis.FileFormats`,
-  `SmartAnalysis.Workflow` (may merge with Analysis initially), `SmartAnalysis.Persistence`,
-  `SmartAnalysis.Visualization` (adapter), `SmartAnalysis.Application`, `SmartAnalysis.UI`,
-  `SmartAnalysis.App`, plus one test project (`SmartAnalysis.Tests` or per-layer).
-- Minimal **project reference skeleton** that respects the dependency direction (doc 11) — e.g.
-  `Analysis → Domain`, `FileFormats → Domain`, `App → UI → Application`.
-- Common build settings via `Directory.Build.props`: `net8.0`/`net8.0-windows` as appropriate,
-  `<Nullable>enable</Nullable>`, `<TreatWarningsAsErrors>` for Domain/Analysis, `LangVersion`.
-- Test project base referencing the test framework (Candidate: xUnit — do not add other libs).
-- A one-paragraph README or top comment per project stating its responsibility.
+- The **8 initial projects (ADR-007)** — no more:
+  `SmartAnalysis.Domain`, `SmartAnalysis.Analysis`, `SmartAnalysis.Infrastructure`,
+  `SmartAnalysis.Visualization`, `SmartAnalysis.Application`, `SmartAnalysis.UI`,
+  `SmartAnalysis.App`, `SmartAnalysis.Tests`.
+- **Project reference skeleton** per ADR-007 / doc 11: `Analysis → Domain`, `Infrastructure → Domain`,
+  `Visualization → Domain`, `Application → {Domain, Analysis, Infrastructure, Visualization}`,
+  `UI → {Application, Visualization}`, `App → UI`, `Tests → (under test)`.
+- Namespace folders that mirror the future split (`Analysis/Image|Spectroscopy|Profile|Pifm`,
+  `Infrastructure/FileFormats|Persistence|External`).
+- Common build settings via `Directory.Build.props`: `net8.0` (Domain/Analysis/Infrastructure
+  platform-neutral where possible) / `net8.0-windows` (Visualization/UI/App), `<Nullable>enable</Nullable>`,
+  `<TreatWarningsAsErrors>` for Domain/Analysis, `LangVersion`.
+- Test project referencing xUnit (**Approved**, doc 20) — no other libs.
+- A **minimal architecture guard** (the gate): a first architecture test (e.g. NetArchTest) asserting
+  Domain and Analysis reference **no** UI/WPF/visualization/commercial assemblies. (Full
+  dependency-matrix + DI composition is **F02**.)
+- A one-line role description per project.
 
 ## Scope — DO NOT do in F00
-- ❌ Do **not** add any commercial library.
+- ❌ Do **not** add any commercial library or any **Candidate** dependency (doc 20) — no chart lib,
+  no AvalonDock, no MVVM toolkit, no external theme.
 - ❌ Do **not** implement Domain types, analysis algorithms, parsers, or UI features.
-- ❌ Do **not** create *every* eventual project (only the MVP-minimal set; expand later per doc 11).
-- ❌ Do **not** finalize all DI wiring (that is **F02**).
-- ❌ Do **not** implement Architecture Tests (that is **F02**).
-- ❌ Do **not** select the UI framework beyond "WPF for UI/App" scaffolding, or install a
-  visualization library (that is **V00**).
+- ❌ Do **not** create the **deferred** projects (Workflow, AI, ML, Visualization.Wpf, per-domain
+  Analysis/Infrastructure splits) — only the 8 above (ADR-007).
+- ❌ Do **not** finalize full DI wiring or the full architecture-test matrix (that is **F02**).
+- ❌ Do **not** install a visualization library (that is **V00**) or a design-system/theme
+  (that is **UIX03**).
 - ❌ Do **not** fix the persistence format or add an AI SDK.
 
 ## Parameters / Units / Preconditions
@@ -66,11 +77,14 @@ The repository root (`smart-analysis/`), alongside `docs/`. Product code lives o
 ## Performance
 n/a.
 
-## Done-when (acceptance)
-- `dotnet build` succeeds on the new `.sln` with the MVP-minimal projects.
-- Project references follow the allowed direction (doc 11); no forbidden edge exists yet.
+## Done-when (acceptance — Architecture Gate)
+- `dotnet build` succeeds on the new `.sln` with exactly the 8 ADR-007 projects.
+- Project references follow the ADR-007 direction; no forbidden edge exists.
+- **The minimal architecture guard test passes**: Domain and Analysis reference no
+  UI/WPF/visualization/commercial assemblies.
 - `Nullable` enabled; warnings-as-errors on Domain/Analysis.
-- No commercial/visualization/AI package references anywhere.
+- No commercial/visualization/AI/theme or Candidate package references anywhere.
+- Namespace folders for the future per-area split exist.
 - Each project has a one-line role description.
 
 ## Legacy parity
@@ -112,11 +126,17 @@ solution` under EPIC-MVP01, linking this spec; verify the ID matches the backlog
 > reference skeleton respecting doc 11, `Directory.Build.props` (net8.0 targets, Nullable enable,
 > warnings-as-errors for Domain/Analysis), and one test project + one-line role descriptions.
 >
-> **Do NOT** start F01 or any other task; add any commercial library or visualization/AI package;
-> install any Candidate dependency; implement Domain types/algorithms/parsers/UI; wire full DI; write
-> architecture tests; pick a chart library; or finalize any OPEN decision. (Those are F01/F02/V00/later.)
+> Create exactly the **8 ADR-007 projects** with the reference skeleton, `Directory.Build.props`,
+> namespace folders for the future per-area split, a test project, and a **minimal architecture guard
+> test** (Domain/Analysis reference no UI/viz/commercial assemblies) — the architecture gate.
 >
-> **Done-when:** `dotnet build` succeeds; references follow doc 11; no forbidden/Candidate packages.
+> **Do NOT** start F01 or any other task; create the deferred projects (Workflow/AI/ML/Visualization.Wpf);
+> add any commercial library or **Candidate** dependency (chart lib, AvalonDock, MVVM toolkit, theme);
+> implement Domain types/algorithms/parsers/UI; wire full DI or the full arch-test matrix (F02); pick
+> a chart library (V00); implement the design system (UIX03); or finalize any OPEN decision.
+>
+> **Done-when:** `dotnet build` succeeds; references follow ADR-007; the minimal arch guard passes;
+> no forbidden/Candidate packages.
 >
 > When done: update this spec's "Docs to update", set the backlog F00 status to **`review`**, commit
 > (Conventional Commits), push, and open a **Draft PR** that `Closes` the F00 issue with the PR

@@ -70,11 +70,11 @@ with a rendering spike on real AFM curve sizes (see OPEN).
 
 | Need | OSS option | License |
 |---|---|---|
-| Docking (document/tool windows) | **Dirkster.AvalonDock** | MS-PL/BSD, no deps |
-| Theming | MahApps.Metro / MaterialDesignInXAML | MIT |
-| Data grids / property panels | WPF built-in `DataGrid`; or community grids | — |
-| MVVM base (replaces DevExpress `BaseViewModel`) | **CommunityToolkit.Mvvm** | MIT |
-| Message box / dialogs | custom (legacy `FW.UI.MessageBox` was themed wrappers) | — |
+| Docking (document/tool windows) | **Dirkster.AvalonDock** — *functionality only; built-in theme NOT used* | MS-PL/BSD, no deps |
+| **Theming / appearance** | **First-party design system** (doc 21, ADR-008) — **no external theme** | — |
+| Data grids / property panels | WPF built-in `DataGrid`; or community grids (restyled) | — |
+| MVVM base (replaces DevExpress `BaseViewModel`) | **CommunityToolkit.Mvvm** (functionality only) | MIT |
+| Message box / dialogs | custom (styled by the design system) | — |
 
 ### 2D image rendering
 Keep **WPF `WriteableBitmap`** + a reimplemented palette (LUT). This is already the legacy approach
@@ -90,10 +90,14 @@ the whole image).
 **Library status:** the concrete chart/docking libraries are **Candidate** (doc 20, ADR-006) until
 the **V00** rendering spike promotes them via ADR. Do not install them into product code before then.
 
-## Colormap / palette
-Reimplement the legacy 256-entry RGB palette LUT (doc 04 TIFF `ColorMap`) as a domain-free
-`Colormap` used by both image and surface render inputs. Export path (image/3D) must be rebuilt
-free of SciChart/DevExpress (legacy export is grade E, doc 04).
+## Colormap / palette — separate from the UI theme (ADR-008, doc 21)
+Reimplement the legacy 256-entry RGB palette LUT (doc 04 TIFF `ColorMap`) as a **domain-owned**
+`Colormap` used by both image and surface render inputs. **The AFM data colormap is NOT a UI theme
+color and must not change with Light/Dark** — switching theme never alters the data's appearance or
+meaning. Chart/image **chrome** (axes, grid, labels, cursors, ROI border/fill) IS themed — it uses
+the design-system **chart/image UI tokens** (doc 21 §3), kept in a separate dictionary from the data
+colormap so the two can never be confused. Export path (image/3D) must be rebuilt free of
+SciChart/DevExpress (legacy export is grade E, doc 04).
 
 ## OPEN decisions (resolve via a spike + ADR)
 - ScottPlot vs OxyPlot final pick — spike with real curve/spectrum sizes and interaction needs.

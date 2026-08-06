@@ -37,8 +37,14 @@ the feature inventory (doc 30) under keep/improve/merge/drop.
    approve → execute (doc 14). Manual and AI paths converge on the same operations.
 9. **Fewer screen/dialog transitions.** Merge redundant dialogs; prefer contextual panels over
    window hops.
-10. **Theme-aware, framework-swappable UI.** WPF first; no control-suite lock-in so the shell can
-    evolve (doc 11 framework independence).
+10. **First-party design system is the only visual standard (ADR-008, doc 21).** Light/Dark are
+    internal semantic-token dictionaries — **no external application/control-suite theme**. External
+    functional controls (AvalonDock, chart lib) are restyled to the design system; only their
+    behavior is used. **UI color ≠ AFM data colormap** — switching theme never changes the data.
+    WPF first; no control-suite lock-in so the shell can evolve (doc 11).
+11. **Visual design precedes UI code.** The IA (UX01) and the design system + approved MVP visuals
+    (UIX01 → UIX02 → user approval → UIX03) are settled **before** U01/U02; the UI realizes an
+    approved design, never invents one (doc 21 §9, doc 32).
 
 ## Keep / Improve / Merge / Remove (lens applied per feature in doc 30)
 

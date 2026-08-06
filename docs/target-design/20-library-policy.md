@@ -37,10 +37,10 @@ never add Forbidden, and must NOT install a Candidate into product code before i
 | Microsoft.Extensions.DependencyInjection | **Approved** | DI; MIT |
 | Microsoft.Extensions.Logging | **Approved** | logging; MIT |
 | xUnit, NetArchTest | **Approved** | tests/arch tests |
-| **ScottPlot 5 vs OxyPlot** (XY charts) | **Candidate** | decide via V00 spike + ADR |
-| **Dirkster.AvalonDock** (docking) | **Candidate** | ADR near U01 |
-| **MahApps.Metro / MaterialDesignInXAML** (theming) | **Candidate** | ADR |
-| **CommunityToolkit.Mvvm** (MVVM base) | **Candidate** | ADR (replaces DevExpress base) |
+| **ScottPlot 5 vs OxyPlot** (XY charts) | **Candidate** | decide via V00 spike + ADR; chrome restyled |
+| **Dirkster.AvalonDock** (docking **functionality**) | **Candidate** | ADR near U01; **built-in theme NOT used** |
+| MahApps.Metro / MaterialDesignInXAML / HandyControl / any external **application theme** | **Forbidden as product theme** | first-party design system only (ADR-008) |
+| **CommunityToolkit.Mvvm** (MVVM **functionality**) | **Candidate** | ADR; functionality only, no appearance |
 | **Workspace container format** | **Candidate** | ADR before P01 |
 | **Buffer strategy** (Memory/ArrayPool/…) | **Candidate** | ADR in F01-C |
 | **LLM SDK** (assistant) | **Candidate** | ADR before AI02 |
@@ -65,20 +65,23 @@ Promoting a Candidate → Approved requires an ADR and updates this table + doc 
 
 ## New-code recommended stack (all OSS)
 
-| Concern | Choice | License |
-|---|---|---|
-| MVVM base (replaces DevExpress) | CommunityToolkit.Mvvm | MIT |
-| Docking shell (replaces DevExpress docking) | Dirkster.AvalonDock | MS-PL/BSD |
-| Theming | MahApps.Metro / MaterialDesignInXAML | MIT |
-| XY charts (replaces SciChart 2D) | ScottPlot 5 (SkiaSharp) | MIT |
-| 3D surface (replaces SciChart3D) | HelixToolkit | MIT |
-| 2D image | WPF `WriteableBitmap` (+ optional SkiaSharp) | — |
-| Numerics | MathNet.Numerics | MIT |
-| DI | Microsoft.Extensions.DependencyInjection | MIT |
-| Logging | Microsoft.Extensions.Logging | MIT |
-| Tests / arch tests | xUnit + NetArchTest | MIT/Apache |
+| Concern | Choice | License | Note |
+|---|---|---|---|
+| **Theming / appearance** | **First-party WPF design system** (doc 21, ADR-008) | — | **No external application theme.** Not MahApps, not MaterialDesign, not HandyControl, not a control-suite theme |
+| MVVM base (replaces DevExpress) | CommunityToolkit.Mvvm | MIT | Candidate — **functionality only**, no appearance |
+| Docking (replaces DevExpress docking) | Dirkster.AvalonDock | MS-PL/BSD | Candidate — **docking functionality only; its built-in theme is NOT used** (restyle via design system) |
+| XY charts (replaces SciChart 2D) | ScottPlot 5 (SkiaSharp) | MIT | Candidate — restyle chart chrome via design-system chart tokens |
+| 3D surface (replaces SciChart3D) | HelixToolkit | MIT | Approved |
+| 2D image | WPF `WriteableBitmap` (+ optional SkiaSharp) | — | palette = domain colormap, not UI theme |
+| Numerics | MathNet.Numerics | MIT | Approved |
+| DI | Microsoft.Extensions.DependencyInjection | MIT | Approved |
+| Logging | Microsoft.Extensions.Logging | MIT | Approved |
+| Tests / arch tests | xUnit + NetArchTest | MIT/Apache | Approved |
 
-Final XY-chart pick (ScottPlot vs OxyPlot) pending a rendering spike (doc 15 OPEN).
+**Appearance policy (ADR-008):** the product's look is a **first-party design system**; Light/Dark
+are internal semantic-token dictionaries. External **functional** controls (AvalonDock, chart lib)
+are used for behavior only and **restyled** to the design system — never adopted with their own theme.
+UI design color ≠ AFM data colormap. Final XY-chart pick pending the V00 spike (doc 15 OPEN).
 
 ## The native stitch engine (`stitchdosa`)
 `LIB.External.Stitch` P/Invokes `stitchdosa_api.dll` + `stitchdosa_engine.dll` (Park Systems

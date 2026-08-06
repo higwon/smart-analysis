@@ -5,43 +5,48 @@ They exist to make change scope **predictable** and the codebase **AI-workable**
 
 ## 1. Layered architecture
 
-Two views are given: a **realistic initial structure** (fewer projects) and an **expanded
-structure** to split into later. Do not over-fragment early.
+The **initial structure is the consolidated set (ADR-007)** — fewer projects, split later. Do not
+over-fragment early (no empty projects).
 
-### Initial structure (start here)
+### Initial structure — created by F00 (ADR-007, 8 projects)
 
 ```
-SmartAnalysis.Domain          // AFM model, units, buffers — no UI, no IO, no viz
-SmartAnalysis.Analysis        // operations + numeric algorithms — depends on Domain only
-SmartAnalysis.FileFormats     // parsers/writers (TIFF, PS-PPT, HDF5) — Domain only
-SmartAnalysis.Persistence     // workspace file, provenance, spectrum library (SQLite)
-SmartAnalysis.Workflow        // operation registry, workflow engine, provenance recording
-SmartAnalysis.Visualization   // adapter interfaces + render-data models (no concrete chart lib)
-SmartAnalysis.Visualization.<Impl>  // concrete viz backend (e.g. ScottPlot/Skia) — isolated
-SmartAnalysis.AI              // NL → structured workflow proposal; validates against registry
-SmartAnalysis.Application     // app services, use-cases, DI composition root (no WPF types)
-SmartAnalysis.UI              // WPF views + view-models — depends on Application + Viz adapter
+SmartAnalysis.Domain          // units, axes, buffers, datasets, channels, metadata, PROVENANCE, ROI — no UI/IO/viz
+SmartAnalysis.Analysis        // operation contract + registry + operations (folders: Image/Spectroscopy/Profile/Pifm) — Domain only
+SmartAnalysis.Infrastructure  // file formats + persistence + external (namespaces FileFormats/Persistence/External) — Domain only
+SmartAnalysis.Visualization   // viz adapter interfaces + render-input models (no concrete chart lib) — Domain only
+SmartAnalysis.Application     // workspace, active context, use-cases, orchestration — Domain/Analysis/Infrastructure/Visualization
+SmartAnalysis.UI              // WPF views + view-models + first-party DesignSystem + concrete WPF viz impl (MVP) — Application/Visualization
 SmartAnalysis.App             // exe: composition root wiring, startup
+SmartAnalysis.Tests           // one test project: unit + architecture tests
 ```
 
-### Expanded structure (split when a layer grows)
+**Provenance types live in `Domain`** (every dataset/artifact carries provenance) — so
+`Persistence` depends on `Domain` only, **not** on Workflow (resolves OD-7).
 
-`Analysis` → `Analysis.Abstractions` + `Analysis.Image` + `Analysis.Spectroscopy` + `Analysis.Pifm`;
-`FileFormats` → one project per format; `Visualization.<Impl>` → 2D / 3D / curve backends;
-`UI` → one module per analysis domain. Split only when a project exceeds comprehension or a
-seam is proven necessary — never speculatively.
+### Deferred projects (NOT created at F00 — split when triggered, ADR-007)
+`SmartAnalysis.Workflow` (workflow engine begins — AI01); `SmartAnalysis.AI`, `.ML` (AI/ML tasks);
+`SmartAnalysis.Visualization.Wpf` (split concrete viz from UI when a chart lib is added — V03/V04);
+`SmartAnalysis.Analysis.{Image,Spectroscopy,Profile,Pifm}` and `Infrastructure.{FileFormats,Persistence}`
+(split when a folder grows or needs dependency isolation); extra test projects (per layer, on growth).
+Namespaces mirror the future split so a split changes references, not code.
 
 ## 2. Dependency rules (allowed / forbidden)
 
+Initial (consolidated) structure:
 ```
-App → UI → Application → { Workflow, Analysis, Persistence, FileFormats, Visualization(adapter), AI }
-Workflow → { Analysis, Domain }
+App → UI → Application → { Analysis, Infrastructure, Visualization(adapter) }
 Analysis → Domain
-FileFormats → Domain
-Persistence → { Domain, Workflow(provenance types) }
-AI → { Workflow(registry, schemas), Domain(read-only view) }
+Infrastructure → Domain          // FileFormats + Persistence + External live here; Persistence → Domain only
 Visualization(adapter) → Domain(read-only render inputs)
-Visualization.<Impl> → Visualization(adapter)   // concrete lib lives ONLY here
+UI → { Application, Visualization(adapter) }   // concrete WPF viz impl + DesignSystem live in UI (MVP)
+Tests → (the projects under test)
+```
+When the deferred projects are split out, the direction extends but never reverses:
+```
+Workflow → { Analysis, Domain }        // provenance types are in Domain
+AI → { Workflow(registry, schemas), Domain(read-only) }
+Visualization.Wpf → Visualization(adapter)   // concrete lib lives ONLY here
 ```
 
 **Forbidden — enforced by review and, where possible, by analyzers/tests:**

@@ -79,16 +79,18 @@ coverage, method, and gaps.
 | [17-uiux-principles](target-design/17-uiux-principles.md) | UX redesign principles, keep/improve/merge/drop lens |
 | [18-ml-candidates](target-design/18-ml-candidates.md) | Where ML adds value vs. validated numerics |
 | [19-testing-and-validation](target-design/19-testing-and-validation.md) | Legacy-vs-new comparison & numeric verification strategy |
-| [20-library-policy](target-design/20-library-policy.md) | License rules + concrete OSS replacements |
+| [20-library-policy](target-design/20-library-policy.md) | License rules + OSS replacements + Forbidden/Approved/Candidate + no-external-theme |
+| [21-design-system](target-design/21-design-system.md) | First-party WPF design system: tokens, control styles, resource structure, simple-modern + per-screen rules |
 
 ### `migration/` — the plan
 | Doc | Covers |
 |---|---|
 | [30-feature-inventory](migration/30-feature-inventory.md) | User+technical feature list with keep/improve/merge/drop |
 | [31-migration-backlog](migration/31-migration-backlog.md) | Full task backlog, stable IDs, priority, MVP flag |
-| [32-dependency-roadmap](migration/32-dependency-roadmap.md) | Implementation order, dependency graph, MVP scope |
-| [33-work-spec-template](migration/33-work-spec-template.md) | Template for per-feature work specs |
-| [specs/](migration/specs/) | Foundation + MVP-boundary work specs: F00, F01, F03, F04, F05, D01, W01, MV00, UX01, V00, FF01, A01, P01 |
+| [32-dependency-roadmap](migration/32-dependency-roadmap.md) | Implementation order, dependency graph, MVP scope + 4 checkpoints (Epic milestones) |
+| [33-work-spec-template](migration/33-work-spec-template.md) | Template for per-feature work specs (incl. GitHub linkage) |
+| [35-product-epics-roadmap](migration/35-product-epics-roadmap.md) | Product vertical-slice Epics (Image/Profile/Spectroscopy/PiFM/AI) + Task↔Epic mapping |
+| [specs/](migration/specs/) | Foundation + MVP-boundary specs: F00, F01, F03, F04, F05, D01, W01, MV00, UX01, **UIX01, UIX02, UIX03,** V00, FF01, A01, P01 |
 
 ### `ai-context/` — how AI sessions must work
 | Doc | Covers |
@@ -111,10 +113,14 @@ classification; backlog = status source of truth; MVP split into 4 checkpoints).
 | Existing-code analysis (6 subsystems) + tech-debt register | ✅ Complete, file:line-cited |
 | Target design (architecture, domain, operation contract, workflow/AI, viz, persistence, UI/UX, ML, testing, library policy) | ✅ Drafted |
 | Feature inventory | ✅ Complete |
-| Migration backlog + dependency roadmap (F00, MV00, UX01, V06 added; contradictions resolved) | ✅ Revised |
-| Work-spec template + specs (F00, F01, F03, F04, F05, D01, W01, MV00, UX01, V00, FF01, A01, P01) | ✅ Written |
-| AI working agreement + doc-maintenance + ADRs (001–006) | ✅ Recorded |
-| Task status source of truth | ✅ Backlog (single SoT) |
+| Migration backlog + dependency roadmap (F00, MV00, UX01, UIX01-03, V06, D03, product Epics; task splits) | ✅ Revised |
+| Initial solution structure decided (ADR-007: consolidated 8 projects; provenance in Domain; F00 = architecture gate) | ✅ Decided |
+| Product Epic roadmap (Image/Profile/Spectroscopy/PiFM/AI vertical slices) + Task↔Epic mapping | ✅ Added |
+| First-party WPF design system (doc 21) + no-external-theme policy (ADR-008) | ✅ Defined |
+| Work-spec template + specs (foundation + MVP boundary + UIX01/02/03) | ✅ Written |
+| GitHub delivery workflow + templates | ✅ Added |
+| AI working agreement + doc-maintenance + ADRs (001–008) | ✅ Recorded |
+| Task status source of truth | ✅ Backlog (single SoT); status flow ↔ GitHub |
 | **New product code / `.sln`** | ❌ Not started (out of scope this phase; first task = F00) |
 
 Decisions still **OPEN** (Candidate, need an ADR) are centralized in

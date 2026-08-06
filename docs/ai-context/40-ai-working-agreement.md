@@ -36,9 +36,16 @@ a validated engine, never around it. (Full: `docs/target-design/10-product-visio
 Dependencies are classified **Forbidden / Approved / Candidate** (doc 20, ADR-006):
 - **Forbidden** (DevExpress, SciChart, any commercial core lib) — never add.
 - **Approved** (ADR-confirmed OSS, e.g. MathNet, HelixToolkit, EF Core, MS.Extensions.*) — you may use.
-- **Candidate** (e.g. ScottPlot/OxyPlot, AvalonDock, CommunityToolkit.Mvvm, MVVM/theming, workspace
-  container, buffer strategy, LLM SDK) — **do NOT install into product code before its deciding
-  ADR** (e.g. the V00 spike promotes the chart lib). Adding/promoting a dependency = license check + ADR.
+- **Candidate** (e.g. ScottPlot/OxyPlot, AvalonDock, CommunityToolkit.Mvvm, workspace container,
+  buffer strategy, LLM SDK) — **do NOT install into product code before its deciding ADR** (e.g. the
+  V00 spike promotes the chart lib). Adding/promoting a dependency = license check + ADR.
+
+**UI appearance (ADR-008, doc 21):** the product uses a **first-party WPF design system**. **No
+external application/control-suite theme** (not MahApps, MaterialDesign, HandyControl, AvalonDock's
+theme, DevExpress). External functional controls are used for behavior only and **restyled** via the
+design system. In screen XAML use **semantic token/style keys only** — no hard-coded
+color/size/padding/template; theme colors via `DynamicResource`. **UI color ≠ AFM data colormap**
+(theme never changes the data). U01/U02 may not start before the UIX02 visual design is user-approved.
 
 ## 4. Coding conventions
 - C#, `net8.0` (windows target only where WPF is required; Domain/Analysis are platform-neutral
@@ -102,6 +109,8 @@ Dependencies are classified **Forbidden / Approved / Candidate** (doc 20, ADR-00
 - The operation contract shape + explicit-DI registration mechanism (doc 13, ADR-003/005).
 - The provenance record shape + mandatory-provenance/workspace (doc 16, ADR-004).
 - The "AI goes through the engine" guardrail (doc 14).
+- The initial solution structure + provenance-in-Domain (doc 11, ADR-007).
+- The first-party design system / no-external-theme policy (doc 21, ADR-008).
 
 ## 13. Decisions still OPEN (do NOT resolve them ad-hoc — ADR + human)
 Buffer strategy (F01-C); final XY-chart library (V00); workspace container format (P01); MVVM

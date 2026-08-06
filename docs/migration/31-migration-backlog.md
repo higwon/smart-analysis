@@ -33,6 +33,7 @@ Prio · MVP · Status**.
 |---|---|---|---|---|---|---|---|---|
 | D01 | Channel descriptors + metadata model | F03 | `TiffHeaderModel`, stringly channels | Rewrite (typed) | strong core + extension bag; no `string.Contains` channel logic | P0 | ✅ | planned |
 | D02 | ROI + MShape domain types | F03 | MShape overlay (doc 05) | Rewrite (domain-free geometry) | ROI types usable by ops + viz. **Not MVP** — MVP flatten uses full-image region (see V02/A01 rationale) | P1 | – | planned |
+| D03 | Force-curve segment + approach/retract domain model | F03 | `SpectroscopyPointData`, PinPoint classifiers (doc 02/03) | Rewrite | segment/approach-retract model for force curves (EPIC-SPEC01) | P2 | – | planned |
 
 ## File formats (FF)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Done-when | Prio | MVP | Status |
@@ -63,14 +64,25 @@ Prio · MVP · Status**.
 | A07 | Crop / Rotate / Flip / Pixel-manip / Arithmetic ops | F04, D02 | `RotateFlip`/`PixelManip`/`Unary`/`Binary`/`Crop` (A/C) | Reuse | P1 | – | planned |
 | A08 | PSD / power-spectrum op | F04 | `LinePowerSpectrum`/`PSDStatistics` (A/B) | Reuse | P2 | – | planned |
 | A09 | Grain / particle op | F04 | `GrainDetector`+`SequentialLabeler` (A/B/C) | Reuse core, drop WPF Color | P2 | – | planned |
-| A10 | Profile filters + flatten ops | F04, FF01 | `ProfileFilter/Flatten` (A/B) | Reuse (merge cores) | P2 | – | planned |
-| A11 | Spectroscopy slope/filter/offset/force-const ops | F04 | Spectroscopy VMs (A core / D) | Extract numeric | P2 | – | planned |
+| A10 | Profile **filter** op (split → A18, A19) | F04, FF01 | `ProfileFilter` (A/B) | Reuse | P2 | – | planned |
+| A11 | Spectroscopy **filter** op (split → A20, A21, A22) | F04 | `SpectroscopyFilter` (A core) | Extract numeric | P2 | – | planned |
 | A12 | Modulus (FD + Oliver-Pharr) op | F04 | `ModulusCalculator`+`NRFitter` (C/A) | Extract numeric | P2 | – | planned |
-| A13 | FD measures + approach/retract classifiers ops | F04 | `FDSpectroscopyCalculator`+classifiers (C/A) | Reuse | P2 | – | planned |
-| A14 | Spectrum matching + preprocessors ops | F04, P02 | matchers+preprocessors (A) | Reuse | P2 | – | planned |
-| A15 | Peak detection + spectral range ops | F04 | `PeakDetector`/`SpectralRangeAnalyzer` (A/B) | Reuse; fix FWHM TODO | P2 | – | planned |
+| A13 | FD measures op (split → A23) | F04 | `FDSpectroscopyCalculator` (C/A) | Reuse | P2 | – | planned |
+| A14 | Spectrum **matching + ranking** op (split → A32, A34) | F04, A32, P02 | matchers (A) | Reuse | P2 | – | planned |
+| A15 | **Peak detection** op (split → A31) | F04 | `PeakDetector` (A) | Reuse | P2 | – | planned |
 | A16 | Stitch (managed blend/preview) op | F04 | `StitchBlend/Preview` (A/B) | Reuse | P3 | – | planned |
 | A17 | Stitch (native engine) op — ADR first | A16 | `LIB.External.Stitch`+native dll (C) | Wrap or reimplement (ADR) | P3 | – | planned |
+| A18 | Profile flatten op | F04, FF01 | `ProfileFlattenProcess` (A/B) | Reuse (share flatten core) | P2 | – | planned |
+| A19 | Profile crop op | F04 | `ProfileProcessCrop` (D) | Rewrite (cursor→ROI) | P2 | – | planned |
+| A20 | Spectroscopy slope-adjust op | F04 | `SpectroscopySlopeRegression` (A core) | Reuse | P2 | – | planned |
+| A21 | Spectroscopy offset-adjust op | F04 | `OffsetAdjust` (D) | Extract numeric | P2 | – | planned |
+| A22 | Force constant / sensitivity op | F04 | `ForceConstant` (D) | Extract numeric | P2 | – | planned |
+| A23 | Approach/Retract split op | F04, D03 | PinPoint classifiers (A) | Reuse | P2 | – | planned |
+| A28 | PiFM smoothing op | F04 | `SmoothingFilter` (A) | Reuse | P2 | – | planned |
+| A29 | PiFM baseline correction op (linear + ALS) | F04 | `BaselineCorrection` (A core) | Reuse | P2 | – | planned |
+| A31 | Spectral range statistics op | F04 | `SpectralRangeAnalyzer` (B) | Reuse; **fix FWHM TODO** (doc 07 M5) | P2 | – | planned |
+| A32 | Spectrum preprocessing ops | F04 | 7 preprocessors (A) | Reuse | P2 | – | planned |
+| A34 | Spectrum difference/overlay op | F04 | overlap/difference (doc 03) | Reuse/rewrite | P2 | – | planned |
 
 ## Workspace / Persistence (W / P)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Prio | MVP | Status |
@@ -80,10 +92,13 @@ Prio · MVP · Status**.
 | P02 | Spectrum library (SQLite) relocate | F03 | `LIB.File.SQLite` (B) | Reuse, fix layering | P2 | – | planned |
 | P03 | Schema versioning + migration | P01 | HDF5 strict validator (no migration) | New | P2 | – | planned |
 
-## UX design (UX) — design confirmation tasks, **no code**
+## UX & Design System (UX / UIX) — design tasks (UIX01/UIX02 no code; UIX03 implements resources)
 | ID | Task | Depends | Legacy | Output | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|
 | UX01 | Core AFM workflow & Information Architecture | doc 17 principles; stable F03/W01 concepts | UI analysis (doc 05) | IA + journeys + active-context meaning + wireframes/text structure + keep/merge/remove + dialog criteria + MVP screen flow. **Parallel with V00.** No code | P0 | ✅ | planned |
+| UIX01 | First-party Design System foundation (no code) | UX01, doc 21, ADR-008 | DevExpress theme (doc 05) — reference only | tokens (palette/semantic/typography/spacing/size/radius/border/focus/status/chart-image/density), theme-swap principle, simple-modern rules, forbidden patterns, design-system doc | P0 | ✅ | planned |
+| UIX02 | MVP visual design + high-fidelity Light/Dark screens (no code) | UIX01 | — | approved Light+Dark visuals for the MVP screens (shell/explorer/viewer/flatten panel/before-after/history/progress/empty/loading/error/save). **User approval is a required gate before U01/U02** | P0 | ✅ | planned |
+| UIX03 | WPF tokens, styles & component mapping (**implements resources**) | UIX02 (approved) | — | ResourceDictionary structure, token keys, base/variant/component styles, Light/Dark swap, VisualStates, external-control styling adapter, no-hardcoded-values rule, style validation | P0 | ✅ | planned |
 
 ## Visualization (V)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Prio | MVP | Status |
@@ -99,11 +114,13 @@ Prio · MVP · Status**.
 ## UI (U)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|
-| U01 | Shell (AvalonDock) + workspace explorer | F02, W01, UX01 | DevExpress shell | Rewrite | P0 | ✅ | planned |
+| U01 | Shell (AvalonDock functionality; first-party styled) + workspace explorer | F02, W01, UX01, **UIX03 (visual design approved, ADR-008)** | DevExpress shell | Rewrite | P0 | ✅ | planned |
 | U02 | Image analysis page + flatten panel (before/after) | U01, V02, A01 | ImageAnalysis + ImageProcess | Rewrite | P0 | ✅ | planned |
 | U03 | Operation parameter panel framework | U01, F04 | process dialogs | Rewrite (registry-driven) | P1 | – | planned |
-| U04 | Curve/spectrum pages + comparison | U01, V03, A14 | Spectroscopy/PiFM/Profile pages | Rewrite | P2 | – | planned |
+| U04 | **Profile analysis UI** (split from old curve/spectrum umbrella → U06, U07) | U01, V03, A10 | Profile pages | Rewrite | P2 | – | planned |
 | U05 | Provenance/history panel | U01, F05 | (none visible) | New | P1 | – | planned |
+| U06 | Spectroscopy analysis UI | U01, V03, A11 | Spectroscopy pages | Rewrite | P2 | – | planned |
+| U07 | PiFM analysis UI | U01, V03, A15 | PiFM pages | Rewrite | P2 | – | planned |
 
 ## AI / ML / Docs
 | ID | Task | Depends | Prio | MVP | Status |
@@ -116,9 +133,15 @@ Prio · MVP · Status**.
 | DOC01 | Keep docs in sync (per completion, doc 41) | ongoing | P0 | ✅ | planned |
 
 ## MVP task set (P0)
-F00, F01, F02, F03, F04, F05, D01, FF01, MV00, T01, W01, UX01, V00, V01, V02, A01, A02, P01, U01,
-U02, DOC01. Grouped into 4 verification checkpoints — see
-[`32-dependency-roadmap.md`](32-dependency-roadmap.md) §MVP checkpoints.
+F00, F01, F02, F03, D01, F04, F05, MV00, T01, FF01, W01, V00, V01, V02, A01, A02, T02, P01, **UX01,
+UIX01, UIX02, UIX03,** U01, U02, DOC01. Grouped into 4 verification checkpoints — see
+[`32-dependency-roadmap.md`](32-dependency-roadmap.md) §MVP checkpoints. This set == **EPIC-MVP01**
+in [`35-product-epics-roadmap.md`](35-product-epics-roadmap.md).
+
+## Product Epics
+The full product beyond the Image MVP is organized as **vertical-slice Epics** (Image / Profile /
+Spectroscopy / PiFM / AI) in [`35-product-epics-roadmap.md`](35-product-epics-roadmap.md), with a
+Task↔Epic mapping. This backlog remains the authoritative per-task list and status source.
 
 ## Notes
 - Once **F04** is stable, operations `A02…A16` are independent, parallelizable tasks.

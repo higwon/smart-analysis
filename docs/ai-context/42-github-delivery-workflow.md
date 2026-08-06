@@ -83,8 +83,15 @@ Criteria · Key OPEN Decisions · Current Blockers. (Template: `.github/ISSUE_TE
 
 **Candidate tasks for EPIC-MVP01** (confirm IDs/scope against the current backlog, doc 31 — the
 backlog is authoritative):
-`TASK-F00, F01, F02, F03, D01, F04, F05, MV00, T01, FF01, W01, UX01, V00, V01, V02, A01, T02, P01,
-U01, U02`.
+`TASK-F00, F01, F02, F03, D01, F04, F05, MV00, T01, FF01, W01, V00, V01, V02, A01, A02, T02, P01,
+UX01, UIX01, UIX02, UIX03, U01, U02`.
+
+The full product beyond the Image MVP is organized as **vertical-slice Epics** (Image / Profile /
+Spectroscopy / PiFM / AI) in `docs/migration/35-product-epics-roadmap.md`:
+`EPIC-MVP01, EPIC-UIX01, EPIC-IMAGE02, EPIC-PROFILE01, EPIC-SPEC01, EPIC-SPEC02, EPIC-PIFM01,
+EPIC-PIFM02, EPIC-AI01`. The 4 MVP checkpoints (doc 32) map to Milestones M1–M4 under EPIC-MVP01.
+Note: **U01/U02 are gated by the UIX02 visual-design user approval** (ADR-008) — an Issue for U01
+stays `status:blocked` until that approval.
 
 **Do not create all Issues at once.** Issue-creation policy:
 - The full plan lives in the **Migration Backlog**.

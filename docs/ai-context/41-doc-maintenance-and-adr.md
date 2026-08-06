@@ -12,6 +12,9 @@ session reports on completion. The docs are a **living development context**, no
 | A new analysis operation | `migration/30-feature-inventory.md` (mark done), `migration/31-migration-backlog.md` (status), the op's spec status |
 | Provenance / persistence schema | `target-design/16-persistence-and-provenance.md` (+ bump schema version) + ADR |
 | Visualization adapter / library pick | `target-design/15-visualization-strategy.md`, `20-library-policy.md` + ADR |
+| Design system (tokens/styles/theme) | `target-design/21-design-system.md` + ADR if ADR-008 policy changes |
+| Solution/project structure | `target-design/11-architecture-principles.md` + ADR (ADR-007) if boundaries change |
+| Product Epic scope/order | `migration/35-product-epics-roadmap.md` + backlog Task↔Epic mapping |
 | Workflow / AI behavior | `target-design/14-workflow-and-ai-layer.md` |
 | A dependency added/removed | `target-design/20-library-policy.md` + THIRD-PARTY-NOTICES + ADR |
 | Any architecture/layer rule | `target-design/11-architecture-principles.md` + ADR (these are "must-not-change-alone") |
@@ -85,12 +88,15 @@ These are **Candidate** decisions (doc 20, ADR-006): do not resolve ad-hoc; each
 | OD-4 | MVVM toolkit (CommunityToolkit.Mvvm assumed) | doc 11 / U01 | open |
 | OD-5 | Native stitch: wrap vs reimplement | doc 20 / A17 | open |
 | OD-6 | LLM provider/hosting for the assistant | doc 14 / AI02 | open |
-| OD-7 | Provenance types placement (Domain vs Workflow) | doc 16 / F04+F05 | open |
+| ~~OD-7~~ | ~~Provenance types placement~~ | doc 16 / F03+F05 | **decided (ADR-007): Domain** |
 | OD-8 | Docking library (AvalonDock) meets multi-doc/auto-hide needs | doc 15 / U01 | open |
+| OD-9 | Concrete design tokens (palette/type/spacing/contrast) | doc 21 / UIX01–UIX02 | open (user-approved) |
+| OD-10 | Split `Visualization.Wpf` from UI now or later | doc 11 / ADR-007 trigger | open |
 
 Decided so far (ADRs): commercial-lib ban (ADR-001), layered architecture (ADR-002), operation
 contract+registry (ADR-003), mandatory provenance+workspace (ADR-004), explicit-DI operation
-registration (ADR-005), dependency classification (ADR-006).
+registration (ADR-005), dependency classification (ADR-006), **initial solution structure +
+provenance-in-Domain (ADR-007)**, **first-party design system / no external theme (ADR-008)**.
 
 Resolving an OD = add an ADR + set status here to "decided (ADR-NNN)" + update the owning design doc
 + (for a dependency) move it Candidate→Approved in doc 20.

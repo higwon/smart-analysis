@@ -80,3 +80,7 @@ Solution Bootstrap**; the repo has no `.sln` yet, so F00 precedes everything).
 - **No DevExpress. No SciChart. No commercial-licensed core libraries.** See
   [docs/target-design/20-library-policy.md](docs/target-design/20-library-policy.md).
 - Domain and analysis layers must not reference any UI, WPF-presentation, or charting type.
+- **First-party WPF design system** — no external application/control-suite theme; Light/Dark are
+  internal semantic tokens; UI color ≠ AFM data colormap. See
+  [docs/target-design/21-design-system.md](docs/target-design/21-design-system.md) (ADR-008).
+- **Initial solution = 8 consolidated projects** (ADR-007); split later when a real reason appears.

@@ -40,8 +40,9 @@ F03 (uses `DatasetId`).
 - **Rewrite** as structured, serializable types. Drop free-text comment-as-state.
 
 ## Target placement
-`SmartAnalysis.Workflow` (or `Domain` if it must be referenced by Domain results — decide with
-F04; keep provenance types where both Domain results and Workflow can see them). No UI reference.
+**`SmartAnalysis.Domain`** — decided (ADR-007, resolves OD-7): every dataset/artifact carries
+provenance, so the types live in Domain. This lets `Persistence` (Infrastructure) and the future
+`Workflow` depend on Domain only. No UI reference.
 
 ## Errors & boundary conditions
 - A dataset/artifact without provenance is invalid (assert in F04 that ops emit a step).
@@ -67,5 +68,5 @@ doc 16 (lock schema v1 + version number), INDEX, backlog status; ADR-004 already
 mandatory-provenance decision — add an ADR only if the record shape deviates from doc 16.
 
 ## Unverified / open
-- Placement layer for provenance types (Domain vs Workflow) — decide jointly with F04; record as ADR.
+- Placement layer for provenance types — **decided: Domain (ADR-007)**. (No longer open.)
 - Exact JSON schema v1 field names — finalize before P01 uses them.

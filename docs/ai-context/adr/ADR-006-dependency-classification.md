@@ -26,7 +26,8 @@ Every candidate dependency is classified as exactly one of:
 |---|---|
 | DevExpress, SciChart, any commercial core lib | **Forbidden** |
 | MathNet.Numerics; HelixToolkit; HDF.PInvoke/HDF5-CSharp; EF Core + SQLitePCLRaw(SQLCipher); a TIFF lib (TiffLibrary, pending BitMiracle confirm); Microsoft.Extensions.DependencyInjection; Microsoft.Extensions.Logging; xUnit; NetArchTest | **Approved** (retained/clearly-permissive OSS; license-checked) |
-| ScottPlot vs OxyPlot (XY charts); Dirkster.AvalonDock (docking); MahApps/MaterialDesign (theming); CommunityToolkit.Mvvm; workspace container format; buffer strategy; LLM SDK | **Candidate** (needs deciding ADR — e.g. V00 spike for the chart lib) |
+| ScottPlot vs OxyPlot (XY charts); Dirkster.AvalonDock (docking **functionality**); CommunityToolkit.Mvvm (MVVM **functionality**); workspace container format; buffer strategy; LLM SDK | **Candidate** (needs deciding ADR — e.g. V00 spike for the chart lib) |
+| MahApps.Metro / MaterialDesignInXAML / HandyControl / any external **application theme** | **Forbidden as product theme** — first-party design system only (**ADR-008**, added later) |
 
 ## Consequences
 - Positive: no accidental adoption of undecided libraries; clear license posture; spikes gate real
