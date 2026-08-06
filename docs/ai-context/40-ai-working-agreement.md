@@ -119,3 +119,38 @@ only; do not start the next task."**
 Use the format in `docs/ai-context/41-doc-maintenance-and-adr.md` → "Completion report":
 what you built, files added/changed, which contracts implemented, test results (incl. parity +
 tolerance), docs updated, ADRs added, deviations from legacy, and remaining open items.
+
+## 15. GitHub delivery procedure (mandatory — full contract in doc 42)
+All implementation happens through GitHub Task Issues, branches, and Draft PRs. The full rules,
+Source-of-Truth map, naming, and templates are in
+[`42-github-delivery-workflow.md`](42-github-delivery-workflow.md). Every session follows it.
+
+**Before implementing:**
+1. Confirm the assigned **Task ID**.
+2. Open/confirm the **GitHub Task Issue**.
+3. Confirm the **Parent Epic**.
+4. Verify **predecessor Issues are merged**. If not → **do not start; report the blocker.**
+5. Check the **backlog** status (status source of truth).
+6. Read this Working Agreement.
+7. Read the **Task Spec**.
+8. Read the referenced **Target Design** docs.
+9. Read the referenced **Legacy Evidence**.
+10. Create the **Issue-specific branch** (`<type>/task-<id>-<slug>`, doc 42 §6).
+11. Confirm Scope and Out-of-Scope.
+
+**While implementing:** implement only this Issue's scope; do not start the next task; do not
+finalize OPEN decisions; do not install Candidate dependencies (write an ADR + wait for review if
+needed); if scope grows, stop and propose an Issue split; record unrelated problems as follow-up
+Issue candidates; never modify the legacy repo.
+
+**After implementing:**
+1. Run tests. 2. Record numeric-parity results. 3. Run architecture validation. 4. Update the
+required docs. 5. Set the backlog status to **`review`**. 6. Commit (Conventional Commits).
+7. Push. 8. Open a **Draft PR** (fill the PR template). 9. Link the Task Issue (`Closes #…`).
+10. Write the Completion Report (§14). 11. **Stop.**
+
+**Mandatory stop rule:**
+```
+After opening the pull request, stop.
+Do not start, create a branch for, or implement the next task until the user reviews and merges the current pull request.
+```

@@ -20,6 +20,17 @@ never guess. Keep specs in [`specs/`](specs/) named `TASK-<ID>-<slug>.md`.
   single source of truth for status (doc 41 §2). Do **not** restate an authoritative status here;
   this spec is the source of truth for **scope/contract** only.
 
+## GitHub linkage (delivery workflow, doc 42)
+The spec is the technical-contract source of truth; the Issue/PR links are recorded after creation.
+- **Parent Epic:** <EPIC-ID / #issue, or TBD>
+- **GitHub Issue:** <#number, filled after the Issue is created>
+- **Expected Branch:** `<type>/task-<id>-<slug>` (prefix: feat/fix/chore/docs/test/refactor/spike)
+- **Expected PR Type:** feat | fix | chore | docs | test | refactor | spike
+- **Review Focus:** what the reviewer should scrutinize most.
+- **Merge Gate:** conditions before Ready-for-Review (acceptance met · tests · parity · arch test ·
+  docs · ADRs · no out-of-scope · Completion Report). The **user** merges; the AI never does.
+- **Follow-up Issue Candidates:** out-of-scope work discovered → separate Issues, not scope creep.
+
 ## Purpose
 Why this exists (1–3 sentences).
 

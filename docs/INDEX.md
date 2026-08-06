@@ -43,11 +43,14 @@ coverage, method, and gaps.
 
 ### If you are about to implement a feature (AI session)
 1. [`ai-context/40-ai-working-agreement.md`](ai-context/40-ai-working-agreement.md) — mandatory.
-2. The **migration backlog** row for your task (status + dependencies — the status source of truth).
-3. The feature's spec in [`migration/specs/`](migration/specs/).
-4. The design docs that spec references (domain model, operation contract, etc.).
-5. The relevant `legacy-analysis/*` doc for numeric-behavior baseline + file:line evidence.
-6. Implement **only** that task; do not start the next one (doc 40 §0).
+2. [`ai-context/42-github-delivery-workflow.md`](ai-context/42-github-delivery-workflow.md) — the
+   GitHub delivery contract (Epic → Issue → branch → Draft PR → **stop for review**).
+3. The **migration backlog** row for your task (status + dependencies — the status source of truth).
+4. The feature's spec in [`migration/specs/`](migration/specs/).
+5. The design docs that spec references (domain model, operation contract, etc.).
+6. The relevant `legacy-analysis/*` doc for numeric-behavior baseline + file:line evidence.
+7. Implement **only** that task on its own branch; open a Draft PR; **stop** — do not start the next
+   task until the user merges (doc 40 §15, doc 42).
 
 ## 4. Document map
 
@@ -90,9 +93,11 @@ coverage, method, and gaps.
 ### `ai-context/` — how AI sessions must work
 | Doc | Covers |
 |---|---|
-| [40-ai-working-agreement](ai-context/40-ai-working-agreement.md) | Mandatory common baseline for every implementation session |
-| [41-doc-maintenance-and-adr](ai-context/41-doc-maintenance-and-adr.md) | Which code change updates which doc; ADR process; completion report |
+| [40-ai-working-agreement](ai-context/40-ai-working-agreement.md) | Mandatory common baseline for every implementation session (incl. §15 GitHub procedure) |
+| [41-doc-maintenance-and-adr](ai-context/41-doc-maintenance-and-adr.md) | Which code change updates which doc; status flow ↔ GitHub; ADR process; completion report |
+| [42-github-delivery-workflow](ai-context/42-github-delivery-workflow.md) | **The delivery contract**: Backlog→Epic→Issue→Branch→Draft PR→review→merge; labels; templates; ready-to-use prompts |
 | [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..006 recorded (append-only) |
+| [.github/](../.github/) | Issue templates (`epic.yml`, `task.yml`) + `pull_request_template.md` |
 
 ## 5. Current status
 
@@ -118,16 +123,21 @@ Decisions still **OPEN** (Candidate, need an ADR) are centralized in
 
 ## 6. Next action after this phase
 
-The recommended first implementation task is **`TASK-F00` (Repository & Solution Bootstrap)** —
-the repo has docs but no `.sln`/projects yet, so nothing (not even F01) can be built until the
-minimal solution skeleton exists. See
-[`migration/specs/TASK-F00-repository-solution-bootstrap.md`](migration/specs/TASK-F00-repository-solution-bootstrap.md)
-and [`migration/32-dependency-roadmap.md`](migration/32-dependency-roadmap.md).
+Implementation runs through GitHub (doc 42). The startable first task is **`TASK-F00` (Repository &
+Solution Bootstrap)** — the repo has docs but no `.sln`/projects yet. The concrete first steps:
 
-**First implementation-session prompt:**
-> Read `docs/ai-context/40-ai-working-agreement.md` first, then implement
-> `docs/migration/specs/TASK-F00-repository-solution-bootstrap.md`. Do only TASK-F00 — do **not**
-> start F01 or any other task. On completion, update the backlog status + INDEX and report per the
-> working-agreement completion format.
+```
+Create EPIC-MVP01 (parent issue)
+→ Create the [TASK-F00] issue (linking its spec)
+→ Create branch chore/task-f00-solution-bootstrap
+→ Implement TASK-F00 only
+→ Open a Draft PR (Closes the F00 issue) → STOP for user review
+→ User merges → then TASK-F01
+```
 
-Then F00 → **F01** (units/axes/buffers, checkpoints A/B/C) → F02/F03 → F04/F05 → … per the roadmap.
+Ready-to-use prompts for these three steps are in
+[`ai-context/42-github-delivery-workflow.md`](ai-context/42-github-delivery-workflow.md) §13
+(Epic creation · F00 Issue creation · F00 implementation + Draft PR). Spec:
+[`migration/specs/TASK-F00-repository-solution-bootstrap.md`](migration/specs/TASK-F00-repository-solution-bootstrap.md).
+Then F00 → **F01** (checkpoints A/B/C) → F02/F03 → F04/F05 → … per
+[`migration/32-dependency-roadmap.md`](migration/32-dependency-roadmap.md).

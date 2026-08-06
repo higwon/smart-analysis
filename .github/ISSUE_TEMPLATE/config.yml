@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Delivery workflow (read first)
+    url: https://github.com/higwon/smart-analysis/blob/main/docs/ai-context/42-github-delivery-workflow.md
+    about: How Epics, Task Issues, branches, and PRs are run. All implementation follows this.

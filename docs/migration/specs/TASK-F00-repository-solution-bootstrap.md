@@ -82,8 +82,9 @@ n/a.
 None.
 
 ## Docs to update on completion
-`docs/INDEX.md` status (F00 done), backlog status (F00 → done), any ADR if the project set
-deviates from the recommended list here.
+On opening the Draft PR: set backlog F00 status → **`review`** (the user's merge sets it to `done`,
+doc 41 §2c); add any ADR if the project set deviates from the recommended list here. Post-merge:
+`docs/INDEX.md` "Current status" + Epic progress.
 
 ## Unverified / open
 - Final project split (initial vs expanded, doc 11) — keep minimal; expand via later ADR.
@@ -91,26 +92,35 @@ deviates from the recommended list here.
 
 ---
 
-## Implementation-prompt draft (usable next phase)
+## Implementation-prompt draft (usable next phase — GitHub delivery flow, doc 42)
 
-> **You are implementing `TASK-F00 — Repository & Solution Bootstrap` for `smart-analysis`.**
+Runs as three gated steps. Full prompts are also in
+[`../../ai-context/42-github-delivery-workflow.md`](../../ai-context/42-github-delivery-workflow.md) §13.
+
+**Step 1 — create the Epic** (see doc 42 §13.1): create `EPIC-MVP01` parent issue from the backlog
++ roadmap; do not create task issues/branches/code yet.
+
+**Step 2 — create the F00 issue** (doc 42 §13.2): create `[TASK-F00] Bootstrap repository and
+solution` under EPIC-MVP01, linking this spec; verify the ID matches the backlog; no branch/code yet.
+
+**Step 3 — implement + Draft PR:**
+
+> **Read `docs/ai-context/40-ai-working-agreement.md` first.**
 >
-> **First read, in order:** `docs/ai-context/40-ai-working-agreement.md`, this spec, and
-> `docs/target-design/11-architecture-principles.md` (§ Initial structure + dependency rules).
+> Confirm EPIC-MVP01 and the `[TASK-F00]` issue. Create branch `chore/task-f00-solution-bootstrap`
+> and implement **only** TASK-F00 per this spec: a new `.sln` + the MVP-minimal empty projects with a
+> reference skeleton respecting doc 11, `Directory.Build.props` (net8.0 targets, Nullable enable,
+> warnings-as-errors for Domain/Analysis), and one test project + one-line role descriptions.
 >
-> **Do exactly this and nothing more:** create a new `.sln` and the MVP-minimal set of empty
-> projects listed in this spec, with a project-reference skeleton respecting the dependency
-> direction, `Directory.Build.props` (net8.0 targets, Nullable enable, warnings-as-errors for
-> Domain/Analysis), and one test project. Add a one-line role description per project.
+> **Do NOT** start F01 or any other task; add any commercial library or visualization/AI package;
+> install any Candidate dependency; implement Domain types/algorithms/parsers/UI; wire full DI; write
+> architecture tests; pick a chart library; or finalize any OPEN decision. (Those are F01/F02/V00/later.)
 >
-> **Do NOT:** implement any Domain type, algorithm, parser, or UI; add any commercial library or
-> visualization/AI package; wire full DI; write architecture tests; pick a chart library. Those
-> are F02/V00/later tasks.
+> **Done-when:** `dotnet build` succeeds; references follow doc 11; no forbidden/Candidate packages.
 >
-> **Do NOT start F01 or any other task.** Complete only F00.
+> When done: update this spec's "Docs to update", set the backlog F00 status to **`review`**, commit
+> (Conventional Commits), push, and open a **Draft PR** that `Closes` the F00 issue with the PR
+> template filled and the Completion Report linked.
 >
-> **Done-when:** `dotnet build` succeeds; references follow doc 11; no forbidden packages.
->
-> **On completion:** update the docs in this spec's "Docs to update", set F00 status to `done`
-> in the backlog, and report using the completion format in
-> `docs/ai-context/41-doc-maintenance-and-adr.md`. Do not begin the next task.
+> **After opening the pull request, stop.** Do not start, branch for, or implement the next task
+> until the user reviews and merges this PR. (The user's merge is what moves F00 to `done`.)

@@ -52,7 +52,22 @@ Top-level structure:
 - **`docs/migration/`** — feature inventory, migration backlog (stable task IDs),
   dependency roadmap, and per-feature work specifications.
 - **`docs/ai-context/`** — the common working agreement every AI implementation session
-  must read first, documentation-maintenance rules, and Architecture Decision Records (ADRs).
+  must read first, documentation-maintenance rules, the GitHub delivery workflow, and ADRs.
+
+## How development runs (GitHub delivery workflow)
+
+Implementation happens one task at a time, gated by user review:
+
+```
+Migration Backlog → GitHub Epic → Task Issue → Task Branch
+→ AI implements only that task + tests + docs → Draft Pull Request → AI STOPS
+→ user reviews → (fixes on the same PR) → user merges → next task
+```
+
+The AI never merges and never starts the next task before the current PR is merged. The full
+contract, templates, labels, and ready-to-use session prompts are in
+[docs/ai-context/42-github-delivery-workflow.md](docs/ai-context/42-github-delivery-workflow.md);
+Issue/PR templates live in [.github/](.github/).
 
 ## Status
 

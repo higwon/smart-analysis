@@ -1,0 +1,83 @@
+name: Epic
+description: A parent issue grouping several Task Issues toward one goal (e.g. an MVP slice).
+title: "EPIC-<ID> — <short goal>"
+labels: ["mvp"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An Epic is a GitHub parent issue. It tracks a group of tasks' goal and aggregate progress —
+        **not** technical scope (that lives in each Task Spec). See
+        `docs/ai-context/42-github-delivery-workflow.md` §4. Link the roadmap; do not paste specs.
+  - type: input
+    id: epic-id
+    attributes:
+      label: Epic ID
+      placeholder: EPIC-MVP01
+    validations: { required: true }
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: The end-to-end capability this Epic delivers.
+    validations: { required: true }
+  - type: textarea
+    id: user-value
+    attributes:
+      label: User Value
+      description: Why this matters to the user.
+    validations: { required: true }
+  - type: textarea
+    id: included-scope
+    attributes:
+      label: Included Scope
+    validations: { required: true }
+  - type: textarea
+    id: excluded-scope
+    attributes:
+      label: Excluded Scope
+    validations: { required: true }
+  - type: textarea
+    id: related-roadmap
+    attributes:
+      label: Related Roadmap
+      description: Links to backlog + dependency roadmap.
+      value: |
+        - Backlog: docs/migration/31-migration-backlog.md
+        - Roadmap: docs/migration/32-dependency-roadmap.md
+    validations: { required: true }
+  - type: textarea
+    id: mvp-checkpoints
+    attributes:
+      label: MVP Checkpoints
+      description: The verification checkpoints this Epic must pass (roadmap §MVP checkpoints).
+    validations: { required: false }
+  - type: textarea
+    id: included-tasks
+    attributes:
+      label: Included Tasks
+      description: TASK-* IDs (confirm against the backlog — it is authoritative). Link created Issues.
+    validations: { required: true }
+  - type: textarea
+    id: task-dependencies
+    attributes:
+      label: Task Dependencies
+      description: Key ordering/prerequisites among the included tasks.
+    validations: { required: false }
+  - type: textarea
+    id: completion-criteria
+    attributes:
+      label: Completion Criteria
+    validations: { required: true }
+  - type: textarea
+    id: open-decisions
+    attributes:
+      label: Key Open Decisions
+      description: OPEN/Candidate decisions in scope (doc 41 §4). Must be resolved via ADR, not ad-hoc.
+    validations: { required: false }
+  - type: textarea
+    id: current-progress
+    attributes:
+      label: Current Progress / Blockers
+      description: Aggregate progress and any current blockers.
+    validations: { required: false }

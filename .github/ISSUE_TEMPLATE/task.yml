@@ -1,0 +1,111 @@
+name: Task
+description: One TASK-* from the migration backlog. Links its spec; focuses on execution & state.
+title: "[TASK-<ID>] <imperative summary>"
+labels: ["status:planned"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One `TASK-*` → one Issue. **Link** the Task Spec — do not paste it. No Spec → no
+        implementation. Verify the Task ID matches the backlog. See
+        `docs/ai-context/42-github-delivery-workflow.md` §5. After the PR is opened, work stops until
+        the user merges it.
+  - type: input
+    id: task-id
+    attributes:
+      label: Task ID
+      description: Must match the migration backlog exactly.
+      placeholder: TASK-F00
+    validations: { required: true }
+  - type: input
+    id: parent-epic
+    attributes:
+      label: Parent Epic
+      placeholder: EPIC-MVP01 (#<issue>)
+    validations: { required: true }
+  - type: input
+    id: source-spec
+    attributes:
+      label: Source Task Spec (path/link)
+      description: The authoritative scope/acceptance contract. Required — no spec, no start.
+      placeholder: docs/migration/specs/TASK-F00-repository-solution-bootstrap.md
+    validations: { required: true }
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+    validations: { required: true }
+  - type: textarea
+    id: required-reading
+    attributes:
+      label: Required Reading
+      value: |
+        - docs/ai-context/40-ai-working-agreement.md
+        - docs/ai-context/42-github-delivery-workflow.md
+        - (Source Spec above) + the design docs it references
+        - relevant docs/legacy-analysis/* evidence
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+    validations: { required: true }
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+    validations: { required: true }
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Prerequisite TASK-* IDs.
+    validations: { required: false }
+  - type: input
+    id: blocked-by
+    attributes:
+      label: Blocked By
+      description: Predecessor Issue(s) not yet merged → this Issue is status:blocked.
+    validations: { required: false }
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Must not contradict the Task Spec.
+    validations: { required: true }
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation (tests / numeric parity / arch test)
+    validations: { required: false }
+  - type: textarea
+    id: legacy-parity
+    attributes:
+      label: Legacy Parity
+      description: What must match legacy (tolerance) vs intentionally different.
+    validations: { required: false }
+  - type: textarea
+    id: doc-updates
+    attributes:
+      label: Required Documentation Updates
+    validations: { required: false }
+  - type: dropdown
+    id: adr-requirement
+    attributes:
+      label: ADR Requirement
+      options:
+        - "None"
+        - "May be required (flag if a decision is made)"
+        - "Required (an OPEN/Candidate decision is in scope)"
+    validations: { required: true }
+  - type: textarea
+    id: open-decisions
+    attributes:
+      label: Open Decisions
+      description: OPEN/Candidate items (doc 41 §4). Do not finalize ad-hoc — ADR + user review.
+    validations: { required: false }
+  - type: textarea
+    id: reviewer-focus
+    attributes:
+      label: Reviewer Focus
+    validations: { required: false }

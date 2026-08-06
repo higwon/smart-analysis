@@ -41,6 +41,30 @@ Rule: **a PR/change that touches a documented contract but not its doc is incomp
 - Periodic review: when the INDEX "Current status" changes, re-read the affected design doc's
   OPEN section and resolve or re-flag.
 
+## 2c. Task status flow ↔ GitHub (delivery workflow, doc 42)
+The **backlog remains the single source of truth for status**, but the status is **updated from
+GitHub Issue/PR state**. Status flow:
+
+```
+planned → ready → in-progress → review → done
+                    (blocked is a separate state, orthogonal)
+```
+
+| Status | Set when |
+|---|---|
+| `planned` | a predecessor task is not yet complete (Issue may not exist yet) |
+| `ready` | the Task Spec exists **and** all predecessor Issues are merged |
+| `in-progress` | the Task branch is created and implementation has started |
+| `review` | a **Draft PR** is opened and tests are complete |
+| `done` | **the user has merged the PR** |
+| `blocked` | a dependency/decision blocks progress (separate; note the blocker) |
+
+Rules:
+- **Never mark a task `done` before its PR is merged.** `review` is the furthest an AI may advance it.
+- The AI sets `review` on opening the Draft PR; the user's merge is what moves it to `done`
+  (post-merge, doc 42 §10).
+- These map to the `status:*` labels (doc 42 §11) and the optional Project statuses (doc 42 §12).
+
 ## 3. Architecture Decision Records (ADR)
 - Location: `docs/ai-context/adr/ADR-<NNN>-<slug>.md`, numbered, **append-only**.
 - Write an ADR when you: resolve an OPEN decision, deviate from documented legacy numeric
