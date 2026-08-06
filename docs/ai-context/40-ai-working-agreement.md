@@ -30,6 +30,13 @@ a validated engine, never around it. (Full: `docs/target-design/10-product-visio
 - Concrete visualization library lives only in the viz-impl project, behind the adapter.
 - No library below UI references a concrete chart lib. No Library→Analysis inversion. No
   Domain→Analysis reference. ViewModels never hold Views.
+- **Ports & Adapters / composition root (ADR-009):** **`App` is the only project that references
+  `Infrastructure`.** `Application` and `UI` do **NOT** reference `Infrastructure` — Application
+  defines **Ports** (interfaces), Infrastructure implements them, App wires them via DI. UI uses
+  Application Use Cases only — never a file system, SQLite, or a parser directly. No EF Core/SQLite/
+  JSON/WPF/file-lib/SDK type on any Domain/Application interface; put such shapes in Infrastructure
+  DTOs. Interface placement: Domain (domain-meaning contracts), Application (use-case Ports),
+  Infrastructure (internal adapter contracts) — doc 11 "Ports & Adapters".
 - A dependency-direction test must pass (doc 19). If your change would break it, your design is wrong.
 
 ## 3. Forbidden libraries
@@ -109,7 +116,8 @@ color/size/padding/template; theme colors via `DynamicResource`. **UI color ≠ 
 - The operation contract shape + explicit-DI registration mechanism (doc 13, ADR-003/005).
 - The provenance record shape + mandatory-provenance/workspace (doc 16, ADR-004).
 - The "AI goes through the engine" guardrail (doc 14).
-- The initial solution structure + provenance-in-Domain (doc 11, ADR-007).
+- The initial solution structure + provenance-in-Domain (doc 11, ADR-007) and the
+  dependency-inversion / App-composition-root direction (ADR-009).
 - The first-party design system / no-external-theme policy (doc 21, ADR-008).
 
 ## 13. Decisions still OPEN (do NOT resolve them ad-hoc — ADR + human)

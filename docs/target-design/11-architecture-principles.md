@@ -15,9 +15,9 @@ SmartAnalysis.Domain          // units, axes, buffers, datasets, channels, metad
 SmartAnalysis.Analysis        // operation contract + registry + operations (folders: Image/Spectroscopy/Profile/Pifm) — Domain only
 SmartAnalysis.Infrastructure  // file formats + persistence + external (namespaces FileFormats/Persistence/External) — Domain only
 SmartAnalysis.Visualization   // viz adapter interfaces + render-input models (no concrete chart lib) — Domain only
-SmartAnalysis.Application     // workspace, active context, use-cases, orchestration — Domain/Analysis/Infrastructure/Visualization
-SmartAnalysis.UI              // WPF views + view-models + first-party DesignSystem + concrete WPF viz impl (MVP) — Application/Visualization
-SmartAnalysis.App             // exe: composition root wiring, startup
+SmartAnalysis.Application     // workspace, active context, use-cases, PORTS (interfaces) — Domain/Analysis/Visualization (NOT Infrastructure)
+SmartAnalysis.UI              // WPF views + view-models + first-party DesignSystem + concrete WPF viz impl (MVP) — Application/Visualization (NOT Infrastructure)
+SmartAnalysis.App             // exe: COMPOSITION ROOT — wires Infrastructure adapters to Application/Domain Ports — UI/Application/Infrastructure
 SmartAnalysis.Tests           // one test project: unit + architecture tests
 ```
 
@@ -33,14 +33,15 @@ Namespaces mirror the future split so a split changes references, not code.
 
 ## 2. Dependency rules (allowed / forbidden)
 
-Initial (consolidated) structure:
+Initial (consolidated) structure — **dependency-inverted; App is the composition root (ADR-009):**
 ```
-App → UI → Application → { Analysis, Infrastructure, Visualization(adapter) }
-Analysis → Domain
-Infrastructure → Domain          // FileFormats + Persistence + External live here; Persistence → Domain only
-Visualization(adapter) → Domain(read-only render inputs)
-UI → { Application, Visualization(adapter) }   // concrete WPF viz impl + DesignSystem live in UI (MVP)
-Tests → (the projects under test)
+Analysis        → Domain
+Infrastructure  → Domain          // FileFormats + Persistence + External live here; Persistence → Domain only
+Visualization   → Domain(read-only render inputs)
+Application     → Domain, Analysis, Visualization        // Ports (interfaces) — NOT Infrastructure
+UI              → Application, Visualization              // uses Use Cases only — NOT Infrastructure
+App             → UI, Application, Infrastructure         // composition root: wires adapters → Ports
+Tests           → (the projects under test)
 ```
 When the deferred projects are split out, the direction extends but never reverses:
 ```
@@ -50,6 +51,10 @@ Visualization.Wpf → Visualization(adapter)   // concrete lib lives ONLY here
 ```
 
 **Forbidden — enforced by review and, where possible, by analyzers/tests:**
+- ❌ `Application → Infrastructure` and `UI → Infrastructure` (**ADR-009** — use Ports; only `App`
+  references Infrastructure).
+- ❌ `Analysis → Infrastructure`; `Visualization → UI`; `Infrastructure → UI`.
+- ❌ `Domain` referencing any other product project.
 - ❌ `Domain` or `Analysis` referencing **any** UI, WPF-presentation, charting, or DevExpress/
   SciChart type (`BitmapSource`, `DependencyObject`, `SciChart*`, `DevExpress*`, `Dialog`, ViewModel).
 - ❌ Any layer below `UI` referencing a concrete visualization library.
@@ -57,8 +62,24 @@ Visualization.Wpf → Visualization(adapter)   // concrete lib lives ONLY here
 - ❌ `Domain` referencing `Analysis` (the legacy `FW.Data.Scan → FW.Analysis.Calculate` inversion).
 - ❌ ViewModels holding View references (legacy H3).
 
-A dependency-direction test (e.g. NetArchTest / a custom check) should fail the build on
-violation — see doc 19.
+A dependency-direction test (a custom check in F00; full NetArchTest matrix in F02) should fail the
+build on violation — see doc 19.
+
+### Ports & Adapters — interface placement (ADR-009)
+- **App = composition root.** Only `App` references `Infrastructure`; it wires implementations to
+  Ports via DI (`services.AddSingleton<IWorkspaceRepository, WorkspaceRepository>()`).
+- **Application** defines **Use Cases + Ports** (interfaces the use-cases need). **Infrastructure**
+  implements them (adapters). **UI** uses Application Use Cases only — never a file system, SQLite,
+  or TIFF parser directly. Swapping an Infrastructure implementation requires no Application change.
+- **Interface placement:**
+  - **Domain** — abstractions that are part of the domain meaning (pure contracts tied to the
+    analysis model / dataset identity; technology-independent).
+  - **Application** — Ports the Use Cases require: repositories, file open, workspace save, external
+    services, user settings, current execution context, orchestration ports.
+  - **Infrastructure** — internal technical adapter contracts not exposed outward.
+- **No implementation types on Domain/Application interfaces:** no EF Core, SQLite, WPF,
+  TIFF-library, JSON-serializer, or external-SDK types, and no concrete file-path policy. Technical
+  shapes (JSON model, DB entity, workspace schema, migration) are **DTOs/mappings in Infrastructure**.
 
 ## 3. Core rules
 

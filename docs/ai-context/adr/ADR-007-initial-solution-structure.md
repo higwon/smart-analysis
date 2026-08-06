@@ -1,9 +1,18 @@
 # ADR-007 — Initial solution structure (consolidated) + provenance in Domain
 
-- **Status:** accepted
+- **Status:** accepted — **amended by [ADR-009](ADR-009-dependency-inversion-composition-root.md)**
+  (reference direction corrected: `Application` does **not** reference `Infrastructure`; **App** is
+  the composition root). All other ADR-007 decisions stand.
 - **Date:** 2026-08-06
 - **Deciders:** project owner
-- **Related:** doc 11 (architecture), F00 spec, ADR-002; resolves OD-7 (provenance placement)
+- **Related:** doc 11 (architecture), F00 spec, ADR-002; resolves OD-7 (provenance placement);
+  amended by ADR-009
+
+> ⚠ **Amendment (ADR-009):** the `References` column below for `Application` and `App` is
+> superseded. Correct direction: `Application → Domain, Analysis, Visualization` (**not**
+> Infrastructure); `App → UI, Application, Infrastructure` (composition root wiring adapters to
+> Ports). See ADR-009 for the full corrected graph, interface-placement rules, and tests-split
+> conditions. The 8-project set and provenance-in-Domain decisions are unchanged.
 
 ## Context
 Doc 11 offered an "initial" and an "expanded" layout. The expanded target lists 11 projects
@@ -30,9 +39,9 @@ Adopt **Plan B**. F00 creates **8 projects**:
 | `SmartAnalysis.Analysis` | operation contract + registry + operations (folders per area: Image/Spectroscopy/Profile/Pifm) | Domain |
 | `SmartAnalysis.Infrastructure` | file formats + persistence + external adapters (namespaces `FileFormats`, `Persistence`, `External`) | Domain |
 | `SmartAnalysis.Visualization` | viz **adapter interfaces** + render-input models (no chart lib) | Domain |
-| `SmartAnalysis.Application` | workspace, active context, use-cases, orchestration | Domain, Analysis, Infrastructure, Visualization |
-| `SmartAnalysis.UI` | WPF views/VMs, **first-party design system** (ResourceDictionaries), concrete WPF viz-adapter impl (MVP) | Application, Visualization |
-| `SmartAnalysis.App` | exe, composition root wiring | UI (+ transitive) |
+| `SmartAnalysis.Application` | workspace, active context, use-cases, **Ports** (interfaces) | Domain, Analysis, Visualization — **NOT Infrastructure** (ADR-009) |
+| `SmartAnalysis.UI` | WPF views/VMs, **first-party design system** (ResourceDictionaries), concrete WPF viz-adapter impl (MVP) | Application, Visualization — **NOT Infrastructure** |
+| `SmartAnalysis.App` | exe, **composition root**: wires Infrastructure adapters to Application/Domain Ports | UI, Application, **Infrastructure** (ADR-009) |
 | `SmartAnalysis.Tests` | one test project initially: unit + **architecture** tests | the projects under test |
 
 **Provenance types live in `Domain`** (every dataset/artifact carries provenance). This resolves

@@ -13,7 +13,7 @@ session reports on completion. The docs are a **living development context**, no
 | Provenance / persistence schema | `target-design/16-persistence-and-provenance.md` (+ bump schema version) + ADR |
 | Visualization adapter / library pick | `target-design/15-visualization-strategy.md`, `20-library-policy.md` + ADR |
 | Design system (tokens/styles/theme) | `target-design/21-design-system.md` + ADR if ADR-008 policy changes |
-| Solution/project structure | `target-design/11-architecture-principles.md` + ADR (ADR-007) if boundaries change |
+| Solution/project structure + reference direction | `target-design/11-architecture-principles.md` + ADR (ADR-007 structure; ADR-009 reference direction / composition root) |
 | Product Epic scope/order | `migration/35-product-epics-roadmap.md` + backlog Task↔Epic mapping |
 | Workflow / AI behavior | `target-design/14-workflow-and-ai-layer.md` |
 | A dependency added/removed | `target-design/20-library-policy.md` + THIRD-PARTY-NOTICES + ADR |
@@ -73,8 +73,11 @@ Rules:
 - Write an ADR when you: resolve an OPEN decision, deviate from documented legacy numeric
   behavior, change a core decision (doc 40 §12), add a dependency, or make a choice a future
   session would otherwise re-litigate.
-- Superseding: never edit a decided ADR's decision; add a new ADR with
-  `Status: supersedes ADR-NNN` and set the old one `Status: superseded-by ADR-MMM`.
+- Superseding / amending: never edit a decided ADR's *decision*; add a new ADR. For a full
+  replacement use `Status: supersedes ADR-NNN` (old one `superseded-by ADR-MMM`). For a partial
+  correction that keeps most of the original, use `Status: amends ADR-NNN` (old one
+  `amended by ADR-MMM`) — e.g. **ADR-009 amends ADR-007** (reference direction only). Add a short
+  amendment note to the amended ADR pointing to the amending one.
 - Template: [`adr/ADR-000-template.md`](adr/ADR-000-template.md).
 
 ## 4. Open decisions (central list — keep current)
@@ -96,7 +99,8 @@ These are **Candidate** decisions (doc 20, ADR-006): do not resolve ad-hoc; each
 Decided so far (ADRs): commercial-lib ban (ADR-001), layered architecture (ADR-002), operation
 contract+registry (ADR-003), mandatory provenance+workspace (ADR-004), explicit-DI operation
 registration (ADR-005), dependency classification (ADR-006), **initial solution structure +
-provenance-in-Domain (ADR-007)**, **first-party design system / no external theme (ADR-008)**.
+provenance-in-Domain (ADR-007)**, **first-party design system / no external theme (ADR-008)**,
+**dependency inversion / App-composition-root (ADR-009, amends ADR-007's reference direction)**.
 
 Resolving an OD = add an ADR + set status here to "decided (ADR-NNN)" + update the owning design doc
 + (for a dependency) move it Candidate→Approved in doc 20.

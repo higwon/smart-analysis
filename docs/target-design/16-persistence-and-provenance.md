@@ -4,6 +4,27 @@ The legacy app has **no workspace file and no reproducibility** (doc 06, Critica
 the largest net-new design area. The new software makes provenance mandatory and workspaces
 first-class.
 
+## Ports & Adapters (ADR-009) — where persistence lives
+
+Persistence follows dependency inversion:
+- **Ports (interfaces)** live in **Application** (e.g. `IWorkspaceRepository`, file-open, settings)
+  — or in **Domain** if they are pure domain contracts tied to dataset identity.
+- **Adapters (implementations)** live in **Infrastructure** (`Persistence` namespace) — EF Core /
+  SQLite / file-based workspace store, TIFF/HDF5/PS-PPT readers, JSON serialization.
+- **App** (composition root) is the **only** project that references Infrastructure and wires
+  implementations to Ports via DI. **Application and UI never reference Infrastructure**, so a
+  persistence implementation can be swapped without touching use-cases or UI.
+- **No implementation types on Application/Domain interfaces** — no EF Core / SQLite / JSON-serializer
+  / file-library / WPF types, no concrete file-path policy. Technical shapes are DTOs in Infrastructure.
+
+### Provenance: meaning (Domain) vs. storage (Infrastructure)
+- **Domain** owns the *meaning*: `DatasetIdentity`, `Provenance`, `ProvenanceStep`, `Lineage`,
+  `OperationIdentity`, input/output relationship — **free of** EF/SQLite/JSON/WPF/file-format
+  attributes or types (ADR-007 keeps provenance in Domain; ADR-009 keeps it storage-clean).
+- **Infrastructure** owns the *storage shape*: JSON serialization model, DB entity, workspace schema,
+  file-persistence implementation, schema migration — mapping to/from the Domain provenance types
+  via DTOs/mappers. A serializer attribute never sits on a Domain provenance type.
+
 ## Provenance record (mandatory on every result)
 
 Target record the brief requires (all fields must be capturable):

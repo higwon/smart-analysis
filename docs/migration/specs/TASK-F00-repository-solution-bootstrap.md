@@ -32,9 +32,12 @@ None. Internal scaffolding.
   `SmartAnalysis.Domain`, `SmartAnalysis.Analysis`, `SmartAnalysis.Infrastructure`,
   `SmartAnalysis.Visualization`, `SmartAnalysis.Application`, `SmartAnalysis.UI`,
   `SmartAnalysis.App`, `SmartAnalysis.Tests`.
-- **Project reference skeleton** per ADR-007 / doc 11: `Analysis → Domain`, `Infrastructure → Domain`,
-  `Visualization → Domain`, `Application → {Domain, Analysis, Infrastructure, Visualization}`,
-  `UI → {Application, Visualization}`, `App → UI`, `Tests → (under test)`.
+- **Project reference skeleton** per ADR-007 + **ADR-009** (dependency-inverted; App is the
+  composition root): `Analysis → Domain`, `Infrastructure → Domain`, `Visualization → Domain`,
+  `Application → {Domain, Analysis, Visualization}` (**NOT Infrastructure**),
+  `UI → {Application, Visualization}` (**NOT Infrastructure**),
+  `App → {UI, Application, Infrastructure}` (composition root wires adapters → Ports),
+  `Tests → (under test)`.
 - Namespace folders that mirror the future split (`Analysis/Image|Spectroscopy|Profile|Pifm`,
   `Infrastructure/FileFormats|Persistence|External`).
 - Common build settings via `Directory.Build.props`: `net8.0` (Domain/Analysis/Infrastructure
@@ -77,11 +80,19 @@ The repository root (`smart-analysis/`), alongside `docs/`. Product code lives o
 ## Performance
 n/a.
 
-## Done-when (acceptance — Architecture Gate)
+## Done-when (acceptance — Architecture Gate, ADR-007 + ADR-009)
 - `dotnet build` succeeds on the new `.sln` with exactly the 8 ADR-007 projects.
-- Project references follow the ADR-007 direction; no forbidden edge exists.
-- **The minimal architecture guard test passes**: Domain and Analysis reference no
-  UI/WPF/visualization/commercial assemblies.
+- Project references follow the **dependency-inverted** direction (ADR-009); the forbidden edges are
+  **absent**, specifically:
+  - **`Application` does NOT reference `Infrastructure`**; **`UI` does NOT reference `Infrastructure`**.
+  - `Analysis` does not reference `Infrastructure`; `Visualization` does not reference `UI`;
+    `Infrastructure` does not reference `UI`.
+  - `Domain` references no other product project; `Analysis` references `Domain` only.
+  - Only **`App`** (composition root) references `Infrastructure`.
+- **Minimal architecture guard passes** — verify the reference graph does not violate the above
+  (primary: the project references themselves don't create a forbidden edge; optionally a small
+  reference-graph test / MSBuild check). **Do NOT** install NetArchTest or any Candidate package —
+  the full type/namespace Architecture-Test matrix is **F02**, not F00.
 - `Nullable` enabled; warnings-as-errors on Domain/Analysis.
 - No commercial/visualization/AI/theme or Candidate package references anywhere.
 - Namespace folders for the future per-area split exist.
@@ -126,9 +137,12 @@ solution` under EPIC-MVP01, linking this spec; verify the ID matches the backlog
 > reference skeleton respecting doc 11, `Directory.Build.props` (net8.0 targets, Nullable enable,
 > warnings-as-errors for Domain/Analysis), and one test project + one-line role descriptions.
 >
-> Create exactly the **8 ADR-007 projects** with the reference skeleton, `Directory.Build.props`,
-> namespace folders for the future per-area split, a test project, and a **minimal architecture guard
-> test** (Domain/Analysis reference no UI/viz/commercial assemblies) — the architecture gate.
+> Create exactly the **8 ADR-007 projects** with the **dependency-inverted** reference skeleton
+> (ADR-009): `App` is the composition root and the **only** project referencing `Infrastructure`;
+> `Application` and `UI` do **not** reference `Infrastructure`. Add `Directory.Build.props`,
+> namespace folders for the future per-area split, a test project, and a **minimal architecture guard**
+> (the reference graph must not create a forbidden edge; Domain/Analysis reference no
+> UI/viz/commercial assemblies) — the architecture gate.
 >
 > **Do NOT** start F01 or any other task; create the deferred projects (Workflow/AI/ML/Visualization.Wpf);
 > add any commercial library or **Candidate** dependency (chart lib, AvalonDock, MVVM toolkit, theme);

@@ -3,7 +3,14 @@
 - **Status:** accepted
 - **Date:** 2026-08-06
 - **Deciders:** project owner
-- **Related:** doc 11, doc 07 (H2/H3), doc 01 §2
+- **Related:** doc 11, doc 07 (H2/H3), doc 01 §2; **concretized by ADR-007 (initial 8-project
+  structure) and ADR-009 (dependency inversion / App composition root)**
+
+> ⚠ **Note:** the illustrative edge list in "Decision" below predates the consolidated structure.
+> The **authoritative** initial structure and reference direction are **ADR-007 + ADR-009** and
+> doc 11: 8 projects with `Infrastructure` (= FileFormats+Persistence+External), **`Application`/`UI`
+> do not reference `Infrastructure`**, and **`App` is the composition root**. This ADR's principle
+> (enforced layered direction, no inversion, DI, no VM→View) stands unchanged.
 
 ## Context
 Legacy layering is inverted/entangled: `LIB.File.SQLite → FW.Analysis.Calculate`,

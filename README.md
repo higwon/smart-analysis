@@ -83,4 +83,6 @@ Solution Bootstrap**; the repo has no `.sln` yet, so F00 precedes everything).
 - **First-party WPF design system** — no external application/control-suite theme; Light/Dark are
   internal semantic tokens; UI color ≠ AFM data colormap. See
   [docs/target-design/21-design-system.md](docs/target-design/21-design-system.md) (ADR-008).
-- **Initial solution = 8 consolidated projects** (ADR-007); split later when a real reason appears.
+- **Initial solution = 8 consolidated projects** (ADR-007); **dependency-inverted — `App` is the
+  composition root; `Application`/`UI` do not reference `Infrastructure`** (ADR-009). Split later
+  when a real reason appears.
