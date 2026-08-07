@@ -31,7 +31,7 @@ Prio · MVP · Status**.
 ## Domain (D)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Done-when | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|---|
-| D01 | Channel descriptors + metadata model | F03 | `TiffHeaderModel`, stringly channels | Rewrite (typed) | strong core + extension bag; no `string.Contains` channel logic | P0 | ✅ | review |
+| D01 | Channel descriptors + metadata model | F03 | `TiffHeaderModel`, stringly channels | Rewrite (typed) | strong core + extension bag; no `string.Contains` channel logic | P0 | ✅ | done |
 | D02 | ROI + MShape domain types | F03 | MShape overlay (doc 05) | Rewrite (domain-free geometry) | ROI types usable by ops + viz. **Not MVP** — MVP flatten uses full-image region (see V02/A01 rationale) | P1 | – | planned |
 | D03 | Force-curve segment + approach/retract domain model | F03 | `SpectroscopyPointData`, PinPoint classifiers (doc 02/03) | Rewrite | segment/approach-retract model for force curves (EPIC-SPEC01) | P2 | – | planned |
 
