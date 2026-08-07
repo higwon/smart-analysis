@@ -8,4 +8,16 @@ namespace SmartAnalysis.App;
 /// </summary>
 public partial class App : System.Windows.Application
 {
+    /// <summary>
+    /// TASK-F00 has no shell/window yet. To avoid leaving an invisible background process when the
+    /// executable is run, the app shuts down immediately (a defined no-op run). This override is
+    /// removed once a real main window exists (U01).
+    /// </summary>
+    protected override void OnStartup(System.Windows.StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        // No UI shell exists in F00 — exit immediately instead of lingering headless.
+        Shutdown();
+    }
 }
