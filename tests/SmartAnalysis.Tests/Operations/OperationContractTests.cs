@@ -122,18 +122,16 @@ public sealed class OperationContractTests
         Assert.Equal(1.0, result.Artifact!.Scalars[IdentityMeasurementOperation.ConstantKey].Value);
         Assert.Equal(StandardUnits.One, result.Artifact.Scalars[IdentityMeasurementOperation.ConstantKey].Unit);
 
-        // Emitted provenance step (returned to the caller).
-        Assert.Equal("reference.identity", result.Provenance.OperationId);
-        Assert.Equal(1, result.Provenance.OperationVersion);
-        Assert.Equal(0, result.Provenance.Order);
-        Assert.Equal(image.Id, result.Provenance.InputDatasetId);
-
-        // Artifact lineage: derived from the input, carrying exactly the emitted step.
+        // Provenance is read from the output object only (single source of truth — ADR-014):
+        // derived from the input, carrying exactly one emitted step.
         Assert.False(result.Artifact.Provenance.IsRoot);
         Assert.Equal(image.Id, result.Artifact.Provenance.ParentId);
         Assert.Equal(image.Id, result.Artifact.SourceId);
         var step = Assert.Single(result.Artifact.Provenance.Steps);
-        Assert.Equal(result.Provenance.StepId, step.StepId);
+        Assert.Equal("reference.identity", step.OperationId);
+        Assert.Equal(1, step.OperationVersion);
+        Assert.Equal(0, step.Order);
+        Assert.Equal(image.Id, step.InputDatasetId);
 
         // Progress reported from start to finish.
         Assert.Equal(0.0, progress.Fractions[0]);
@@ -217,4 +215,112 @@ public sealed class OperationContractTests
     [Fact]
     public void ValidationResult_failure_requires_at_least_one_error() =>
         Assert.Throws<ArgumentException>(() => ValidationResult.Fail());
+
+    // --- OperationProgress is a validated value (0..1, finite) ---
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void OperationProgress_rejects_out_of_range_fraction(double fraction) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => new OperationProgress(fraction));
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.5)]
+    [InlineData(1.0)]
+    public void OperationProgress_accepts_a_fraction_in_range(double fraction) =>
+        Assert.Equal(fraction, new OperationProgress(fraction).Fraction);
+
+    // --- Descriptor rejects an undefined DataKind; ApplicableTo rejects an undefined query ---
+
+    [Fact]
+    public void Descriptor_rejects_an_undefined_accepted_input() =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => new OperationDescriptor(
+            "x", 1, "name", "summary", [(DataKind)999], ParameterSchema.Empty, OutputKind.Artifact));
+
+    [Fact]
+    public void ApplicableTo_rejects_an_undefined_data_kind() =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => new OperationRegistry([]).ApplicableTo((DataKind)999));
+
+    // --- ParameterDescriptor invariants: an inconsistent schema is unrepresentable ---
+
+    [Fact]
+    public void ParameterDescriptor_rejects_default_of_the_wrong_type() =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("order", typeof(int), defaultValue: "wrong"));
+
+    [Fact]
+    public void ParameterDescriptor_rejects_inverted_range() =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("threshold", typeof(double), min: 10, max: 1));
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void ParameterDescriptor_rejects_non_finite_range(double bad) =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("threshold", typeof(double), min: bad, max: bad));
+
+    [Fact]
+    public void ParameterDescriptor_rejects_default_outside_range() =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("order", typeof(int), defaultValue: 9, min: 0, max: 3));
+
+    [Fact]
+    public void ParameterDescriptor_rejects_range_on_non_numeric_type() =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("name", typeof(string), min: 0, max: 1));
+
+    [Fact]
+    public void ParameterDescriptor_rejects_unit_on_non_numeric_type() =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("name", typeof(string), unit: StandardUnits.Nanometre));
+
+    [Fact]
+    public void ParameterDescriptor_accepts_a_valid_numeric_parameter_with_unit()
+    {
+        var d = new ParameterDescriptor("threshold", typeof(double), defaultValue: 2.0, min: 0.0, max: 10.0, unit: StandardUnits.Nanometre);
+
+        Assert.Equal(2.0, d.Default);
+        Assert.Equal(StandardUnits.Nanometre, d.Unit);
+    }
+
+    // --- ParameterSchema.Validate: the common check operations compose with ---
+
+    private static ParameterSchema TwoParamSchema() => new(
+    [
+        new ParameterDescriptor("order", typeof(int), defaultValue: 1, min: 0, max: 3),   // optional (has default)
+        new ParameterDescriptor("threshold", typeof(double), min: 0.0, max: 10.0),         // required (no default)
+    ]);
+
+    private static ParameterSet Set(params (string Name, object? Value)[] pairs)
+    {
+        var dict = new Dictionary<string, object?>();
+        foreach (var (name, value) in pairs)
+        {
+            dict[name] = value;
+        }
+
+        return new ParameterSet(dict);
+    }
+
+    [Fact]
+    public void Schema_validate_passes_when_required_present_and_in_range() =>
+        Assert.True(TwoParamSchema().Validate(Set(("threshold", 5.0))).IsValid);
+
+    [Fact]
+    public void Schema_validate_flags_unknown_parameter() =>
+        Assert.False(TwoParamSchema().Validate(Set(("threshold", 5.0), ("bogus", 1))).IsValid);
+
+    [Fact]
+    public void Schema_validate_flags_missing_required_parameter() =>
+        Assert.False(TwoParamSchema().Validate(ParameterSet.Empty).IsValid);
+
+    [Fact]
+    public void Schema_validate_flags_wrong_type() =>
+        Assert.False(TwoParamSchema().Validate(Set(("threshold", "not-a-double"))).IsValid);
+
+    [Fact]
+    public void Schema_validate_flags_out_of_range() =>
+        Assert.False(TwoParamSchema().Validate(Set(("threshold", 99.0))).IsValid);
+
+    [Fact]
+    public void ParameterSet_rejects_blank_key() =>
+        Assert.Throws<ArgumentException>(() => new ParameterSet(new Dictionary<string, object?> { ["  "] = 1 }));
 }

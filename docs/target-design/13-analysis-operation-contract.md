@@ -130,14 +130,32 @@ The contract, registry, explicit-DI registration, and a reference operation are 
 `SmartAnalysis.Analysis` (Domain + `Microsoft.Extensions.DependencyInjection.Abstractions` only).
 Deltas from the sketch above, and why:
 
+- **Provenance has a single source of truth (ADR-014).** `OperationResult` carries **no**
+  `ProvenanceStep` field — only the output object (`AfmDataset`/`AnalysisArtifact`) holds the mandatory
+  `ProvenanceRecord` (ADR-004/013). A result therefore cannot carry a step that disagrees with its
+  output's lineage. Read the step a run produced from `result.Artifact.Provenance.Steps[^1]` (or the
+  derived dataset's). `OperationResult` = `{ DerivedDataset?, Artifact?, Warnings }`.
+- **Parameter value/unit convention (ADR-014).** The runtime value in an `IParameterSet` is the **raw
+  CLR value** of `ParameterDescriptor.Type`; `Unit` is descriptor **metadata** naming the unit that
+  value is expressed in (so a `Unit`, and any `Min`/`Max` range, is valid only on a numeric parameter
+  type). An operation pairs value + `Unit` into a `PhysicalValue` when it records provenance — so the
+  binding rule is fixed once here, not re-decided per operation.
+- **Schemas validate their own invariants + the values against them.** `ParameterDescriptor` rejects
+  an inconsistent schema at construction (default of the wrong type, default outside range, inverted or
+  non-finite range, range/unit on a non-numeric type). `ParameterSchema.Validate(IParameterSet)` is the
+  common value check every operation composes with its own preconditions: unknown names, missing
+  required (no-default) values, wrong CLR types, out-of-range numbers → typed `ValidationResult`
+  failures. `OperationProgress` rejects a non-finite or out-of-`[0,1]` fraction at construction.
 - **`OperationResult.Quality` (`QualityMetrics?`) is deferred.** No MVP operation emits it yet; it is
-  added with the first operation that measures fit residual/SNR. The result still always carries a
-  `ProvenanceStep`.
+  added with the first operation that measures fit residual/SNR.
 - **`OutputKind.InPlaceView` is not defined.** "In place" is a visualization concern, not a domain
   output; the two domain outputs are `DerivedDataset` and `Artifact`. Added only if a real operation
   needs a third kind.
 - **`OperationInput.Region` (ROI) is omitted.** `RegionOfInterest` is **D02** (not MVP); MVP operations
   work on the whole dataset. `OperationInput` gains `Region` when D02 lands.
+- **Enum inputs are validated.** `OperationDescriptor` rejects an undefined `OutputKind` **and** any
+  undefined `DataKind` in `AcceptedInputs`; `IOperationRegistry.ApplicableTo` rejects an undefined
+  `DataKind` query (a nonsense enum is a programming error, not "no matches").
 - **Execution environment is injected, not self-captured.** `ProvenanceStep` requires an
   `ExecutionEnvironment` (doc 16). An operation owns no clock/host lookup, so the contract adds
   `IExecutionEnvironmentProvider` (with a `SystemExecutionEnvironmentProvider` default); the
@@ -149,6 +167,7 @@ Deltas from the sketch above, and why:
   explicitly, then `AddOperationRegistry()` once. Duplicate operation ids are rejected at registry
   construction; an unregistered id is simply not found — there is no central switch/enum/reflection.
 - **Reference operation** `reference.identity` (accepts `ScanImage`, no parameters, `Output = Artifact`)
-  exercises the full path: validate → run headless (progress + cancellation) → emit a `ProvenanceStep`
-  → return an `AnalysisArtifact` derived from the input. It performs no real analysis; it proves the
+  exercises the full path: validate (common schema check + its own precondition) → run headless
+  (progress + cancellation) → emit a `ProvenanceStep` **into the artifact's `ProvenanceRecord`** →
+  return that `AnalysisArtifact` derived from the input. It performs no real analysis; it proves the
   contract, the explicit-DI wiring, and the provenance flow.

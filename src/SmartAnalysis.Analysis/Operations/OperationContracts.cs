@@ -31,8 +31,24 @@ public sealed class OperationInput
     // NOTE: RegionOfInterest is added with D02; omitted here (MVP operates on whole datasets).
 }
 
-/// <summary>Progress report from a running operation (0..1 plus optional message).</summary>
-public readonly record struct OperationProgress(double Fraction, string? Message = null);
+/// <summary>Progress report from a running operation: a finite fraction in [0, 1] plus an optional message.</summary>
+public readonly record struct OperationProgress
+{
+    public OperationProgress(double fraction, string? message = null)
+    {
+        if (!double.IsFinite(fraction) || fraction is < 0.0 or > 1.0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(fraction), fraction, "Progress fraction must be finite and within [0, 1].");
+        }
+
+        Fraction = fraction;
+        Message = message;
+    }
+
+    public double Fraction { get; }
+
+    public string? Message { get; }
+}
 
 /// <summary>Typed result of precondition/parameter validation — failures are values, not exceptions.</summary>
 public sealed class ValidationResult
@@ -62,20 +78,21 @@ public sealed class ValidationResult
 }
 
 /// <summary>
-/// The result of an operation run: exactly one output (a derived dataset or an artifact), the typed
-/// warnings, and the emitted <see cref="ProvenanceStep"/> the caller records (doc 13).
+/// The result of an operation run: exactly one output — a derived dataset or a measurement artifact —
+/// plus typed warnings. The emitted provenance step is <b>not</b> duplicated here: the output object's
+/// mandatory <see cref="ProvenanceRecord"/> is the single source of truth (ADR-004/013/014). Read the
+/// step this run produced from <c>Artifact.Provenance.Steps[^1]</c> (or the derived dataset's), so a
+/// result can never carry a step that disagrees with its output's lineage.
 /// </summary>
 public sealed class OperationResult
 {
     private OperationResult(
         AfmDataset? derivedDataset,
         AnalysisArtifact? artifact,
-        ProvenanceStep provenance,
         IReadOnlyList<OperationWarning> warnings)
     {
         DerivedDataset = derivedDataset;
         Artifact = artifact;
-        Provenance = provenance;
         Warnings = warnings;
     }
 
@@ -83,15 +100,13 @@ public sealed class OperationResult
 
     public AnalysisArtifact? Artifact { get; }
 
-    public ProvenanceStep Provenance { get; }
-
     public IReadOnlyList<OperationWarning> Warnings { get; }
 
-    public static OperationResult Derived(AfmDataset dataset, ProvenanceStep provenance, IReadOnlyList<OperationWarning>? warnings = null)
-        => new(AnalysisGuard.NotNull(dataset, nameof(dataset)), null, AnalysisGuard.NotNull(provenance, nameof(provenance)), Copy(warnings));
+    public static OperationResult Derived(AfmDataset dataset, IReadOnlyList<OperationWarning>? warnings = null)
+        => new(AnalysisGuard.NotNull(dataset, nameof(dataset)), null, Copy(warnings));
 
-    public static OperationResult Measurement(AnalysisArtifact artifact, ProvenanceStep provenance, IReadOnlyList<OperationWarning>? warnings = null)
-        => new(null, AnalysisGuard.NotNull(artifact, nameof(artifact)), AnalysisGuard.NotNull(provenance, nameof(provenance)), Copy(warnings));
+    public static OperationResult Measurement(AnalysisArtifact artifact, IReadOnlyList<OperationWarning>? warnings = null)
+        => new(null, AnalysisGuard.NotNull(artifact, nameof(artifact)), Copy(warnings));
 
     private static IReadOnlyList<OperationWarning> Copy(IReadOnlyList<OperationWarning>? warnings)
     {
@@ -140,6 +155,11 @@ public sealed record OperationDescriptor
         if (acceptedInputs.Count == 0)
         {
             throw new ArgumentException("An operation must accept at least one DataKind.", nameof(acceptedInputs));
+        }
+
+        foreach (var kind in acceptedInputs)
+        {
+            AnalysisGuard.DefinedEnum(kind, nameof(acceptedInputs));
         }
 
         AcceptedInputs = Array.AsReadOnly(acceptedInputs.Distinct().ToArray());

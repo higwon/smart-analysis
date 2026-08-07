@@ -45,5 +45,8 @@ public sealed class OperationRegistry : IOperationRegistry
     }
 
     public IEnumerable<OperationDescriptor> ApplicableTo(DataKind kind)
-        => _byId.Values.Select(o => o.Descriptor).Where(d => d.Accepts(kind));
+    {
+        AnalysisGuard.DefinedEnum(kind, nameof(kind)); // an undefined query is a programming error, not "no matches"
+        return _byId.Values.Select(o => o.Descriptor).Where(d => d.Accepts(kind));
+    }
 }

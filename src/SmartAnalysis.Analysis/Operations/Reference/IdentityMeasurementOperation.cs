@@ -37,6 +37,14 @@ public sealed class IdentityMeasurementOperation : IAnalysisOperation
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(parameters);
 
+        // Common schema check first (here: the empty schema rejects any unexpected parameter)...
+        var schema = Descriptor.Parameters.Validate(parameters);
+        if (!schema.IsValid)
+        {
+            return schema;
+        }
+
+        // ...then this operation's own precondition.
         return input.Primary is ScanImageDataset
             ? ValidationResult.Success
             : ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(ScanImageDataset)} as its primary input.");
@@ -72,6 +80,8 @@ public sealed class IdentityMeasurementOperation : IAnalysisOperation
             environment: _environment.Capture(),
             parentResultId: artifactId);
 
+        // The artifact's ProvenanceRecord is the single source of truth for this run's step (ADR-014):
+        // the result carries no separate step to disagree with it.
         var artifact = new AnalysisArtifact(
             id: artifactId,
             sourceId: input.Primary.Id,
@@ -80,6 +90,6 @@ public sealed class IdentityMeasurementOperation : IAnalysisOperation
             provenance: ProvenanceRecord.DerivedFrom(input.Primary.Id, [step]));
 
         progress?.Report(new OperationProgress(1.0, "Done."));
-        return Task.FromResult(OperationResult.Measurement(artifact, step));
+        return Task.FromResult(OperationResult.Measurement(artifact));
     }
 }

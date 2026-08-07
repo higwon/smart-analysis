@@ -102,7 +102,7 @@ registration (ADR-005), dependency classification (ADR-006), **initial solution 
 provenance-in-Domain (ADR-007)**, **first-party design system / no external theme (ADR-008)**,
 **dependency inversion / App-composition-root (ADR-009, amends ADR-007), completed by ADR-010
 (`Infrastructure → Application` allowed for Port implementation; `Application → Infrastructure` forbidden)**,
-**buffer ownership strategy (ADR-011: owned array over `Memory<T>`, defer pooling — resolves OD-1)**, **datasets are Id-based entities owning their buffers (ADR-012)**, **provenance record shape v1 (ADR-013: `ProvenanceRecord` = ParentId+Steps; serialization in Infrastructure/P01)**, **operation contract implementation (ADR-014: `IExecutionEnvironmentProvider` injected into ops; `AddAnalysisOperation`/`AddOperationRegistry` DI surface; MVP defers `Region`/`Quality`/`InPlaceView`)**.
+**buffer ownership strategy (ADR-011: owned array over `Memory<T>`, defer pooling — resolves OD-1)**, **datasets are Id-based entities owning their buffers (ADR-012)**, **provenance record shape v1 (ADR-013: `ProvenanceRecord` = ParentId+Steps; serialization in Infrastructure/P01)**, **operation contract implementation (ADR-014: single-source-of-truth provenance on the output object — no result-level step; `IExecutionEnvironmentProvider` injected into ops; validated `ParameterDescriptor`/`ParameterSchema` + raw-value/Unit-metadata convention; `AddAnalysisOperation`/`AddOperationRegistry` DI surface; MVP defers `Region`/`Quality`/`InPlaceView`)**.
 
 Resolving an OD = add an ADR + set status here to "decided (ADR-NNN)" + update the owning design doc
 + (for a dependency) move it Candidate→Approved in doc 20.
