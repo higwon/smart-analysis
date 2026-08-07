@@ -18,10 +18,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Projects under test (F01: Domain; F04: Analysis). Tests may reference product projects; this
-         does not affect the "only App references Infrastructure" rule (Tests references neither). -->
+    <!-- Projects under test (F01: Domain; F04: Analysis; FF01: Application port + Infrastructure adapter).
+         A test project may reference any product project to test it — the "only App references
+         Infrastructure" rule is about product wiring and exempts the test project (arch guard). -->
     <ProjectReference Include="..\..\src\SmartAnalysis.Domain\SmartAnalysis.Domain.csproj" />
     <ProjectReference Include="..\..\src\SmartAnalysis.Analysis\SmartAnalysis.Analysis.csproj" />
+    <ProjectReference Include="..\..\src\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
+    <ProjectReference Include="..\..\src\SmartAnalysis.Infrastructure\SmartAnalysis.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Committed real-file fixtures (ADR-015): copied next to the test assembly so tests can read them. -->
+    <None Include="Fixtures\Tiff\*.tiff" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

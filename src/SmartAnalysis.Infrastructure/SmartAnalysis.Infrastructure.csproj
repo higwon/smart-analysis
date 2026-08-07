@@ -12,4 +12,11 @@
     <ProjectReference Include="..\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- PSIA-TIFF reader (ADR-015): TiffLibrary (MIT), reader-only, isolated in Infrastructure behind
+         the IScanFileReader port. DI abstractions for the explicit AddPsiaTiffReader() registration. -->
+    <PackageReference Include="TiffLibrary" Version="0.6.65" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
 </Project>

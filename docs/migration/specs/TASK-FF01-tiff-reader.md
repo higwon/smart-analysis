@@ -128,7 +128,30 @@ doc 04 (confirm details), doc 12 (metadata mapping), INDEX status, T01 fixture l
 - **Reader boundary/API:** Application port + Infrastructure adapter (see Target placement).
 - **Fixtures:** committed minimal corpus + env-gated golden dir (see Required test data).
 
-## Still open (resolve during FF01)
+## Implementation status (this PR)
+Implemented per ADR-015 — Application port `IScanFileReader` + typed `FileReadResult`, Infrastructure
+`PsiaTiffReader` on **TiffLibrary (MIT)**, explicit DI (`AddPsiaTiffReader`).
+- **Shipped:** the **2D scan-image** path → `ScanImageDataset`. PSIA tags MagicNumber(0xC500,
+  presence)/Header(0xC503)/Data(0xC502); header parsed with an explicit little-endian `BinaryReader`
+  and pixels decoded with explicit little-endian `BinaryPrimitives` (no `unsafe`, no host-endian
+  `BitConverter`); pixels short/int/float → `physical = raw*DataGain + ZOffset` in the header `Unit`;
+  axes raw[0..W]→real[0..XScanSize] **µm**; unit resolved via `IUnitRegistry` (dimensionless fallback);
+  `Provenance = ProvenanceRecord.Root`; `Source = DataSource("psia-tiff", path, SHA-256 hash)`. Typed
+  failures for missing-magic / short-header / truncated-payload / missing-file / non-2D image type.
+- **Tests:** deterministic **synthetic PSIA-TIFF** (hand-written bytes) parsed by the real TiffLibrary
+  → reader → domain, covering short/int/float, axes/units/values, provenance/source, and every typed
+  failure. Plus **real files**: a committed tiny installer demo crop (`cheese-15x15.tiff`, 3.9 KB) as a
+  CI read-regression guard, and an **env-gated** sweep (`SMARTANALYSIS_TIFF_SAMPLES_DIR`, default
+  install path) — validated locally against the SmartAnalysis 2.0 samples: **all 27 `Samples/Image`
+  2D scans read**; Profile/Spectroscopy/PiFM-spectra correctly route to typed `UnsupportedImageType`,
+  while PiFM 2D maps (Z Height, single-wavenumber) read as images. Legacy **numeric** parity (golden)
+  stays deferred to MV00/T01.
+- **Deferred (follow-up):** line-profile & spectroscopy mapping (currently typed `UnsupportedImageType`);
+  metadata-only fast path (option plumbed, not yet optimized); `DateTime` tag parse (`AcquiredAt`
+  placeholder); comparing the exact magic **value**; physical values stored as `float` (legacy uses
+  `double`) — revisit precision against golden; 1 MB chunked pixel streaming for very large images.
+
+## Still open (resolve during follow-up)
 - Full semantics of the ~60 header fields (only structurally catalogued — doc 00 gaps); map the
   MVP-required subset (axes origin/step/count, channel unit, image type) first, catalogue the rest.
 - **Magic check:** `0xC500` is the PSIA **`MagicNumber` private tag ID**, not the magic value. Legacy

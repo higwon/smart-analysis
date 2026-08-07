@@ -38,7 +38,7 @@ Prio · MVP · Status**.
 ## File formats (FF)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Done-when | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|---|
-| FF01 | TIFF (PSIA) reader → domain | F01, F03, D01 | `TiffReader`/`LIB.File.Tiff` (B) | Extract parser, rewrite mapping | reads scan/profile/spectroscopy TIFF to `AfmDataset`; fixtures | P0 | ✅ | planned |
+| FF01 | TIFF (PSIA) reader → domain | F01, F03, D01 | `TiffReader`/`LIB.File.Tiff` (B) | Extract parser, rewrite mapping | reads scan/profile/spectroscopy TIFF to `AfmDataset`; fixtures | P0 | ✅ | review (MVP = 2D scan image; profile/spectroscopy routed to typed unsupported, follow-up) |
 | FF02 | TIFF writer (WPF-free) + provenance | FF01, F05 | `TiffWriter` (D) | Rewrite | writes result TIFF incl. provenance; round-trip | P1 | – | planned |
 | FF03 | PS-PPT reader (Fast PinPoint) | F03 | `LIB.File.PSPPT` (B) | Extract | reads PS-PPT → ForceCurve/ScanImage datasets | P2 | – | planned |
 | FF04 | HDF5 reader (PiFM) + preserve provenance | F03, F05 | `LIB.File.HDF5` (A) | Extract (reference design) | reads HDF5; instrument provenance preserved | P2 | – | planned |
