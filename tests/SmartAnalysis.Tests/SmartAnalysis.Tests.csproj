@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Role: initial single test project. TASK-F00 ships ONLY the minimal project-reference
-       Architecture Guard (reads the .csproj graph). No product-feature tests.
-       References only the xUnit test framework (Approved, doc 20) — it validates the reference
-       graph by reading .csproj files, so no product ProjectReference is required. -->
+  <!-- Role: initial single test project. Hosts the project-reference Architecture Guard (reads the
+       .csproj graph) and unit tests for the projects under test. References the xUnit test framework
+       (Approved, doc 20) plus the product projects it tests (from F01: Domain). -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
@@ -14,6 +13,12 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Projects under test (F01: Domain). Tests may reference product projects; this does not
+         affect the "only App references Infrastructure" rule (Tests references neither). -->
+    <ProjectReference Include="..\..\src\SmartAnalysis.Domain\SmartAnalysis.Domain.csproj" />
   </ItemGroup>
 
 </Project>

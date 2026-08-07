@@ -25,7 +25,7 @@ public sealed class ArchitectureGuardTests
         ["SmartAnalysis.Infrastructure"] = ["SmartAnalysis.Domain", "SmartAnalysis.Application"],
         ["SmartAnalysis.UI"] = ["SmartAnalysis.Application", "SmartAnalysis.Visualization"],
         ["SmartAnalysis.App"] = ["SmartAnalysis.UI", "SmartAnalysis.Application", "SmartAnalysis.Infrastructure"],
-        ["SmartAnalysis.Tests"] = [], // reads csproj files; references only the test framework
+        ["SmartAnalysis.Tests"] = ["SmartAnalysis.Domain"], // references the projects under test (F01: Domain)
     };
 
     // Edges that must never exist (product project -> product project). ADR-009/010.

@@ -14,7 +14,7 @@ Proposed UI-free, immutable AFM domain. Derived from the legacy model analysis (
 | Tree/ParentId in domain? | fused into UI tray node | **No** — lineage lives in Provenance; tree is a UI/workspace projection | separates domain from navigation (fixes fusion) |
 | Immutable? | no | **Yes, externally immutable** | headless test + reproducibility |
 | Who owns big arrays? | domain object, unclear lifetime, 3–5 copies | **explicit `ScanBuffer` owner**, copy only at boundaries | memory + ownership clarity (H6) |
-| Buffer abstraction? | raw `Array` | **`ScanBuffer<T>` over `Memory<T>`** (OPEN: pooled) | slicing without copy, endianness-safe |
+| Buffer abstraction? | raw `Array` | **`ScanBuffer<T>` over `Memory<T>`** (implemented F01; owned array, pooling deferred — ADR-011) | slicing without copy, endianness-safe |
 | Metadata strong vs dict? | ~60-field struct + loose dict | **strong core + typed extension bag** | discoverable + extensible |
 | Unit conversion layer? | domain Quantity + duplicated formulas | **Domain unit system, single source** | remove duplication (doc 02 weakness) |
 | Result = dataset or artifact? | new tray item | **Analysis produces a new `AfmDataset` (derived) or an `AnalysisArtifact`** (scalars/tables) | both needed |
@@ -102,9 +102,19 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
 | `BaseTrayItemModel` (`Id`/`ParentId` + View) | UI/workspace concern; domain keeps only `DatasetId` + provenance lineage |
 | WPF `BitmapImage Thumbnail` | removed from domain; thumbnails are a viz/persistence concern |
 
+## Implemented in F01
+- **Units**: `Dimension`, `Unit` (affine `ScaleToBase`/`OffsetToBase`), `PhysicalValue`
+  (`TryConvertTo` → typed `UnitConversion`; cross-dimension = typed failure), immutable injected
+  `IUnitRegistry` + `StandardUnits` (no static singletons).
+- **Axes**: `Axis` (name, unit, origin, step, count, direction) with a single `RawToReal` transform;
+  reversed axes explicit; out-of-range index throws.
+- **Buffers**: `ScanBuffer<T>` — owned array over `Memory<T>`, copy-free slicing, `IDisposable`
+  (ADR-011, resolves OD-1).
+
 ## OPEN decisions (record as ADRs when resolved)
 
-- `ScanBuffer<T>`: plain `Memory<T>` owner vs. `ArrayPool`-backed with explicit rent/return.
+- ~~`ScanBuffer<T>` backing~~ — **decided (ADR-011)**: owned array over `Memory<T>`; revisit pooling
+  (ArrayPool) or mmap only on evidence, behind the same API.
 - Whether `ForceCurve` approach/retract split is stored or recomputed on demand.
 - Extension metadata: `Dictionary<string,string>` vs. a typed variant union.
 - Whether vector-scan is a distinct dataset type or a `ScanImageDataset` variant (legacy: sub-mode).
