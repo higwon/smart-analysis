@@ -98,7 +98,7 @@ coverage, method, and gaps.
 | [40-ai-working-agreement](ai-context/40-ai-working-agreement.md) | Mandatory common baseline for every implementation session (incl. §15 GitHub procedure) |
 | [41-doc-maintenance-and-adr](ai-context/41-doc-maintenance-and-adr.md) | Which code change updates which doc; status flow ↔ GitHub; ADR process; completion report |
 | [42-github-delivery-workflow](ai-context/42-github-delivery-workflow.md) | **The delivery contract**: Backlog→Epic→Issue→Branch→Draft PR→review→merge; labels; templates; ready-to-use prompts |
-| [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..011 (append-only; ADR-009 amends ADR-007, ADR-010 completes it: `Infrastructure → Application` for Ports) |
+| [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..012 (append-only; ADR-009 amends ADR-007, ADR-010 completes it: `Infrastructure → Application` for Ports) |
 | [.github/](../.github/) | Issue templates (`epic.yml`, `task.yml`) + `pull_request_template.md` |
 
 ## 5. Current status
@@ -119,7 +119,7 @@ classification; backlog = status source of truth; MVP split into 4 checkpoints).
 | First-party WPF design system (doc 21) + no-external-theme policy (ADR-008) | ✅ Defined |
 | Work-spec template + specs (foundation + MVP boundary + UIX01/02/03) | ✅ Written |
 | GitHub delivery workflow + templates | ✅ Added |
-| AI working agreement + doc-maintenance + ADRs (001–011) | ✅ Recorded |
+| AI working agreement + doc-maintenance + ADRs (001–012) | ✅ Recorded |
 | Task status source of truth | ✅ Backlog (single SoT); status flow ↔ GitHub |
 | **New product code / `.sln`** | 🟢 `TASK-F00` (PR #3) + `TASK-F01` (PR #5) **merged** on `main`. 🟡 `TASK-F03` (domain dataset model) implemented on `feat/task-f03-domain-dataset`; **Draft PR under review**. |
 

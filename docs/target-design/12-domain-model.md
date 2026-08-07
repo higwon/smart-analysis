@@ -103,10 +103,15 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
 | WPF `BitmapImage Thumbnail` | removed from domain; thumbnails are a viz/persistence concern |
 
 ## Implemented in F03
-- **Datasets**: `DatasetId` (identity, never a path), `DataSource` (format id + optional path/hash,
-  provenance-only), abstract `AfmDataset` base, and immutable records `ScanImageDataset`,
-  `LineProfileDataset`, `SpectrumDataset`, `ForceCurveDataset`, plus a minimal `AnalysisArtifact` —
-  composed from F01 types with buffer↔axes consistency validated at construction.
+- **Datasets as Id-based entities (ADR-012)**: `DatasetId` (identity, never a path; non-empty
+  enforced), `DataSource` (format id + optional path/hash, provenance-only), abstract `AfmDataset`
+  base (`class`, **equality by `Id` only**, `IDisposable`), and concrete `ScanImageDataset`,
+  `LineProfileDataset`, `SpectrumDataset`, `ForceCurveDataset`, plus `AnalysisArtifact` (Id-entity,
+  no buffers) — composed from F01 types with buffer↔axes consistency validated at construction.
+- **Buffer ownership (ADR-011/012)**: a dataset **owns** its `ScanBuffer`(s); `Dispose()` releases
+  them. Constructor **transfers ownership on success**, leaves it with the caller **on failure**;
+  the same buffer instance can't fill two roles (force-curve). Reload with the same `DatasetId`
+  compares equal regardless of buffer instances (real H1 fix).
 - **Deferred (incremental build):** `ChannelDescriptor`/`ScanMetadata` members → **D01** (value unit
   is carried as `Unit` for now); `Provenance` member on `AfmDataset`/`AnalysisArtifact` → **F05**
   (ADR-004); force-curve approach/retract segment model → **D03/EPIC-SPEC01**.

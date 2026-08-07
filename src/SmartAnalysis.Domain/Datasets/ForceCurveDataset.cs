@@ -5,13 +5,15 @@ namespace SmartAnalysis.Domain.Datasets;
 
 /// <summary>
 /// A single force–distance curve: paired <see cref="Force"/> and <see cref="Separation"/> samples
-/// (same length, 1D). Immutable.
+/// (same length, 1D). Entity keyed by <c>Id</c>; owns <b>both</b> buffers.
 /// <para>
-/// F03 stores the raw curve only. The <b>approach/retract segmentation</b> and contact model are
-/// added in <b>D03 / EPIC-SPEC01</b> (doc 12 OPEN: stored vs recomputed).
+/// On success the ctor takes ownership of both buffers (dispose the dataset). If the ctor throws,
+/// ownership stays with the caller. Passing the <b>same</b> buffer instance for both roles is rejected
+/// so each buffer has exactly one owner. The approach/retract segmentation is added in
+/// <b>D03 / EPIC-SPEC01</b> (doc 12 OPEN: stored vs recomputed).
 /// </para>
 /// </summary>
-public sealed record ForceCurveDataset : AfmDataset
+public sealed class ForceCurveDataset : AfmDataset
 {
     public ForceCurveDataset(
         DatasetId id,
@@ -22,10 +24,15 @@ public sealed record ForceCurveDataset : AfmDataset
         Unit forceUnit)
         : base(id, source)
     {
-        Separation = DomainGuard.NotNull(separation, nameof(separation));
-        Force = DomainGuard.NotNull(force, nameof(force));
+        DomainGuard.NotNull(separation, nameof(separation));
+        DomainGuard.NotNull(force, nameof(force));
         SeparationUnit = DomainGuard.NotNull(separationUnit, nameof(separationUnit));
         ForceUnit = DomainGuard.NotNull(forceUnit, nameof(forceUnit));
+
+        if (ReferenceEquals(separation, force))
+        {
+            throw new ArgumentException("Separation and force must be distinct buffers (single-owner per buffer).", nameof(force));
+        }
 
         if (separation.Height != 1 || force.Height != 1)
         {
@@ -37,6 +44,9 @@ public sealed record ForceCurveDataset : AfmDataset
             throw new ArgumentException(
                 $"Separation and force must have equal length (was {separation.Length} vs {force.Length}).");
         }
+
+        Separation = separation;
+        Force = force;
     }
 
     public ScanBuffer<float> Separation { get; }
@@ -49,4 +59,10 @@ public sealed record ForceCurveDataset : AfmDataset
 
     /// <summary>Number of samples in the curve.</summary>
     public int Length => Force.Length;
+
+    public override void Dispose()
+    {
+        Separation.Dispose();
+        Force.Dispose(); // distinct instances guaranteed at construction
+    }
 }

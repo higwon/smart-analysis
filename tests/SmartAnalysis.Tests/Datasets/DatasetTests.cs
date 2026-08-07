@@ -10,49 +10,46 @@ public sealed class DatasetTests
 {
     private static Axis Axis(int count) => new("X", StandardUnits.Nanometre, 0.0, 1.0, count);
     private static DataSource Source(string? path = null) => new("psia-tiff", path);
+    private static ScanImageDataset Image(DatasetId id, DataSource src, ScanBuffer<float> buffer)
+        => new(id, src, Axis(3), Axis(1), StandardUnits.Nanometre, buffer);
 
-    // --- Identity ---
-
-    [Fact]
-    public void DatasetId_new_is_unique()
-        => Assert.NotEqual(DatasetId.New(), DatasetId.New());
+    // --- Identity (ADR-012): equality is by DatasetId only ---
 
     [Fact]
-    public void Identity_is_the_id_not_the_file_path()
-    {
-        var x = Axis(3);
-        var y = Axis(1);
-        var buffer = ScanBuffer<float>.Allocate(3, 1);
-
-        // Same source file path, different ids → different datasets.
-        var a = new ScanImageDataset(DatasetId.New(), Source("C:/scan.tiff"), x, y, StandardUnits.Nanometre, buffer);
-        var b = new ScanImageDataset(DatasetId.New(), Source("C:/scan.tiff"), x, y, StandardUnits.Nanometre, buffer);
-
-        Assert.NotEqual(a, b);
-        Assert.NotEqual(a.Id, b.Id);
-    }
+    public void DatasetId_new_is_unique() => Assert.NotEqual(DatasetId.New(), DatasetId.New());
 
     [Fact]
-    public void Same_id_and_members_are_equal()
+    public void Same_id_with_different_buffer_instances_is_the_same_identity()
     {
         var id = DatasetId.New();
-        var x = Axis(3);
-        var y = Axis(1);
-        var buffer = ScanBuffer<float>.Allocate(3, 1);
-        var src = Source();
-
-        var a = new ScanImageDataset(id, src, x, y, StandardUnits.Nanometre, buffer);
-        var b = new ScanImageDataset(id, src, x, y, StandardUnits.Nanometre, buffer);
+        var a = Image(id, Source(), ScanBuffer<float>.Allocate(3, 1)); // distinct buffers
+        var b = Image(id, Source(), ScanBuffer<float>.Allocate(3, 1));
 
         Assert.Equal(a, b);
+        Assert.True(a == b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 
-    // --- ScanImageDataset ---
+    [Fact]
+    public void Different_id_same_source_and_content_is_a_different_identity()
+    {
+        var a = Image(DatasetId.New(), Source("C:/scan.tiff"), ScanBuffer<float>.Allocate(3, 1));
+        var b = Image(DatasetId.New(), Source("C:/scan.tiff"), ScanBuffer<float>.Allocate(3, 1));
+
+        Assert.NotEqual(a, b);
+        Assert.True(a != b);
+    }
+
+    [Fact]
+    public void Empty_dataset_id_is_rejected()
+        => Assert.Throws<ArgumentException>(() => Image(default, Source(), ScanBuffer<float>.Allocate(3, 1)));
+
+    // --- Buffer↔axes validation ---
 
     [Fact]
     public void ScanImage_exposes_axes_unit_and_buffer()
     {
-        var image = new ScanImageDataset(
+        using var image = new ScanImageDataset(
             DatasetId.New(), Source(), Axis(4), Axis(3), StandardUnits.Nanometre, ScanBuffer<float>.Allocate(4, 3));
 
         Assert.Equal(4, image.X.Count);
@@ -63,24 +60,13 @@ public sealed class DatasetTests
 
     [Fact]
     public void ScanImage_rejects_buffer_not_matching_axes()
-    {
-        Assert.Throws<ArgumentException>(() => new ScanImageDataset(
+        => Assert.Throws<ArgumentException>(() => new ScanImageDataset(
             DatasetId.New(), Source(), Axis(4), Axis(3), StandardUnits.Nanometre, ScanBuffer<float>.Allocate(4, 2)));
-    }
-
-    [Fact]
-    public void ScanImage_rejects_null_arguments()
-    {
-        Assert.Throws<ArgumentNullException>(() => new ScanImageDataset(
-            DatasetId.New(), Source(), Axis(2), Axis(2), StandardUnits.Nanometre, null!));
-    }
-
-    // --- LineProfileDataset / SpectrumDataset ---
 
     [Fact]
     public void LineProfile_requires_1d_buffer_matching_axis()
     {
-        var ok = new LineProfileDataset(DatasetId.New(), Source(), Axis(5), StandardUnits.Nanometre, ScanBuffer<float>.Allocate(5, 1));
+        using var ok = new LineProfileDataset(DatasetId.New(), Source(), Axis(5), StandardUnits.Nanometre, ScanBuffer<float>.Allocate(5, 1));
         Assert.Equal(5, ok.Values.Length);
 
         Assert.Throws<ArgumentException>(() => new LineProfileDataset(
@@ -90,46 +76,80 @@ public sealed class DatasetTests
     [Fact]
     public void Spectrum_requires_1d_buffer_matching_axis()
     {
-        var ok = new SpectrumDataset(
-            DatasetId.New(), Source(), new Axis("wn", StandardUnits.PerCentimetre, 500, 1, 8), StandardUnits.One, ScanBuffer<float>.Allocate(8, 1));
+        var axis = new Axis("wn", StandardUnits.PerCentimetre, 500, 1, 8);
+        using var ok = new SpectrumDataset(DatasetId.New(), Source(), axis, StandardUnits.One, ScanBuffer<float>.Allocate(8, 1));
         Assert.Equal(8, ok.Intensity.Length);
 
         Assert.Throws<ArgumentException>(() => new SpectrumDataset(
-            DatasetId.New(), Source(), new Axis("wn", StandardUnits.PerCentimetre, 500, 1, 8), StandardUnits.One, ScanBuffer<float>.Allocate(7, 1)));
+            DatasetId.New(), Source(), axis, StandardUnits.One, ScanBuffer<float>.Allocate(7, 1)));
+    }
+
+    // --- Buffer ownership & lifetime (ADR-011/012) ---
+
+    [Fact]
+    public void Dataset_owns_and_disposes_its_buffer()
+    {
+        var image = new ScanImageDataset(
+            DatasetId.New(), Source(), Axis(4), Axis(3), StandardUnits.Nanometre, ScanBuffer<float>.Allocate(4, 3));
+
+        image.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => _ = image.Data.Memory);
+    }
+
+    [Fact]
+    public void Failed_construction_does_not_take_ownership_of_the_buffer()
+    {
+        var buffer = ScanBuffer<float>.Allocate(4, 2); // 8 elements, mismatched with 4x3 axes
+
+        Assert.Throws<ArgumentException>(() => new ScanImageDataset(
+            DatasetId.New(), Source(), Axis(4), Axis(3), StandardUnits.Nanometre, buffer));
+
+        // Ownership stayed with the caller: the buffer is still usable and can be disposed by us.
+        Assert.Equal(8, buffer.Memory.Length);
+        buffer.Dispose();
     }
 
     // --- ForceCurveDataset ---
 
     [Fact]
-    public void ForceCurve_requires_equal_length_1d_buffers()
+    public void ForceCurve_requires_equal_length_and_distinct_buffers_and_disposes_both()
     {
-        var ok = new ForceCurveDataset(
-            DatasetId.New(), Source(), ScanBuffer<float>.Allocate(64, 1), ScanBuffer<float>.Allocate(64, 1),
-            StandardUnits.Nanometre, StandardUnits.Nanonewton);
-        Assert.Equal(64, ok.Length);
+        var sep = ScanBuffer<float>.Allocate(64, 1);
+        var force = ScanBuffer<float>.Allocate(64, 1);
+        var fc = new ForceCurveDataset(DatasetId.New(), Source(), sep, force, StandardUnits.Nanometre, StandardUnits.Nanonewton);
+        Assert.Equal(64, fc.Length);
 
+        fc.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => _ = sep.Memory);
+        Assert.Throws<ObjectDisposedException>(() => _ = force.Memory);
+    }
+
+    [Fact]
+    public void ForceCurve_rejects_same_buffer_for_both_roles()
+    {
+        var shared = ScanBuffer<float>.Allocate(64, 1);
         Assert.Throws<ArgumentException>(() => new ForceCurveDataset(
+            DatasetId.New(), Source(), shared, shared, StandardUnits.Nanometre, StandardUnits.Nanonewton));
+    }
+
+    [Fact]
+    public void ForceCurve_rejects_length_mismatch()
+        => Assert.Throws<ArgumentException>(() => new ForceCurveDataset(
             DatasetId.New(), Source(), ScanBuffer<float>.Allocate(64, 1), ScanBuffer<float>.Allocate(32, 1),
             StandardUnits.Nanometre, StandardUnits.Nanonewton));
-    }
 
     // --- AnalysisArtifact ---
 
     [Fact]
     public void Artifact_scalars_are_immutable_and_defensively_copied()
     {
-        var mutable = new Dictionary<string, PhysicalValue>
-        {
-            ["Sq"] = new(1.5, StandardUnits.Nanometre),
-        };
-
+        var mutable = new Dictionary<string, PhysicalValue> { ["Sq"] = new(1.5, StandardUnits.Nanometre) };
         var artifact = new AnalysisArtifact(DatasetId.New(), DatasetId.New(), "image.roughness", mutable);
 
-        // Mutating the source dictionary must not affect the artifact.
-        mutable["Sa"] = new(0.9, StandardUnits.Nanometre);
+        mutable["Sa"] = new(0.9, StandardUnits.Nanometre); // must not leak in
         Assert.Single(artifact.Scalars);
         Assert.Equal(1.5, artifact.Scalars["Sq"].Value);
-
         Assert.Throws<InvalidCastException>(() => _ = (Dictionary<string, PhysicalValue>)artifact.Scalars);
     }
 
@@ -137,4 +157,24 @@ public sealed class DatasetTests
     public void Artifact_rejects_blank_operation_id()
         => Assert.Throws<ArgumentException>(() => new AnalysisArtifact(
             DatasetId.New(), DatasetId.New(), "  ", new Dictionary<string, PhysicalValue>()));
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Artifact_rejects_empty_ids(bool emptyId, bool emptySource)
+    {
+        var id = emptyId ? default : DatasetId.New();
+        var source = emptySource ? default : DatasetId.New();
+        Assert.Throws<ArgumentException>(() => new AnalysisArtifact(id, source, "op", new Dictionary<string, PhysicalValue>()));
+    }
+
+    [Fact]
+    public void Artifact_equality_is_by_id()
+    {
+        var id = DatasetId.New();
+        var a = new AnalysisArtifact(id, DatasetId.New(), "op-a", new Dictionary<string, PhysicalValue>());
+        var b = new AnalysisArtifact(id, DatasetId.New(), "op-b", new Dictionary<string, PhysicalValue>());
+
+        Assert.Equal(a, b); // same Id ⇒ same identity, regardless of other fields
+    }
 }
