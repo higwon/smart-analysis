@@ -3,6 +3,7 @@ using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Metadata;
+using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
 using Xunit;
 
@@ -13,13 +14,15 @@ public sealed class DatasetTests
     private static Axis Axis(int count) => new("X", StandardUnits.Nanometre, 0.0, 1.0, count);
     private static DataSource Source(string? path = null) => new("psia-tiff", path);
     private static ScanMetadata Meta => ScanMetadata.Unknown;
+    private static ProvenanceRecord Prov => ProvenanceRecord.Root;
     private static ChannelDescriptor Height => new("height", ChannelKind.Topography, StandardUnits.Nanometre);
     private static ChannelDescriptor Intensity => new("intensity", ChannelKind.Intensity, StandardUnits.One);
     private static ChannelDescriptor SeparationCh => new("separation", ChannelKind.Topography, StandardUnits.Nanometre);
     private static ChannelDescriptor ForceChannel => new("force", ChannelKind.Force, StandardUnits.Nanonewton);
+    private static Dictionary<string, PhysicalValue> NoScalars() => new();
 
     private static ScanImageDataset Image(DatasetId id, DataSource src, ScanBuffer<float> buffer)
-        => new(id, src, Axis(3), Axis(1), Height, buffer, Meta);
+        => new(id, src, Axis(3), Axis(1), Height, buffer, Meta, Prov);
 
     // --- Identity (ADR-012): equality is by DatasetId only ---
 
@@ -52,13 +55,13 @@ public sealed class DatasetTests
     public void Empty_dataset_id_is_rejected()
         => Assert.Throws<ArgumentException>(() => Image(default, Source(), ScanBuffer<float>.Allocate(3, 1)));
 
-    // --- Channel + metadata (D01) ---
+    // --- Channel + metadata + provenance ---
 
     [Fact]
-    public void ScanImage_exposes_channel_unit_and_metadata()
+    public void ScanImage_exposes_channel_metadata_and_provenance()
     {
         using var image = new ScanImageDataset(
-            DatasetId.New(), Source(), Axis(4), Axis(3), Height, ScanBuffer<float>.Allocate(4, 3), ScanMetadata.Unknown);
+            DatasetId.New(), Source(), Axis(4), Axis(3), Height, ScanBuffer<float>.Allocate(4, 3), ScanMetadata.Unknown, ProvenanceRecord.Root);
 
         Assert.Equal(4, image.X.Count);
         Assert.Equal(3, image.Y.Count);
@@ -66,49 +69,44 @@ public sealed class DatasetTests
         Assert.Equal("nm", image.Channel.Unit.Symbol);
         Assert.Equal(12, image.Data.Length);
         Assert.Same(ScanMetadata.Unknown, image.Metadata);
+        Assert.True(image.Provenance.IsRoot);
     }
 
     [Fact]
-    public void Metadata_is_required_and_carried()
+    public void Metadata_and_provenance_are_required()
     {
-        var meta = new ScanMetadata("NX10", DateTimeOffset.UnixEpoch);
-        using var image = new ScanImageDataset(
-            DatasetId.New(), Source(), Axis(2), Axis(2), Height, ScanBuffer<float>.Allocate(2, 2), meta);
-
-        Assert.Equal("NX10", image.Metadata.InstrumentModel);
+        Assert.Throws<ArgumentNullException>(() => new ScanImageDataset(
+            DatasetId.New(), Source(), Axis(2), Axis(2), Height, ScanBuffer<float>.Allocate(2, 2), null!, Prov));
+        Assert.Throws<ArgumentNullException>(() => new ScanImageDataset(
+            DatasetId.New(), Source(), Axis(2), Axis(2), Height, ScanBuffer<float>.Allocate(2, 2), Meta, null!));
     }
-
-    [Fact]
-    public void Null_metadata_is_rejected()
-        => Assert.Throws<ArgumentNullException>(() => new ScanImageDataset(
-            DatasetId.New(), Source(), Axis(2), Axis(2), Height, ScanBuffer<float>.Allocate(2, 2), null!));
 
     // --- Buffer↔axes validation ---
 
     [Fact]
     public void ScanImage_rejects_buffer_not_matching_axes()
         => Assert.Throws<ArgumentException>(() => new ScanImageDataset(
-            DatasetId.New(), Source(), Axis(4), Axis(3), Height, ScanBuffer<float>.Allocate(4, 2), Meta));
+            DatasetId.New(), Source(), Axis(4), Axis(3), Height, ScanBuffer<float>.Allocate(4, 2), Meta, Prov));
 
     [Fact]
     public void LineProfile_requires_1d_buffer_matching_axis()
     {
-        using var ok = new LineProfileDataset(DatasetId.New(), Source(), Axis(5), Height, ScanBuffer<float>.Allocate(5, 1), Meta);
+        using var ok = new LineProfileDataset(DatasetId.New(), Source(), Axis(5), Height, ScanBuffer<float>.Allocate(5, 1), Meta, Prov);
         Assert.Equal(5, ok.Values.Length);
 
         Assert.Throws<ArgumentException>(() => new LineProfileDataset(
-            DatasetId.New(), Source(), Axis(5), Height, ScanBuffer<float>.Allocate(5, 2), Meta));
+            DatasetId.New(), Source(), Axis(5), Height, ScanBuffer<float>.Allocate(5, 2), Meta, Prov));
     }
 
     [Fact]
     public void Spectrum_requires_1d_buffer_matching_axis()
     {
         var axis = new Axis("wn", StandardUnits.PerCentimetre, 500, 1, 8);
-        using var ok = new SpectrumDataset(DatasetId.New(), Source(), axis, Intensity, ScanBuffer<float>.Allocate(8, 1), Meta);
+        using var ok = new SpectrumDataset(DatasetId.New(), Source(), axis, Intensity, ScanBuffer<float>.Allocate(8, 1), Meta, Prov);
         Assert.Equal(8, ok.Intensity.Length);
 
         Assert.Throws<ArgumentException>(() => new SpectrumDataset(
-            DatasetId.New(), Source(), axis, Intensity, ScanBuffer<float>.Allocate(7, 1), Meta));
+            DatasetId.New(), Source(), axis, Intensity, ScanBuffer<float>.Allocate(7, 1), Meta, Prov));
     }
 
     // --- Buffer ownership & lifetime (ADR-011/012) ---
@@ -117,7 +115,7 @@ public sealed class DatasetTests
     public void Dataset_owns_and_disposes_its_buffer()
     {
         var image = new ScanImageDataset(
-            DatasetId.New(), Source(), Axis(4), Axis(3), Height, ScanBuffer<float>.Allocate(4, 3), Meta);
+            DatasetId.New(), Source(), Axis(4), Axis(3), Height, ScanBuffer<float>.Allocate(4, 3), Meta, Prov);
 
         image.Dispose();
 
@@ -130,7 +128,7 @@ public sealed class DatasetTests
         var buffer = ScanBuffer<float>.Allocate(4, 2); // mismatched with 4x3 axes
 
         Assert.Throws<ArgumentException>(() => new ScanImageDataset(
-            DatasetId.New(), Source(), Axis(4), Axis(3), Height, buffer, Meta));
+            DatasetId.New(), Source(), Axis(4), Axis(3), Height, buffer, Meta, Prov));
 
         Assert.Equal(8, buffer.Memory.Length); // still owned by the caller
         buffer.Dispose();
@@ -143,7 +141,7 @@ public sealed class DatasetTests
     {
         var sep = ScanBuffer<float>.Allocate(64, 1);
         var force = ScanBuffer<float>.Allocate(64, 1);
-        var fc = new ForceCurveDataset(DatasetId.New(), Source(), sep, force, SeparationCh, ForceChannel, Meta);
+        var fc = new ForceCurveDataset(DatasetId.New(), Source(), sep, force, SeparationCh, ForceChannel, Meta, Prov);
         Assert.Equal(64, fc.Length);
         Assert.Equal(ChannelKind.Force, fc.ForceChannel.Kind);
 
@@ -157,14 +155,14 @@ public sealed class DatasetTests
     {
         var shared = ScanBuffer<float>.Allocate(64, 1);
         Assert.Throws<ArgumentException>(() => new ForceCurveDataset(
-            DatasetId.New(), Source(), shared, shared, SeparationCh, ForceChannel, Meta));
+            DatasetId.New(), Source(), shared, shared, SeparationCh, ForceChannel, Meta, Prov));
     }
 
     [Fact]
     public void ForceCurve_rejects_length_mismatch()
         => Assert.Throws<ArgumentException>(() => new ForceCurveDataset(
             DatasetId.New(), Source(), ScanBuffer<float>.Allocate(64, 1), ScanBuffer<float>.Allocate(32, 1),
-            SeparationCh, ForceChannel, Meta));
+            SeparationCh, ForceChannel, Meta, Prov));
 
     // --- AnalysisArtifact ---
 
@@ -172,7 +170,7 @@ public sealed class DatasetTests
     public void Artifact_scalars_are_immutable_and_defensively_copied()
     {
         var mutable = new Dictionary<string, PhysicalValue> { ["Sq"] = new(1.5, StandardUnits.Nanometre) };
-        var artifact = new AnalysisArtifact(DatasetId.New(), DatasetId.New(), "image.roughness", mutable);
+        var artifact = new AnalysisArtifact(DatasetId.New(), DatasetId.New(), "image.roughness", mutable, Prov);
 
         mutable["Sa"] = new(0.9, StandardUnits.Nanometre);
         Assert.Single(artifact.Scalars);
@@ -183,7 +181,7 @@ public sealed class DatasetTests
     [Fact]
     public void Artifact_rejects_blank_operation_id()
         => Assert.Throws<ArgumentException>(() => new AnalysisArtifact(
-            DatasetId.New(), DatasetId.New(), "  ", new Dictionary<string, PhysicalValue>()));
+            DatasetId.New(), DatasetId.New(), "  ", NoScalars(), Prov));
 
     [Theory]
     [InlineData(true, false)]
@@ -192,15 +190,15 @@ public sealed class DatasetTests
     {
         var id = emptyId ? default : DatasetId.New();
         var source = emptySource ? default : DatasetId.New();
-        Assert.Throws<ArgumentException>(() => new AnalysisArtifact(id, source, "op", new Dictionary<string, PhysicalValue>()));
+        Assert.Throws<ArgumentException>(() => new AnalysisArtifact(id, source, "op", NoScalars(), Prov));
     }
 
     [Fact]
     public void Artifact_equality_is_by_id()
     {
         var id = DatasetId.New();
-        var a = new AnalysisArtifact(id, DatasetId.New(), "op-a", new Dictionary<string, PhysicalValue>());
-        var b = new AnalysisArtifact(id, DatasetId.New(), "op-b", new Dictionary<string, PhysicalValue>());
+        var a = new AnalysisArtifact(id, DatasetId.New(), "op-a", NoScalars(), Prov);
+        var b = new AnalysisArtifact(id, DatasetId.New(), "op-b", NoScalars(), Prov);
 
         Assert.Equal(a, b);
     }

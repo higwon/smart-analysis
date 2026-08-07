@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
 
 namespace SmartAnalysis.Domain.Datasets;
@@ -16,7 +17,8 @@ public sealed class AnalysisArtifact : IEquatable<AnalysisArtifact>
         DatasetId id,
         DatasetId sourceId,
         string operationId,
-        IReadOnlyDictionary<string, PhysicalValue> scalars)
+        IReadOnlyDictionary<string, PhysicalValue> scalars,
+        ProvenanceRecord provenance)
     {
         if (id.IsEmpty)
         {
@@ -34,6 +36,7 @@ public sealed class AnalysisArtifact : IEquatable<AnalysisArtifact>
         ArgumentNullException.ThrowIfNull(scalars);
         Scalars = new ReadOnlyDictionary<string, PhysicalValue>(
             new Dictionary<string, PhysicalValue>(scalars, StringComparer.Ordinal));
+        Provenance = DomainGuard.NotNull(provenance, nameof(provenance));
     }
 
     /// <summary>Stable identity of this artifact.</summary>
@@ -47,6 +50,9 @@ public sealed class AnalysisArtifact : IEquatable<AnalysisArtifact>
 
     /// <summary>Named scalar results with their units (read-only, defensively copied).</summary>
     public IReadOnlyDictionary<string, PhysicalValue> Scalars { get; }
+
+    /// <summary>Lineage + step history (F05, ADR-004).</summary>
+    public ProvenanceRecord Provenance { get; }
 
     // --- Identity-based equality (ADR-012) ---
 

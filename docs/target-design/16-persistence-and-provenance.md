@@ -29,13 +29,21 @@ Persistence follows dependency inversion:
 
 ## Provenance record (mandatory on every result)
 
-Target record the brief requires (all fields must be capturable):
+> **Implemented in F05 (ADR-013).** The aggregate is `ProvenanceRecord` (named so to avoid the
+> namespace/type clash; dataset members stay named `Provenance`). Lineage is `ParentId` + `Steps`;
+> it does **not** duplicate the owning dataset's `Id`/`Source` (those live on the dataset — ADR-012).
+> `ProvenanceRecord.Root` = original/imported. **JSON serialization is a Persistence concern (P01)** —
+> the Domain types below are serializer-attribute-free; the schema v1 lands with P01.
 
 ```csharp
-public sealed record Provenance(
-    DatasetId DatasetId,
-    DataSource Source,                       // original file id/hash, format
-    IReadOnlyList<ProvenanceStep> Steps);    // ordered history (the full lineage)
+public sealed class ProvenanceRecord            // Domain; identity/source live on the dataset
+{
+    public DatasetId? ParentId { get; }          // derived-from (lineage), null for a root
+    public IReadOnlyList<ProvenanceStep> Steps { get; }   // ordered history
+    public static ProvenanceRecord Root { get; } // no parent, no steps
+}
+
+public sealed record ProvenanceStep(  // shape below; implemented with a validating class ctor
 
 public sealed record ProvenanceStep(
     string StepId,

@@ -2,6 +2,7 @@ using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Metadata;
+using SmartAnalysis.Domain.Provenance;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -15,8 +16,8 @@ public sealed class ScanImageDataset : AfmDataset
 {
     public ScanImageDataset(
         DatasetId id, DataSource source, Axis x, Axis y, ChannelDescriptor channel, ScanBuffer<float> data,
-        ScanMetadata metadata)
-        : base(id, source, metadata)
+        ScanMetadata metadata, ProvenanceRecord provenance)
+        : base(id, source, metadata, provenance)
     {
         X = DomainGuard.NotNull(x, nameof(x));
         Y = DomainGuard.NotNull(y, nameof(y));
