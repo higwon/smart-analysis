@@ -33,7 +33,8 @@ never add Forbidden, and must NOT install a Candidate into product code before i
 | HelixToolkit | **Approved** | 3D; MIT |
 | HDF.PInvoke / HDF5-CSharp | **Approved** | HDF5 import; BSD/MIT |
 | EF Core + SQLitePCLRaw (SQLCipher) | **Approved** | spectrum library; MIT |
-| TIFF library (TiffLibrary) | **Approved** | pending BitMiracle-vs-TiffLibrary confirm in FF01 |
+| TIFF library (**TiffLibrary**, MIT) | **Approved** | confirmed for the PSIA **reader** (ADR-015); Infrastructure-only, behind the `IScanFileReader` port |
+| BitMiracle.LibTiff.NET (BSD) | **Rejected for new code** | ADR-015: legacy uses it only on the **write / EZ-flatten** path, not the reader; new reader code standardizes on TiffLibrary (a future writer/FF02 may revisit in its own ADR) |
 | Microsoft.Extensions.DependencyInjection | **Approved** | DI; MIT |
 | Microsoft.Extensions.Logging | **Approved** | logging; MIT |
 | xUnit, NetArchTest | **Approved** | tests/arch tests |
@@ -58,8 +59,8 @@ Promoting a Candidate → Approved requires an ADR and updates this table + doc 
 | HDF.PInvoke / HDF5-CSharp | BSD/MIT ✅ | HDF5 read | **Keep** — PiFM import; maybe workspace container |
 | Newtonsoft.Json | MIT ✅ | JSON | **Keep** (or `System.Text.Json`) |
 | EF Core + SQLitePCLRaw (SQLCipher) | MIT ✅ | Spectrum library | **Keep** — persistence layer (doc 16) |
-| TiffLibrary 0.6.65 | MIT ✅ | TIFF read/write | **Keep** — verify vs BitMiracle.LibTiff |
-| BitMiracle.LibTiff.NET 2.4 | BSD ✅ | TIFF (legacy) | **Verify if used** (doc 04 UNVERIFIED); prefer one TIFF lib |
+| TiffLibrary 0.6.65 | MIT ✅ | TIFF read (PSIA path) | **Keep** — reader standard (ADR-015) |
+| BitMiracle.LibTiff.NET 2.4 | BSD ✅ | TIFF write / EZ-flatten (legacy) | **Not for new reader code** (ADR-015): legacy write/EZ-flatten + UI only, not the PSIA reader; FF02 writer may revisit |
 | log4net 3.3.2 | Apache-2.0 ✅ | Logging | Keep or swap for `Microsoft.Extensions.Logging` |
 | **stitchdosa_api/engine.dll** | Native, closed ⚠ | Batch stitch engine (P/Invoke) | **Special case** — see below |
 
