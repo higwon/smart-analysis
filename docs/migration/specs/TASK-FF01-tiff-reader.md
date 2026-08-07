@@ -139,7 +139,12 @@ Implemented per ADR-015 — Application port `IScanFileReader` + typed `FileRead
   failures for missing-magic / short-header / truncated-payload / missing-file / non-2D image type.
 - **Tests:** deterministic **synthetic PSIA-TIFF** (hand-written bytes) parsed by the real TiffLibrary
   → reader → domain, covering short/int/float, axes/units/values, provenance/source, and every typed
-  failure. No committed binaries; real-file legacy parity stays env-gated (MV00/T01).
+  failure. Plus **real files**: a committed tiny installer demo crop (`cheese-15x15.tiff`, 3.9 KB) as a
+  CI read-regression guard, and an **env-gated** sweep (`SMARTANALYSIS_TIFF_SAMPLES_DIR`, default
+  install path) — validated locally against the SmartAnalysis 2.0 samples: **all 27 `Samples/Image`
+  2D scans read**; Profile/Spectroscopy/PiFM-spectra correctly route to typed `UnsupportedImageType`,
+  while PiFM 2D maps (Z Height, single-wavenumber) read as images. Legacy **numeric** parity (golden)
+  stays deferred to MV00/T01.
 - **Deferred (follow-up):** line-profile & spectroscopy mapping (currently typed `UnsupportedImageType`);
   metadata-only fast path (option plumbed, not yet optimized); `DateTime` tag parse (`AcquiredAt`
   placeholder); comparing the exact magic **value**; physical values stored as `float` (legacy uses

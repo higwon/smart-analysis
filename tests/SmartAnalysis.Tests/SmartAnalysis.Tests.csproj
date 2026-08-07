@@ -27,4 +27,9 @@
     <ProjectReference Include="..\..\src\SmartAnalysis.Infrastructure\SmartAnalysis.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Committed real-file fixtures (ADR-015): copied next to the test assembly so tests can read them. -->
+    <None Include="Fixtures\Tiff\*.tiff" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
