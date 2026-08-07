@@ -121,7 +121,7 @@ classification; backlog = status source of truth; MVP split into 4 checkpoints).
 | GitHub delivery workflow + templates | ✅ Added |
 | AI working agreement + doc-maintenance + ADRs (001–013) | ✅ Recorded |
 | Task status source of truth | ✅ Backlog (single SoT); status flow ↔ GitHub |
-| **New product code / `.sln`** | 🟢 `TASK-F00`/`F01`/`F03`/`D01` **merged** on `main`. 🟡 `TASK-F05` (provenance; completes `AfmDataset`) implemented on `feat/task-f05-provenance`; **Draft PR under review**. |
+| **New product code / `.sln`** | 🟢 `TASK-F00`/`F01`/`F03`/`D01`/`F05` **merged** on `main` (Domain foundation complete). 🟡 `TASK-F04` (operation contract + registry) in progress next — unlocks all `A##` operations. |
 
 Decisions still **OPEN** (Candidate, need an ADR) are centralized in
 [`ai-context/41-doc-maintenance-and-adr.md`](ai-context/41-doc-maintenance-and-adr.md) §4 →
