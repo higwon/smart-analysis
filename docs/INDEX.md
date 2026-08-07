@@ -121,7 +121,7 @@ classification; backlog = status source of truth; MVP split into 4 checkpoints).
 | GitHub delivery workflow + templates | ✅ Added |
 | AI working agreement + doc-maintenance + ADRs (001–012) | ✅ Recorded |
 | Task status source of truth | ✅ Backlog (single SoT); status flow ↔ GitHub |
-| **New product code / `.sln`** | 🟢 `TASK-F00` (PR #3) + `TASK-F01` (PR #5) **merged** on `main`. 🟡 `TASK-F03` (domain dataset model) implemented on `feat/task-f03-domain-dataset`; **Draft PR under review**. |
+| **New product code / `.sln`** | 🟢 `TASK-F00` (PR #3) + `F01` (PR #5) + `F03` (PR #7, datasets as Id-entities) **merged** on `main`. 🟡 `TASK-D01` (channels + metadata) in progress next. |
 
 Decisions still **OPEN** (Candidate, need an ADR) are centralized in
 [`ai-context/41-doc-maintenance-and-adr.md`](ai-context/41-doc-maintenance-and-adr.md) §4 →
