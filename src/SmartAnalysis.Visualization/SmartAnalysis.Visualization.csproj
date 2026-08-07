@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Role: visualization adapter interfaces + render-input models. Domain only. No UI, no chart lib. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartAnalysis.Domain\SmartAnalysis.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Role: AFM domain meaning model (Dataset, Unit, Axis, Metadata, Identity, Provenance).
+       Platform-neutral. References NO other product project. (ADR-007/009/010) -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

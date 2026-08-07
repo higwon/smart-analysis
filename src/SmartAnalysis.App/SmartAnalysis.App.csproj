@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Role: executable + the ONLY Composition Root. References UI/Application/Infrastructure and
+       wires Infrastructure adapters to Application/Domain Ports via DI (ADR-009/010).
+       TASK-F00: no DI wiring / adapter registration yet — startup shell only. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartAnalysis.UI\SmartAnalysis.UI.csproj" />
+    <ProjectReference Include="..\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
+    <ProjectReference Include="..\SmartAnalysis.Infrastructure\SmartAnalysis.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

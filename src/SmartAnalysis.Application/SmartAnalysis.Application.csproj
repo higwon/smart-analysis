@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Role: Use Cases, orchestration, and Ports (interfaces). References Domain/Analysis/Visualization.
+       MUST NOT reference Infrastructure (ADR-009/010) — Infrastructure implements these Ports. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartAnalysis.Domain\SmartAnalysis.Domain.csproj" />
+    <ProjectReference Include="..\SmartAnalysis.Analysis\SmartAnalysis.Analysis.csproj" />
+    <ProjectReference Include="..\SmartAnalysis.Visualization\SmartAnalysis.Visualization.csproj" />
+  </ItemGroup>
+
+</Project>
