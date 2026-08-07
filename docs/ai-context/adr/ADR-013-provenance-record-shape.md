@@ -19,6 +19,15 @@ per ADR-010). A C# naming clash also surfaced: a type named `Provenance` in name
      is `ParentId` + `Steps`; it does **not** duplicate the owning dataset's `Id`/`Source` (those live
      on the dataset — ADR-012). `ProvenanceRecord.Root` = original/imported (no parent, no steps);
      `DerivedFrom(parent, steps)` + immutable `Append(step)`.
+   - **State rule (both-or-neither):** exactly two valid shapes — **Root** (`ParentId == null` and no
+     steps) and **Derived** (non-empty `ParentId` **and** ≥1 step). "No parent + steps" and
+     "parent + no steps" are **rejected** at construction; `Append` is invalid on `Root` (a step needs
+     a parent — use `DerivedFrom`).
+   - **Ordering & identity validation** (provenance is reproducibility data — validated hard): `Steps`
+     are **contiguously ordered from 0** (step *i* has `Order == i`); step ids are **non-null, unique**
+     within a record; `Append` requires the new step's `Order == Steps.Count`. Empty ids rejected:
+     `ParentId`/`InputDatasetId` non-empty, `ParentResultId` null-or-non-empty; step parameter keys
+     non-empty; warning/error lists contain no null elements.
    - **`ProvenanceStep`** captures the full doc-16 field set: input dataset id + version, operation id
      + version, **parameters with units** (`IReadOnlyDictionary<string, PhysicalValue>`), execution
      order, `ExecutionEnvironment`, typed `OperationWarning`/`OperationError` lists, `ParentResultId`,

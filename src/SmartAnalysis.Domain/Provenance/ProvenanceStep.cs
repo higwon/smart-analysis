@@ -29,18 +29,25 @@ public sealed class ProvenanceStep
         MlModelRef? model = null)
     {
         StepId = DomainGuard.Text(stepId, nameof(stepId));
+        if (inputDatasetId.IsEmpty)
+        {
+            throw new ArgumentException("InputDatasetId must not be empty.", nameof(inputDatasetId));
+        }
+
+        if (parentResultId is { IsEmpty: true })
+        {
+            throw new ArgumentException("ParentResultId, when present, must not be empty.", nameof(parentResultId));
+        }
+
         InputDatasetId = inputDatasetId;
         InputVersion = DomainGuard.NonNegative(inputVersion, nameof(inputVersion));
         OperationId = DomainGuard.Text(operationId, nameof(operationId));
         OperationVersion = DomainGuard.NonNegative(operationVersion, nameof(operationVersion));
         Order = DomainGuard.NonNegative(order, nameof(order));
         Environment = DomainGuard.NotNull(environment, nameof(environment));
-        Parameters = parameters is null || parameters.Count == 0
-            ? EmptyParameters
-            : new ReadOnlyDictionary<string, PhysicalValue>(
-                new Dictionary<string, PhysicalValue>(parameters, StringComparer.Ordinal));
-        Warnings = warnings is null || warnings.Count == 0 ? [] : warnings.ToArray().AsReadOnly();
-        Errors = errors is null || errors.Count == 0 ? [] : errors.ToArray().AsReadOnly();
+        Parameters = CopyParameters(parameters);
+        Warnings = CopyNonNull(warnings, nameof(warnings));
+        Errors = CopyNonNull(errors, nameof(errors));
         ParentResultId = parentResultId;
         UserChange = userChange;
         Ai = ai;
@@ -49,6 +56,45 @@ public sealed class ProvenanceStep
 
     private static readonly IReadOnlyDictionary<string, PhysicalValue> EmptyParameters =
         new ReadOnlyDictionary<string, PhysicalValue>(new Dictionary<string, PhysicalValue>(StringComparer.Ordinal));
+
+    private static IReadOnlyDictionary<string, PhysicalValue> CopyParameters(
+        IReadOnlyDictionary<string, PhysicalValue>? parameters)
+    {
+        if (parameters is null || parameters.Count == 0)
+        {
+            return EmptyParameters;
+        }
+
+        var copy = new Dictionary<string, PhysicalValue>(parameters.Count, StringComparer.Ordinal);
+        foreach (var kv in parameters)
+        {
+            if (string.IsNullOrWhiteSpace(kv.Key))
+            {
+                throw new ArgumentException("Parameter keys must be non-empty.", nameof(parameters));
+            }
+
+            copy[kv.Key] = kv.Value;
+        }
+
+        return new ReadOnlyDictionary<string, PhysicalValue>(copy);
+    }
+
+    private static IReadOnlyList<T> CopyNonNull<T>(IReadOnlyList<T>? items, string paramName)
+        where T : class
+    {
+        if (items is null || items.Count == 0)
+        {
+            return [];
+        }
+
+        var copy = new T[items.Count];
+        for (var i = 0; i < items.Count; i++)
+        {
+            copy[i] = items[i] ?? throw new ArgumentException($"{paramName} must not contain null elements.", paramName);
+        }
+
+        return Array.AsReadOnly(copy);
+    }
 
     public string StepId { get; }
 

@@ -7,7 +7,7 @@ namespace SmartAnalysis.Tests.Provenance;
 
 public sealed class ProvenanceTests
 {
-    private static ProvenanceStep Step(int order = 0)
+    private static ProvenanceStep Step(int order)
         => new(
             stepId: $"s{order}",
             inputDatasetId: DatasetId.New(),
@@ -17,6 +17,8 @@ public sealed class ProvenanceTests
             order: order,
             environment: ExecutionEnvironment.Unknown,
             parameters: new Dictionary<string, PhysicalValue> { ["order"] = new(1, StandardUnits.One) });
+
+    // --- ProvenanceRecord state rules (ADR-013) ---
 
     [Fact]
     public void Root_is_root_with_no_parent_or_steps()
@@ -30,7 +32,7 @@ public sealed class ProvenanceTests
     public void DerivedFrom_records_parent_and_steps()
     {
         var parent = DatasetId.New();
-        var prov = ProvenanceRecord.DerivedFrom(parent, [Step()]);
+        var prov = ProvenanceRecord.DerivedFrom(parent, [Step(0)]);
 
         Assert.False(prov.IsRoot);
         Assert.Equal(parent, prov.ParentId);
@@ -38,14 +40,51 @@ public sealed class ProvenanceTests
     }
 
     [Fact]
+    public void DerivedFrom_rejects_empty_parent()
+        => Assert.Throws<ArgumentException>(() => ProvenanceRecord.DerivedFrom(default, [Step(0)]));
+
+    [Fact]
+    public void Derived_with_parent_requires_at_least_one_step()
+        => Assert.Throws<ArgumentException>(() => ProvenanceRecord.DerivedFrom(DatasetId.New(), []));
+
+    [Fact]
+    public void Steps_without_a_parent_are_rejected()
+        => Assert.Throws<ArgumentException>(() => new ProvenanceRecord(null, [Step(0)]));
+
+    [Fact]
+    public void Root_append_is_rejected()
+        => Assert.Throws<ArgumentException>(() => ProvenanceRecord.Root.Append(Step(0)));
+
+    [Fact]
     public void Append_is_immutable_and_ordered()
     {
-        var prov = ProvenanceRecord.Root.Append(Step(0)).Append(Step(1));
+        var parent = DatasetId.New();
+        var baseRecord = ProvenanceRecord.DerivedFrom(parent, [Step(0)]);
+        var appended = baseRecord.Append(Step(1));
 
-        Assert.Empty(ProvenanceRecord.Root.Steps); // original unchanged
-        Assert.Equal(2, prov.Steps.Count);
-        Assert.Equal(0, prov.Steps[0].Order);
-        Assert.Equal(1, prov.Steps[1].Order);
+        Assert.Single(baseRecord.Steps);          // original unchanged
+        Assert.Equal(2, appended.Steps.Count);
+        Assert.Equal(0, appended.Steps[0].Order);
+        Assert.Equal(1, appended.Steps[1].Order);
+    }
+
+    [Fact]
+    public void Non_contiguous_order_is_rejected()
+        => Assert.Throws<ArgumentException>(() => ProvenanceRecord.DerivedFrom(DatasetId.New(), [Step(0), Step(2)]));
+
+    [Fact]
+    public void Duplicate_step_id_is_rejected()
+    {
+        var dup = new ProvenanceStep("same", DatasetId.New(), 1, "op", 1, 1, ExecutionEnvironment.Unknown);
+        var first = new ProvenanceStep("same", DatasetId.New(), 1, "op", 1, 0, ExecutionEnvironment.Unknown);
+        Assert.Throws<ArgumentException>(() => ProvenanceRecord.DerivedFrom(DatasetId.New(), [first, dup]));
+    }
+
+    [Fact]
+    public void Append_wrong_order_is_rejected()
+    {
+        var record = ProvenanceRecord.DerivedFrom(DatasetId.New(), [Step(0)]);
+        Assert.Throws<ArgumentException>(() => record.Append(Step(5)));
     }
 
     // --- ProvenanceStep ---
@@ -69,9 +108,33 @@ public sealed class ProvenanceTests
         var p = new Dictionary<string, PhysicalValue> { ["a"] = new(1, StandardUnits.One) };
         var step = new ProvenanceStep("s1", DatasetId.New(), 0, "op", 0, 0, ExecutionEnvironment.Unknown, parameters: p);
 
-        p["b"] = new(2, StandardUnits.One); // must not leak in
+        p["b"] = new(2, StandardUnits.One);
         Assert.Single(step.Parameters);
         Assert.Throws<InvalidCastException>(() => _ = (Dictionary<string, PhysicalValue>)step.Parameters);
+    }
+
+    [Fact]
+    public void Step_rejects_empty_input_dataset_id()
+        => Assert.Throws<ArgumentException>(() => new ProvenanceStep("s1", default, 0, "op", 0, 0, ExecutionEnvironment.Unknown));
+
+    [Fact]
+    public void Step_rejects_empty_parent_result_id()
+        => Assert.Throws<ArgumentException>(() => new ProvenanceStep(
+            "s1", DatasetId.New(), 0, "op", 0, 0, ExecutionEnvironment.Unknown, parentResultId: default(DatasetId)));
+
+    [Fact]
+    public void Step_rejects_blank_parameter_key()
+        => Assert.Throws<ArgumentException>(() => new ProvenanceStep(
+            "s1", DatasetId.New(), 0, "op", 0, 0, ExecutionEnvironment.Unknown,
+            parameters: new Dictionary<string, PhysicalValue> { [" "] = new(1, StandardUnits.One) }));
+
+    [Fact]
+    public void Step_rejects_null_warning_or_error_elements()
+    {
+        Assert.Throws<ArgumentException>(() => new ProvenanceStep(
+            "s1", DatasetId.New(), 0, "op", 0, 0, ExecutionEnvironment.Unknown, warnings: [null!]));
+        Assert.Throws<ArgumentException>(() => new ProvenanceStep(
+            "s1", DatasetId.New(), 0, "op", 0, 0, ExecutionEnvironment.Unknown, errors: [null!]));
     }
 
     [Fact]
