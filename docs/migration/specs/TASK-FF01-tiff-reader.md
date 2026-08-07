@@ -133,7 +133,8 @@ Implemented per ADR-015 — Application port `IScanFileReader` + typed `FileRead
 `PsiaTiffReader` on **TiffLibrary (MIT)**, explicit DI (`AddPsiaTiffReader`).
 - **Shipped:** the **2D scan-image** path → `ScanImageDataset`. PSIA tags MagicNumber(0xC500,
   presence)/Header(0xC503)/Data(0xC502); header parsed with an explicit little-endian `BinaryReader`
-  (no `unsafe`); pixels short/int/float → `physical = raw*DataGain + ZOffset` in the header `Unit`;
+  and pixels decoded with explicit little-endian `BinaryPrimitives` (no `unsafe`, no host-endian
+  `BitConverter`); pixels short/int/float → `physical = raw*DataGain + ZOffset` in the header `Unit`;
   axes raw[0..W]→real[0..XScanSize] **µm**; unit resolved via `IUnitRegistry` (dimensionless fallback);
   `Provenance = ProvenanceRecord.Root`; `Source = DataSource("psia-tiff", path, SHA-256 hash)`. Typed
   failures for missing-magic / short-header / truncated-payload / missing-file / non-2D image type.

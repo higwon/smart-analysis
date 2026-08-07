@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using SmartAnalysis.Application.FileFormats;
@@ -224,13 +225,16 @@ public sealed class PsiaTiffReader : IScanFileReader
 
     private static float[] ToPhysicalFloats(byte[] raw, int count, int dataType, double dataGain, double zOffset)
     {
+        // Pixel payload is little-endian PSIA data — read it explicitly (BinaryPrimitives), not with
+        // host-endian BitConverter, so the decode matches ADR-015's "endianness explicit" rule.
         var result = new float[count];
+        ReadOnlySpan<byte> span = raw;
         switch (dataType)
         {
             case (int)PsiaTiff.DataType.Short:
                 for (int i = 0; i < count; i++)
                 {
-                    short v = BitConverter.ToInt16(raw, i * sizeof(short));
+                    short v = BinaryPrimitives.ReadInt16LittleEndian(span.Slice(i * sizeof(short), sizeof(short)));
                     result[i] = (float)(v * dataGain + zOffset);
                 }
 
@@ -239,7 +243,7 @@ public sealed class PsiaTiffReader : IScanFileReader
             case (int)PsiaTiff.DataType.Int:
                 for (int i = 0; i < count; i++)
                 {
-                    int v = BitConverter.ToInt32(raw, i * sizeof(int));
+                    int v = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(i * sizeof(int), sizeof(int)));
                     result[i] = (float)(v * dataGain + zOffset);
                 }
 
@@ -248,7 +252,7 @@ public sealed class PsiaTiffReader : IScanFileReader
             default: // Float
                 for (int i = 0; i < count; i++)
                 {
-                    float v = BitConverter.ToSingle(raw, i * sizeof(float));
+                    float v = BinaryPrimitives.ReadSingleLittleEndian(span.Slice(i * sizeof(float), sizeof(float)));
                     result[i] = (float)(v * dataGain + zOffset);
                 }
 

@@ -75,7 +75,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task Reports_non_2d_samples_as_typed_results()
+    public async Task Profile_and_spectroscopy_samples_route_to_unsupported()
     {
         var root = SamplesRoot();
         if (root is null)
@@ -85,7 +85,8 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
         }
 
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
-        foreach (var sub in new[] { "Profile", "Spectroscopy", "PiFM" })
+        int checkedFiles = 0;
+        foreach (var sub in new[] { "Profile", "Spectroscopy" })
         {
             var dir = Path.Combine(root, sub);
             if (!Directory.Exists(dir))
@@ -93,18 +94,54 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
                 continue;
             }
 
-            foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p).Take(4))
+            foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
             {
                 var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
-                string outcome = result.IsSuccess
-                    ? $"OK {((result.Dataset as ScanImageDataset) is { } d ? $"{d.X.Count}x{d.Y.Count}" : "non-image")}"
-                    : $"{result.Error?.Kind}";
-                if (result.Dataset is IDisposable disp)
-                {
-                    disp.Dispose();
-                }
+                (result.Dataset as IDisposable)?.Dispose();
 
-                output.WriteLine($"[{sub}] {Path.GetFileName(path)} -> {outcome}");
+                output.WriteLine($"[{sub}] {Path.GetFileName(path)} -> {(result.IsSuccess ? "OK" : result.Error?.Kind.ToString())}");
+                Assert.False(result.IsSuccess, $"{sub}/{Path.GetFileName(path)} should not read as a 2D image.");
+                Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
+                checkedFiles++;
+            }
+        }
+
+        Assert.True(checkedFiles > 0, "Expected at least one Profile/Spectroscopy sample to assert on.");
+    }
+
+    [Fact]
+    public async Task PiFM_samples_are_either_2d_images_or_typed_unsupported()
+    {
+        var root = SamplesRoot();
+        if (root is null)
+        {
+            output.WriteLine("No samples directory available — skipping.");
+            return;
+        }
+
+        var dir = Path.Combine(root, "PiFM");
+        if (!Directory.Exists(dir))
+        {
+            output.WriteLine("No PiFM dir — skipping.");
+            return;
+        }
+
+        var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
+        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
+        {
+            var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+            // PiFM mixes 2D maps (read as images) and spectra (unsupported). Both are valid outcomes;
+            // any OTHER failure (Io/Corrupt/Truncated/NotPsiaTiff) is a regression.
+            if (result.IsSuccess)
+            {
+                using var _ = Assert.IsType<ScanImageDataset>(result.Dataset);
+                output.WriteLine($"[PiFM] {Path.GetFileName(path)} -> image");
+            }
+            else
+            {
+                output.WriteLine($"[PiFM] {Path.GetFileName(path)} -> {result.Error!.Kind}");
+                Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
             }
         }
     }
