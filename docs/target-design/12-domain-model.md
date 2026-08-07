@@ -102,6 +102,16 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
 | `BaseTrayItemModel` (`Id`/`ParentId` + View) | UI/workspace concern; domain keeps only `DatasetId` + provenance lineage |
 | WPF `BitmapImage Thumbnail` | removed from domain; thumbnails are a viz/persistence concern |
 
+## Implemented in D01
+- **Channels**: `ChannelKind` (typed: Topography/Deflection/Amplitude/Phase/Current/Force/… + explicit
+  `Unknown`) and `ChannelDescriptor` (key, kind, `Unit`, display name) — no `string.Contains` guessing.
+- **Metadata**: `ScanMetadata` (strong core: instrument model + acquired-at) + typed `Extended` string
+  bag (defensively copied), with `ScanMetadata.Unknown` for derived/synthetic datasets. Full ~60-field
+  legacy header mapping stays a documented follow-up (doc 00 gaps) via `Extended`.
+- **Dataset upgrade**: `AfmDataset` now carries `ScanMetadata Metadata`; the scan/profile/spectrum/
+  force-curve datasets carry `ChannelDescriptor`(s) (value unit via `Channel.Unit`) instead of a bare
+  `Unit`. Only `Provenance` (F05) remains to be added.
+
 ## Implemented in F03
 - **Datasets as Id-based entities (ADR-012)**: `DatasetId` (identity, never a path; non-empty
   enforced), `DataSource` (format id + optional path/hash, provenance-only), abstract `AfmDataset`
@@ -112,9 +122,9 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
   them. Constructor **transfers ownership on success**, leaves it with the caller **on failure**;
   the same buffer instance can't fill two roles (force-curve). Reload with the same `DatasetId`
   compares equal regardless of buffer instances (real H1 fix).
-- **Deferred (incremental build):** `ChannelDescriptor`/`ScanMetadata` members → **D01** (value unit
-  is carried as `Unit` for now); `Provenance` member on `AfmDataset`/`AnalysisArtifact` → **F05**
-  (ADR-004); force-curve approach/retract segment model → **D03/EPIC-SPEC01**.
+- **Deferred (incremental build):** ~~`ChannelDescriptor`/`ScanMetadata` → **D01**~~ (done);
+  `Provenance` member on `AfmDataset`/`AnalysisArtifact` → **F05** (ADR-004); force-curve
+  approach/retract segment model → **D03/EPIC-SPEC01**.
 
 ## Implemented in F01
 - **Units**: `Dimension`, `Unit` (affine `ScaleToBase`/`OffsetToBase`), `PhysicalValue`
