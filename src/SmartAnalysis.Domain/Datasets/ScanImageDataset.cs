@@ -15,8 +15,8 @@ public sealed class ScanImageDataset : AfmDataset
 {
     public ScanImageDataset(
         DatasetId id, DataSource source, Axis x, Axis y, ChannelDescriptor channel, ScanBuffer<float> data,
-        ScanMetadata? metadata = null)
-        : base(id, source, metadata ?? ScanMetadata.Unknown)
+        ScanMetadata metadata)
+        : base(id, source, metadata)
     {
         X = DomainGuard.NotNull(x, nameof(x));
         Y = DomainGuard.NotNull(y, nameof(y));

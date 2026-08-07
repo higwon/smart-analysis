@@ -77,4 +77,48 @@ public sealed class ChannelMetadataTests
         Assert.Equal("unknown", ScanMetadata.Unknown.InstrumentModel);
         Assert.Empty(ScanMetadata.Unknown.Extended);
     }
+
+    [Fact]
+    public void Metadata_rejects_blank_extended_key()
+        => Assert.Throws<ArgumentException>(() => new ScanMetadata(
+            "NX10", DateTimeOffset.UnixEpoch, new Dictionary<string, string> { [" "] = "x" }));
+
+    [Fact]
+    public void Metadata_rejects_null_extended_value()
+        => Assert.Throws<ArgumentException>(() => new ScanMetadata(
+            "NX10", DateTimeOffset.UnixEpoch, new Dictionary<string, string> { ["k"] = null! }));
+
+    // --- Structural (content-based) equality ---
+
+    [Fact]
+    public void Metadata_equality_is_content_based_including_extended()
+    {
+        var at = DateTimeOffset.UnixEpoch;
+        var a = new ScanMetadata("NX10", at, new Dictionary<string, string> { ["ScanRate"] = "1 Hz" });
+        var b = new ScanMetadata("NX10", at, new Dictionary<string, string> { ["ScanRate"] = "1 Hz" });
+
+        Assert.Equal(a, b);          // different dictionary instances, same content
+        Assert.True(a == b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void Metadata_differs_when_extended_differs()
+    {
+        var at = DateTimeOffset.UnixEpoch;
+        var a = new ScanMetadata("NX10", at, new Dictionary<string, string> { ["ScanRate"] = "1 Hz" });
+        var b = new ScanMetadata("NX10", at, new Dictionary<string, string> { ["ScanRate"] = "2 Hz" });
+        var c = new ScanMetadata("NX10", at); // no extended
+
+        Assert.NotEqual(a, b);
+        Assert.NotEqual(a, c);
+    }
+
+    [Fact]
+    public void Metadata_differs_when_core_differs()
+    {
+        var a = new ScanMetadata("NX10", DateTimeOffset.UnixEpoch);
+        var b = new ScanMetadata("NX20", DateTimeOffset.UnixEpoch);
+        Assert.NotEqual(a, b);
+    }
 }

@@ -105,12 +105,16 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
 ## Implemented in D01
 - **Channels**: `ChannelKind` (typed: Topography/Deflection/Amplitude/Phase/Current/Force/… + explicit
   `Unknown`) and `ChannelDescriptor` (key, kind, `Unit`, display name) — no `string.Contains` guessing.
-- **Metadata**: `ScanMetadata` (strong core: instrument model + acquired-at) + typed `Extended` string
-  bag (defensively copied), with `ScanMetadata.Unknown` for derived/synthetic datasets. Full ~60-field
-  legacy header mapping stays a documented follow-up (doc 00 gaps) via `Extended`.
-- **Dataset upgrade**: `AfmDataset` now carries `ScanMetadata Metadata`; the scan/profile/spectrum/
+- **Metadata**: `ScanMetadata` — an immutable **value object with structural (content-based) equality**
+  (core fields + `Extended` key/value pairs, order-independent). Strong core (instrument model +
+  acquired-at) + typed `Extended` string bag (defensively copied; **keys non-empty, values non-null**;
+  keys compared Ordinal — per-instrument key normalization is a parser follow-up). `ScanMetadata.Unknown`
+  is the explicit placeholder for derived/synthetic datasets. Full ~60-field legacy header mapping stays
+  a documented follow-up (doc 00 gaps) via `Extended`.
+- **Dataset upgrade**: `AfmDataset` carries `ScanMetadata Metadata`; the scan/profile/spectrum/
   force-curve datasets carry `ChannelDescriptor`(s) (value unit via `Channel.Unit`) instead of a bare
-  `Unit`. Only `Provenance` (F05) remains to be added.
+  `Unit`. **`metadata` is a required constructor argument** (callers pass `ScanMetadata.Unknown`
+  explicitly for derived data, so a real importer can't silently omit it). Only `Provenance` (F05) remains.
 
 ## Implemented in F03
 - **Datasets as Id-based entities (ADR-012)**: `DatasetId` (identity, never a path; non-empty

@@ -24,8 +24,8 @@ public sealed class ForceCurveDataset : AfmDataset
         ScanBuffer<float> force,
         ChannelDescriptor separationChannel,
         ChannelDescriptor forceChannel,
-        ScanMetadata? metadata = null)
-        : base(id, source, metadata ?? ScanMetadata.Unknown)
+        ScanMetadata metadata)
+        : base(id, source, metadata)
     {
         DomainGuard.NotNull(separation, nameof(separation));
         DomainGuard.NotNull(force, nameof(force));

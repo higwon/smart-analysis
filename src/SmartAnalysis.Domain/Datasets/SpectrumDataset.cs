@@ -16,8 +16,8 @@ public sealed class SpectrumDataset : AfmDataset
 {
     public SpectrumDataset(
         DatasetId id, DataSource source, Axis x, ChannelDescriptor channel, ScanBuffer<float> intensity,
-        ScanMetadata? metadata = null)
-        : base(id, source, metadata ?? ScanMetadata.Unknown)
+        ScanMetadata metadata)
+        : base(id, source, metadata)
     {
         X = DomainGuard.NotNull(x, nameof(x));
         Channel = DomainGuard.NotNull(channel, nameof(channel));
