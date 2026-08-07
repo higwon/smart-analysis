@@ -25,7 +25,8 @@ public sealed class ArchitectureGuardTests
         ["SmartAnalysis.Infrastructure"] = ["SmartAnalysis.Domain", "SmartAnalysis.Application"],
         ["SmartAnalysis.UI"] = ["SmartAnalysis.Application", "SmartAnalysis.Visualization"],
         ["SmartAnalysis.App"] = ["SmartAnalysis.UI", "SmartAnalysis.Application", "SmartAnalysis.Infrastructure"],
-        ["SmartAnalysis.Tests"] = ["SmartAnalysis.Domain", "SmartAnalysis.Analysis"], // references the projects under test (F01: Domain, F04: Analysis)
+        // References the projects under test (F01: Domain, F04: Analysis, FF01: Application + Infrastructure).
+        ["SmartAnalysis.Tests"] = ["SmartAnalysis.Domain", "SmartAnalysis.Analysis", "SmartAnalysis.Application", "SmartAnalysis.Infrastructure"],
     };
 
     // Edges that must never exist (product project -> product project). ADR-009/010.
@@ -113,8 +114,11 @@ public sealed class ArchitectureGuardTests
     public void Only_App_references_Infrastructure()
     {
         var graph = LoadGraph();
+        // The rule is about PRODUCT wiring: only the App composition root may reference Infrastructure.
+        // The test project is exempt — it references Infrastructure to test the adapters (FF01).
         var offenders = graph
-            .Where(kv => kv.Key != "SmartAnalysis.App" && kv.Value.Contains("SmartAnalysis.Infrastructure"))
+            .Where(kv => kv.Key != "SmartAnalysis.App" && kv.Key != "SmartAnalysis.Tests"
+                && kv.Value.Contains("SmartAnalysis.Infrastructure"))
             .Select(kv => kv.Key)
             .ToArray();
         Assert.True(
