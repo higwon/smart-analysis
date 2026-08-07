@@ -30,7 +30,8 @@ open that must be decided **before** implementation so FF01 lands as one clean, 
   (reader) scope; the writer is FF02 (grade D, rewritten headless later).
 - The PSIA header is a fixed C struct (`PsiaHeaderStruct`, `[StructLayout(Sequential, Pack=1)]`) read
   byte-for-byte, **little-endian assumed with no swap**; the extended header is XML read with
-  `Encoding.Default`; the magic value is checked only for tag **presence**, not value (doc 04 §2 —
+  `Encoding.Default`; the PSIA `MagicNumber` tag (`0xC500`) is checked only for **presence**, not its
+  value (doc 04 §2 —
   known defects to fix, doc 07 M2/M3).
 - `SmartAnalysis.Application` and `SmartAnalysis.Infrastructure` are currently **empty** — this ADR
   sets the first port/adapter convention.
@@ -69,20 +70,35 @@ open that must be decided **before** implementation so FF01 lands as one clean, 
   // FileReadResult = success(AfmDataset) | failure(typed FileReadError: Corrupt | Truncated |
   //                  UnsupportedImageType | NotPsiaTiff | Io), never a thrown exception for these.
   ```
-  Input is a **path** now, a **stream** later (spec). The result carries a **root `ProvenanceRecord`**
-  with source = file id + **content hash** (ADR-013). The returned `AfmDataset` subtype
-  (`ScanImageDataset` / `LineProfileDataset` / spectroscopy) is selected from `Header.ImageType`.
+  Input is a **path** now, a **stream** later (spec). A successful import is an **original/root**
+  dataset — its lineage is `Dataset.Provenance = ProvenanceRecord.Root` (ADR-013: `ProvenanceRecord`
+  is `ParentId + Steps` and must **not** duplicate identity/source). The file origin lives on the
+  **dataset's `Source`**, not in provenance:
+  ```csharp
+  Dataset.Provenance = ProvenanceRecord.Root;
+  Dataset.Source     = new DataSource(formatId: "psia-tiff", originalFilePath: path, contentHash: hash);
+  ```
+  (`DataSource` already carries `FormatId` / `OriginalFilePath` / `ContentHash` — the content hash is
+  for relink-by-content, ADR-012.) The returned `AfmDataset` subtype (`ScanImageDataset` /
+  `LineProfileDataset` / spectroscopy) is selected from `Header.ImageType`.
 - **Correctness rules FF01 must honor (fixing legacy defects):** endianness **explicit** (validate,
-  don't assume host); **UTF-8** for the extended-header XML (not `Encoding.Default`); **verify the
-  magic value** `0xC500`, not just tag presence; NaN/Infinity pixels preserved and flagged in metadata.
+  don't assume host); the extended-header XML **must not be decoded with `Encoding.Default`** — decode
+  explicitly per its BOM / XML declaration (or the confirmed PSIA rule) and **verify the actual
+  encoding with fixtures** before pinning one (do **not** blindly force UTF-8: legacy device files may
+  be Windows-ANSI/locale, and a blind switch would corrupt Korean/special-character metadata); verify
+  the PSIA **`MagicNumber` private tag (tag `0xC500`)** is present **and validate its exact expected
+  value** once that value is confirmed from legacy constants/spec/fixtures (FF01 open item); NaN/Infinity
+  pixels preserved and flagged in metadata.
 
 ### 3. Fixtures — small committed corpus + env-gated golden dir
 - **Commit a minimal curated corpus** of real PSIA-TIFF samples to this (private) repo under
   `tests/SmartAnalysis.Tests/Fixtures/Tiff/`: one 2D scan, one line-profile, one spectroscopy file,
-  each as small as a real instrument file allows. Sourced from the legacy sample sets
-  (`NSISBuild/Sample`, `FW.UI.Common/Resource`). **Ownership:** Park Systems internal sample data in a
-  private repo — acceptable to commit; if any file is size- or confidentiality-sensitive, it goes to
-  the env-gated dir instead, never committed.
+  each as small as a real instrument file allows. **Prefer** files distributed with the installer or
+  made specifically for testing (e.g. legacy `NSISBuild/Sample`, `FW.UI.Common/Resource`).
+  **A file may be committed only if all hold:** cleared for internal test/sample reuse; **no customer
+  data**; no personal/confidential measurement; and its `README.md` records source + purpose. If
+  ownership or export status is unclear, the file is **env-gated only, never committed**. Real customer
+  measurement files are **not committed** even when small.
 - **Env-gated golden dir** for larger/sensitive files and legacy-derived golden values:
   `SMARTANALYSIS_TIFF_GOLDEN_DIR`; tests **skip** (not fail) when it is absent — mirroring the legacy
   HDF5 golden pattern (doc 04 §3). Legacy-derived golden values come from **MV00/T01**.
