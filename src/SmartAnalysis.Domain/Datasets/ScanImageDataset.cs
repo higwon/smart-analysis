@@ -1,6 +1,7 @@
 using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
-using SmartAnalysis.Domain.Units;
+using SmartAnalysis.Domain.Channels;
+using SmartAnalysis.Domain.Metadata;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -8,16 +9,18 @@ namespace SmartAnalysis.Domain.Datasets;
 /// A 2D scan image: a value per (x, y) sample. <see cref="Data"/> is row-major with
 /// <c>Width = X.Count</c>, <c>Height = Y.Count</c>. Entity keyed by <c>Id</c>; owns <see cref="Data"/>.
 /// <para>On success the ctor takes ownership of <paramref name="data"/> (dispose the dataset). If the
-/// ctor throws, ownership stays with the caller. D01 replaces <see cref="ValueUnit"/> with a channel.</para>
+/// ctor throws, ownership stays with the caller. The pixel unit is <c>Channel.Unit</c>.</para>
 /// </summary>
 public sealed class ScanImageDataset : AfmDataset
 {
-    public ScanImageDataset(DatasetId id, DataSource source, Axis x, Axis y, Unit valueUnit, ScanBuffer<float> data)
-        : base(id, source)
+    public ScanImageDataset(
+        DatasetId id, DataSource source, Axis x, Axis y, ChannelDescriptor channel, ScanBuffer<float> data,
+        ScanMetadata metadata)
+        : base(id, source, metadata)
     {
         X = DomainGuard.NotNull(x, nameof(x));
         Y = DomainGuard.NotNull(y, nameof(y));
-        ValueUnit = DomainGuard.NotNull(valueUnit, nameof(valueUnit));
+        Channel = DomainGuard.NotNull(channel, nameof(channel));
         DomainGuard.NotNull(data, nameof(data));
 
         if (data.Width != x.Count || data.Height != y.Count)
@@ -36,8 +39,8 @@ public sealed class ScanImageDataset : AfmDataset
     /// <summary>Slow-axis coordinates (rows).</summary>
     public Axis Y { get; }
 
-    /// <summary>Unit of the pixel value (D01 upgrades to a channel descriptor).</summary>
-    public Unit ValueUnit { get; }
+    /// <summary>The pixel-value channel (kind + unit + name). Value unit is <c>Channel.Unit</c>.</summary>
+    public ChannelDescriptor Channel { get; }
 
     /// <summary>Row-major pixel values, owned by this dataset (consumers use read-only views).</summary>
     public ScanBuffer<float> Data { get; }

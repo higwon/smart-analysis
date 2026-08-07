@@ -1,6 +1,7 @@
 using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
-using SmartAnalysis.Domain.Units;
+using SmartAnalysis.Domain.Channels;
+using SmartAnalysis.Domain.Metadata;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -8,15 +9,17 @@ namespace SmartAnalysis.Domain.Datasets;
 /// A 1D line profile: one value per position along <see cref="X"/>. <see cref="Values"/> is 1D
 /// (<c>Width = X.Count</c>, <c>Height = 1</c>). Entity keyed by <c>Id</c>; owns <see cref="Values"/>.
 /// <para>On success the ctor takes ownership of <paramref name="values"/> (dispose the dataset). If the
-/// ctor throws, ownership stays with the caller. D01 replaces <see cref="ValueUnit"/> with a channel.</para>
+/// ctor throws, ownership stays with the caller. The value unit is <c>Channel.Unit</c>.</para>
 /// </summary>
 public sealed class LineProfileDataset : AfmDataset
 {
-    public LineProfileDataset(DatasetId id, DataSource source, Axis x, Unit valueUnit, ScanBuffer<float> values)
-        : base(id, source)
+    public LineProfileDataset(
+        DatasetId id, DataSource source, Axis x, ChannelDescriptor channel, ScanBuffer<float> values,
+        ScanMetadata metadata)
+        : base(id, source, metadata)
     {
         X = DomainGuard.NotNull(x, nameof(x));
-        ValueUnit = DomainGuard.NotNull(valueUnit, nameof(valueUnit));
+        Channel = DomainGuard.NotNull(channel, nameof(channel));
         DomainGuard.NotNull(values, nameof(values));
 
         if (values.Height != 1 || values.Width != x.Count)
@@ -31,7 +34,7 @@ public sealed class LineProfileDataset : AfmDataset
 
     public Axis X { get; }
 
-    public Unit ValueUnit { get; }
+    public ChannelDescriptor Channel { get; }
 
     public ScanBuffer<float> Values { get; }
 

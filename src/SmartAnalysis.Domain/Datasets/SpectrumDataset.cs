@@ -1,6 +1,7 @@
 using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
-using SmartAnalysis.Domain.Units;
+using SmartAnalysis.Domain.Channels;
+using SmartAnalysis.Domain.Metadata;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -9,15 +10,17 @@ namespace SmartAnalysis.Domain.Datasets;
 /// <see cref="Intensity"/> is 1D (<c>Width = X.Count</c>, <c>Height = 1</c>). Entity keyed by <c>Id</c>;
 /// owns <see cref="Intensity"/>.
 /// <para>On success the ctor takes ownership of <paramref name="intensity"/> (dispose the dataset). If
-/// the ctor throws, ownership stays with the caller. D01 replaces <see cref="IntensityUnit"/> with a channel.</para>
+/// the ctor throws, ownership stays with the caller. The intensity unit is <c>Channel.Unit</c>.</para>
 /// </summary>
 public sealed class SpectrumDataset : AfmDataset
 {
-    public SpectrumDataset(DatasetId id, DataSource source, Axis x, Unit intensityUnit, ScanBuffer<float> intensity)
-        : base(id, source)
+    public SpectrumDataset(
+        DatasetId id, DataSource source, Axis x, ChannelDescriptor channel, ScanBuffer<float> intensity,
+        ScanMetadata metadata)
+        : base(id, source, metadata)
     {
         X = DomainGuard.NotNull(x, nameof(x));
-        IntensityUnit = DomainGuard.NotNull(intensityUnit, nameof(intensityUnit));
+        Channel = DomainGuard.NotNull(channel, nameof(channel));
         DomainGuard.NotNull(intensity, nameof(intensity));
 
         if (intensity.Height != 1 || intensity.Width != x.Count)
@@ -32,7 +35,7 @@ public sealed class SpectrumDataset : AfmDataset
 
     public Axis X { get; }
 
-    public Unit IntensityUnit { get; }
+    public ChannelDescriptor Channel { get; }
 
     public ScanBuffer<float> Intensity { get; }
 

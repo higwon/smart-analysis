@@ -1,5 +1,6 @@
 using SmartAnalysis.Domain.Buffers;
-using SmartAnalysis.Domain.Units;
+using SmartAnalysis.Domain.Channels;
+using SmartAnalysis.Domain.Metadata;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -9,8 +10,9 @@ namespace SmartAnalysis.Domain.Datasets;
 /// <para>
 /// On success the ctor takes ownership of both buffers (dispose the dataset). If the ctor throws,
 /// ownership stays with the caller. Passing the <b>same</b> buffer instance for both roles is rejected
-/// so each buffer has exactly one owner. The approach/retract segmentation is added in
-/// <b>D03 / EPIC-SPEC01</b> (doc 12 OPEN: stored vs recomputed).
+/// so each buffer has exactly one owner. Units come from the channel descriptors
+/// (<c>SeparationChannel.Unit</c>, <c>ForceChannel.Unit</c>). The approach/retract segmentation is
+/// added in <b>D03 / EPIC-SPEC01</b> (doc 12 OPEN: stored vs recomputed).
 /// </para>
 /// </summary>
 public sealed class ForceCurveDataset : AfmDataset
@@ -20,14 +22,15 @@ public sealed class ForceCurveDataset : AfmDataset
         DataSource source,
         ScanBuffer<float> separation,
         ScanBuffer<float> force,
-        Unit separationUnit,
-        Unit forceUnit)
-        : base(id, source)
+        ChannelDescriptor separationChannel,
+        ChannelDescriptor forceChannel,
+        ScanMetadata metadata)
+        : base(id, source, metadata)
     {
         DomainGuard.NotNull(separation, nameof(separation));
         DomainGuard.NotNull(force, nameof(force));
-        SeparationUnit = DomainGuard.NotNull(separationUnit, nameof(separationUnit));
-        ForceUnit = DomainGuard.NotNull(forceUnit, nameof(forceUnit));
+        SeparationChannel = DomainGuard.NotNull(separationChannel, nameof(separationChannel));
+        ForceChannel = DomainGuard.NotNull(forceChannel, nameof(forceChannel));
 
         if (ReferenceEquals(separation, force))
         {
@@ -53,9 +56,9 @@ public sealed class ForceCurveDataset : AfmDataset
 
     public ScanBuffer<float> Force { get; }
 
-    public Unit SeparationUnit { get; }
+    public ChannelDescriptor SeparationChannel { get; }
 
-    public Unit ForceUnit { get; }
+    public ChannelDescriptor ForceChannel { get; }
 
     /// <summary>Number of samples in the curve.</summary>
     public int Length => Force.Length;
