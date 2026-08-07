@@ -17,16 +17,22 @@ public sealed class ScanBufferTests
     }
 
     [Fact]
-    public void Constructor_rejects_mismatched_dimensions()
+    public void TakeOwnership_rejects_mismatched_dimensions()
     {
-        Assert.Throws<ArgumentException>(() => new ScanBuffer<float>(new float[10], width: 3, height: 3));
+        Assert.Throws<ArgumentException>(() => ScanBuffer<float>.TakeOwnership(new float[10], width: 3, height: 3));
+    }
+
+    [Fact]
+    public void TakeOwnership_rejects_null_data()
+    {
+        Assert.Throws<ArgumentNullException>(() => ScanBuffer<float>.TakeOwnership(null!, width: 0, height: 0));
     }
 
     [Fact]
     public void Slice_is_copy_free_and_shares_backing_storage()
     {
         var data = new double[] { 0, 1, 2, 3, 4, 5, 6, 7 };
-        using var buffer = new ScanBuffer<double>(data, width: 8, height: 1);
+        using var buffer = ScanBuffer<double>.TakeOwnership(data, width: 8, height: 1);
 
         var slice = buffer.Slice(2, 4);
 
@@ -42,7 +48,7 @@ public sealed class ScanBufferTests
     public void Full_memory_view_is_copy_free()
     {
         var data = new float[] { 1f, 2f, 3f };
-        using var buffer = new ScanBuffer<float>(data, width: 3, height: 1);
+        using var buffer = ScanBuffer<float>.TakeOwnership(data, width: 3, height: 1);
 
         Assert.True(MemoryMarshal.TryGetArray(buffer.Memory, out ArraySegment<float> segment));
         Assert.Same(data, segment.Array);

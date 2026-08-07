@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 
 namespace SmartAnalysis.Domain.Units;
@@ -24,12 +25,34 @@ public sealed class UnitRegistry : IUnitRegistry
 {
     private readonly Dictionary<string, Unit> _bySymbol;
 
+    /// <summary>
+    /// Builds an immutable registry over the given units. Throws if any element is null or if two
+    /// units share a symbol (a clear domain error rather than a generic collection exception).
+    /// </summary>
     public UnitRegistry(IEnumerable<Unit> units)
     {
         ArgumentNullException.ThrowIfNull(units);
-        Units = units.ToArray();
-        _bySymbol = Units.ToDictionary(u => u.Symbol, StringComparer.Ordinal);
-        Dimensions = Units.Select(u => u.Dimension).Distinct().ToArray();
+
+        var list = units.ToArray();
+        _bySymbol = new Dictionary<string, Unit>(list.Length, StringComparer.Ordinal);
+        foreach (var unit in list)
+        {
+            if (unit is null)
+            {
+                throw new ArgumentException("Unit collection must not contain null elements.", nameof(units));
+            }
+
+            if (!_bySymbol.TryAdd(unit.Symbol, unit))
+            {
+                throw new ArgumentException(
+                    $"Duplicate unit symbol '{unit.Symbol}': each symbol must be unique in a registry.",
+                    nameof(units));
+            }
+        }
+
+        // Expose genuinely read-only views (ReadOnlyCollection cannot be cast back to the array).
+        Units = new ReadOnlyCollection<Unit>(list);
+        Dimensions = new ReadOnlyCollection<Dimension>(list.Select(u => u.Dimension).Distinct().ToArray());
     }
 
     public IReadOnlyList<Unit> Units { get; }

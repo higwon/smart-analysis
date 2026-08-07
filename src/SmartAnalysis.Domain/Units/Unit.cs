@@ -5,13 +5,35 @@ namespace SmartAnalysis.Domain.Units;
 /// <c>base = value * ScaleToBase + OffsetToBase</c>.
 /// The base unit of a dimension has <c>ScaleToBase = 1</c> and <c>OffsetToBase = 0</c>.
 /// Immutable; value equality by all members.
+/// <para>
+/// Invariants (validated at construction): <see cref="Symbol"/> non-empty; <see cref="Dimension"/>
+/// non-null; <see cref="ScaleToBase"/> finite and &gt; 0 (so conversion never divides by zero);
+/// <see cref="OffsetToBase"/> finite. Members are get-only so a <c>with</c>-expression cannot
+/// bypass these invariants.
+/// </para>
 /// </summary>
-/// <param name="Symbol">Display/lookup symbol, e.g. <c>"nm"</c>, <c>"pN"</c>, <c>"°C"</c>.</param>
-/// <param name="Dimension">The dimension this unit measures.</param>
-/// <param name="ScaleToBase">Multiplicative factor to the dimension's base unit.</param>
-/// <param name="OffsetToBase">Additive offset to the base unit (0 for purely multiplicative units).</param>
-public sealed record Unit(string Symbol, Dimension Dimension, double ScaleToBase, double OffsetToBase = 0.0)
+public sealed record Unit
 {
+    /// <param name="symbol">Display/lookup symbol, e.g. <c>"nm"</c>, <c>"pN"</c>, <c>"Å"</c>.</param>
+    /// <param name="dimension">The dimension this unit measures.</param>
+    /// <param name="scaleToBase">Multiplicative factor to the dimension's base unit (finite, &gt; 0).</param>
+    /// <param name="offsetToBase">Additive offset to the base unit (finite; 0 for multiplicative units).</param>
+    public Unit(string symbol, Dimension dimension, double scaleToBase, double offsetToBase = 0.0)
+    {
+        Symbol = DomainGuard.Text(symbol, nameof(symbol));
+        Dimension = DomainGuard.NotNull(dimension, nameof(dimension));
+        ScaleToBase = DomainGuard.FinitePositive(scaleToBase, nameof(scaleToBase));
+        OffsetToBase = DomainGuard.Finite(offsetToBase, nameof(offsetToBase));
+    }
+
+    public string Symbol { get; }
+
+    public Dimension Dimension { get; }
+
+    public double ScaleToBase { get; }
+
+    public double OffsetToBase { get; }
+
     /// <summary>True when <paramref name="other"/> measures the same dimension (i.e. convertible).</summary>
-    public bool IsConvertibleTo(Unit other) => Dimension == other.Dimension;
+    public bool IsConvertibleTo(Unit other) => Dimension == DomainGuard.NotNull(other, nameof(other)).Dimension;
 }

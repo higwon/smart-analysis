@@ -49,4 +49,37 @@ public sealed class UnitRegistryTests
         Assert.Equal(0.0, StandardUnits.Metre.OffsetToBase);
         Assert.Equal(1.0, StandardUnits.Newton.ScaleToBase);
     }
+
+    [Fact]
+    public void Units_collection_cannot_be_cast_back_to_a_mutable_array()
+    {
+        var registry = StandardUnits.CreateRegistry();
+        Assert.Throws<InvalidCastException>(() => _ = (Unit[])registry.Units);
+    }
+
+    [Fact]
+    public void Duplicate_symbols_throw_a_clear_domain_error()
+    {
+        var dim = new Dimension("Length");
+        var a = new Unit("m", dim, 1.0);
+        var b = new Unit("m", dim, 2.0); // same symbol
+
+        var ex = Assert.Throws<ArgumentException>(() => new UnitRegistry([a, b]));
+        Assert.Contains("Duplicate unit symbol 'm'", ex.Message);
+    }
+
+    [Fact]
+    public void Null_unit_element_is_rejected()
+        => Assert.Throws<ArgumentException>(() => new UnitRegistry([StandardUnits.Metre, null!]));
+
+    [Fact]
+    public void Angstrom_and_ampere_have_distinct_canonical_symbols()
+    {
+        Assert.Equal("Å", StandardUnits.Angstrom.Symbol);
+        Assert.Equal("A", StandardUnits.Ampere.Symbol);
+
+        var registry = StandardUnits.CreateRegistry();
+        Assert.Same(StandardUnits.Angstrom, registry.GetUnit("Å"));
+        Assert.Same(StandardUnits.Ampere, registry.GetUnit("A"));
+    }
 }

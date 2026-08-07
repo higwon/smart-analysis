@@ -12,7 +12,7 @@ public sealed class UnitConversionTests
         { 1.0, "nm", "um", 1e-3 },
         { 2500.0, "nm", "um", 2.5 },
         { 1.0, "um", "nm", 1000.0 },
-        { 1.0, "A", "nm", 0.1 },        // 1 angstrom = 0.1 nm
+        { 1.0, "Å", "nm", 0.1 },        // 1 angstrom = 0.1 nm
         { 1.0, "pN", "nN", 1e-3 },
         { 5.0, "nN", "pN", 5000.0 },
         { 1.0, "GPa", "Pa", 1e9 },

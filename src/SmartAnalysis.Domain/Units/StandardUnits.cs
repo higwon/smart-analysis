@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 namespace SmartAnalysis.Domain.Units;
 
 /// <summary>
@@ -30,7 +32,7 @@ public static class StandardUnits
     public static readonly Unit Micrometre = new("um", Length, 1e-6);
     public static readonly Unit Nanometre = new("nm", Length, 1e-9);
     public static readonly Unit Picometre = new("pm", Length, 1e-12);
-    public static readonly Unit Angstrom = new("A", Length, 1e-10);
+    public static readonly Unit Angstrom = new("Å", Length, 1e-10);
 
     // --- Force (base: newton) ---
     public static readonly Unit Newton = new("N", Force, 1.0);
@@ -40,7 +42,7 @@ public static class StandardUnits
     public static readonly Unit Piconewton = new("pN", Force, 1e-12);
 
     // --- Current (base: ampere) ---
-    public static readonly Unit Ampere = new("A_current", Current, 1.0); // distinct symbol from Angstrom "A"
+    public static readonly Unit Ampere = new("A", Current, 1.0);
     public static readonly Unit Milliampere = new("mA", Current, 1e-3);
     public static readonly Unit Microampere = new("uA", Current, 1e-6);
     public static readonly Unit Nanoampere = new("nA", Current, 1e-9);
@@ -83,8 +85,13 @@ public static class StandardUnits
     // --- Dimensionless ---
     public static readonly Unit One = new("1", Dimensionless, 1.0);
 
-    /// <summary>All standard units, in definition order.</summary>
-    public static IReadOnlyList<Unit> All { get; } =
+    /// <summary>
+    /// All standard units, in definition order. Symbols are the <b>canonical</b> forms (e.g. "Å", "A",
+    /// "um"). Input-file variants and ASCII/Unicode aliases (e.g. "A"/"Angstrom" for Å, "µm" for "um",
+    /// "°C" for "degC") are intentionally NOT registered here — alias normalization is a parser/import
+    /// concern handled in FF01/D01 (documented follow-up), so the domain unit table stays unambiguous.
+    /// </summary>
+    public static IReadOnlyList<Unit> All { get; } = new ReadOnlyCollection<Unit>(
     [
         Metre, Millimetre, Micrometre, Nanometre, Picometre, Angstrom,
         Newton, Millinewton, Micronewton, Nanonewton, Piconewton,
@@ -97,7 +104,7 @@ public static class StandardUnits
         Farad, Microfarad, Nanofarad, Picofarad,
         Kelvin, Celsius,
         One,
-    ];
+    ]);
 
     /// <summary>Builds a fresh, immutable <see cref="IUnitRegistry"/> over the standard units.</summary>
     public static IUnitRegistry CreateRegistry() => new UnitRegistry(All);
