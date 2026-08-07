@@ -25,7 +25,7 @@ Prio · MVP · Status**.
 | F02 | DI Composition Root + full Architecture-Test matrix | F00 | none (no DI legacy) | New | App composition root wires Infrastructure adapters → Application/Domain Ports; NetArchTest enforces the **full** doc 11 matrix: Application ⊄ Infrastructure, UI ⊄ Infrastructure, Infrastructure adapters depend only on allowed Application Ports (Infrastructure → Application OK), Domain ⊄ other product assemblies, only App is a composition root. **Parallel with F01/F03** | P0 | ✅ | planned |
 | F03 | Domain dataset model (records) | F01 | `BaseScanData` hierarchy (doc 02) | Rewrite (composition, immutable) | `AfmDataset` + Scan/Profile/Curve/Spectrum records; no WPF | P0 | ✅ | done |
 | F04 | Operation contract + registry (explicit DI, ADR-005) | F03, F05 | operation dispatch enums (doc 03) | New (replaces switch, H4) | `IAnalysisOperation`, `OperationDescriptor`, `IOperationRegistry`; module-based explicit registration; duplicate-id check; reference op + tests | P0 | ✅ | planned |
-| F05 | Provenance record + types | F03 | `ProcessHistoryLog` (doc 06) | Rewrite (structured, serializable) | `Provenance`/`ProvenanceStep` + JSON schema v1. **Parallel with F04** | P0 | ✅ | planned |
+| F05 | Provenance record + types | F03 | `ProcessHistoryLog` (doc 06) | Rewrite (structured, serializable) | `Provenance`/`ProvenanceStep` + JSON schema v1. **Parallel with F04** | P0 | ✅ | review |
 | ~~F06~~ | ~~Numeric baseline harness~~ | — | — | — | **superseded-by MV00** (baseline extraction is a MigrationValidation task, decoupled from the new domain) | — | — | superseded |
 
 ## Domain (D)

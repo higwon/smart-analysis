@@ -2,6 +2,7 @@ using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Metadata;
+using SmartAnalysis.Domain.Provenance;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -16,8 +17,8 @@ public sealed class SpectrumDataset : AfmDataset
 {
     public SpectrumDataset(
         DatasetId id, DataSource source, Axis x, ChannelDescriptor channel, ScanBuffer<float> intensity,
-        ScanMetadata metadata)
-        : base(id, source, metadata)
+        ScanMetadata metadata, ProvenanceRecord provenance)
+        : base(id, source, metadata, provenance)
     {
         X = DomainGuard.NotNull(x, nameof(x));
         Channel = DomainGuard.NotNull(channel, nameof(channel));

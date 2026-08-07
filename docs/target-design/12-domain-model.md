@@ -102,6 +102,16 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
 | `BaseTrayItemModel` (`Id`/`ParentId` + View) | UI/workspace concern; domain keeps only `DatasetId` + provenance lineage |
 | WPF `BitmapImage Thumbnail` | removed from domain; thumbnails are a viz/persistence concern |
 
+## Implemented in F05
+- **Provenance (Domain, ADR-013)**: `ProvenanceRecord` (`ParentId` + ordered `Steps`; `Root` for
+  originals; immutable `Append`/`DerivedFrom`) + `ProvenanceStep` (input id+version, operation
+  id+version, **params with units**, order, `ExecutionEnvironment`, typed `OperationWarning`/
+  `OperationError`, `ParentResultId`, `UserEdit?`, `AiInvolvement?`, `MlModelRef?`).
+- **Dataset completion**: `AfmDataset` and `AnalysisArtifact` now **require** a `ProvenanceRecord`
+  (mandatory provenance, ADR-004). `AfmDataset` = Id + Source + Metadata + **Provenance** + data.
+  Serialization (JSON schema v1) is deferred to **P01** (Infrastructure, ADR-010) — Domain stays
+  serializer-attribute-free.
+
 ## Implemented in D01
 - **Channels**: `ChannelKind` (typed: Topography/Deflection/Amplitude/Phase/Current/Force/… + explicit
   `Unknown`) and `ChannelDescriptor` (key, kind, `Unit`, display name) — no `string.Contains` guessing.
@@ -127,8 +137,8 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
   the same buffer instance can't fill two roles (force-curve). Reload with the same `DatasetId`
   compares equal regardless of buffer instances (real H1 fix).
 - **Deferred (incremental build):** ~~`ChannelDescriptor`/`ScanMetadata` → **D01**~~ (done);
-  `Provenance` member on `AfmDataset`/`AnalysisArtifact` → **F05** (ADR-004); force-curve
-  approach/retract segment model → **D03/EPIC-SPEC01**.
+  ~~`Provenance` member → **F05**~~ (done); force-curve approach/retract segment model →
+  **D03/EPIC-SPEC01** (only remaining deferral).
 
 ## Implemented in F01
 - **Units**: `Dimension`, `Unit` (affine `ScaleToBase`/`OffsetToBase`), `PhysicalValue`

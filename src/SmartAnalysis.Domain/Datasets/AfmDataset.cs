@@ -1,4 +1,5 @@
 using SmartAnalysis.Domain.Metadata;
+using SmartAnalysis.Domain.Provenance;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -19,7 +20,7 @@ namespace SmartAnalysis.Domain.Datasets;
 /// </summary>
 public abstract class AfmDataset : IEquatable<AfmDataset>, IDisposable
 {
-    protected AfmDataset(DatasetId id, DataSource source, ScanMetadata metadata)
+    protected AfmDataset(DatasetId id, DataSource source, ScanMetadata metadata, ProvenanceRecord provenance)
     {
         if (id.IsEmpty)
         {
@@ -29,6 +30,7 @@ public abstract class AfmDataset : IEquatable<AfmDataset>, IDisposable
         Id = id;
         Source = DomainGuard.NotNull(source, nameof(source));
         Metadata = DomainGuard.NotNull(metadata, nameof(metadata));
+        Provenance = DomainGuard.NotNull(provenance, nameof(provenance));
     }
 
     /// <summary>Stable identity (never a file path).</summary>
@@ -39,6 +41,9 @@ public abstract class AfmDataset : IEquatable<AfmDataset>, IDisposable
 
     /// <summary>Acquisition metadata (D01). Use <see cref="ScanMetadata.Unknown"/> when none.</summary>
     public ScanMetadata Metadata { get; }
+
+    /// <summary>Lineage + step history (F05, ADR-004). Use <see cref="ProvenanceRecord.Root"/> for originals.</summary>
+    public ProvenanceRecord Provenance { get; }
 
     /// <summary>Releases the buffer(s) this dataset owns.</summary>
     public abstract void Dispose();
