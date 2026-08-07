@@ -121,7 +121,7 @@ classification; backlog = status source of truth; MVP split into 4 checkpoints).
 | GitHub delivery workflow + templates | ✅ Added |
 | AI working agreement + doc-maintenance + ADRs (001–010) | ✅ Recorded |
 | Task status source of truth | ✅ Backlog (single SoT); status flow ↔ GitHub |
-| **New product code / `.sln`** | 🟡 `TASK-F00` solution skeleton (8 projects + arch guard) implemented on branch `chore/task-f00-solution-bootstrap`; **Draft PR under review — not merged**. No product code. |
+| **New product code / `.sln`** | 🟢 `TASK-F00` **merged** (PR #3): solution + 8-project skeleton + arch guard on `main`. `TASK-F01` (units/axes/buffers) in progress next. |
 
 Decisions still **OPEN** (Candidate, need an ADR) are centralized in
 [`ai-context/41-doc-maintenance-and-adr.md`](ai-context/41-doc-maintenance-and-adr.md) §4 →
