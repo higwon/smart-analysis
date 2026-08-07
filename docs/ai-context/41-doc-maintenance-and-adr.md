@@ -85,7 +85,7 @@ These are **Candidate** decisions (doc 20, ADR-006): do not resolve ad-hoc; each
 
 | ID | Decision | Where (task) | Status |
 |---|---|---|---|
-| OD-1 | Buffer strategy: plain array / `Memory<T>` / `IMemoryOwner<T>` / `ArrayPool<T>` / mmap | doc 12 / F01-C | open (ADR required) |
+| ~~OD-1~~ | ~~Buffer strategy~~ | doc 12 / F01-C | **decided (ADR-011): owned array over `Memory<T>`; defer pooling** |
 | OD-2 | Final XY chart library (ScottPlot vs OxyPlot) | doc 15 / V00 | open (spike + ADR) |
 | OD-3 | Workspace container format | doc 16 / P01 | open |
 | OD-4 | MVVM toolkit (CommunityToolkit.Mvvm assumed) | doc 11 / U01 | open |
@@ -101,7 +101,8 @@ contract+registry (ADR-003), mandatory provenance+workspace (ADR-004), explicit-
 registration (ADR-005), dependency classification (ADR-006), **initial solution structure +
 provenance-in-Domain (ADR-007)**, **first-party design system / no external theme (ADR-008)**,
 **dependency inversion / App-composition-root (ADR-009, amends ADR-007), completed by ADR-010
-(`Infrastructure → Application` allowed for Port implementation; `Application → Infrastructure` forbidden)**.
+(`Infrastructure → Application` allowed for Port implementation; `Application → Infrastructure` forbidden)**,
+**buffer ownership strategy (ADR-011: owned array over `Memory<T>`, defer pooling — resolves OD-1)**.
 
 Resolving an OD = add an ADR + set status here to "decided (ADR-NNN)" + update the owning design doc
 + (for a dependency) move it Candidate→Approved in doc 20.
