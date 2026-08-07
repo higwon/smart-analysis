@@ -9,4 +9,10 @@
     <ProjectReference Include="..\SmartAnalysis.Domain\SmartAnalysis.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- DI abstractions only (Approved, doc 20) — for the explicit per-module AddAnalysisOperation<T>
+         registration (ADR-005). Not a container, not UI/viz/commercial. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
 </Project>

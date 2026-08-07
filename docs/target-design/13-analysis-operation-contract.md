@@ -123,3 +123,32 @@ ids are rejected at registration; an unregistered operation cannot be executed.
 From legacy defects (doc 07 M5): out-of-range interpolation, NaN/Infinity, empty data,
 reversed axes, non-overlapping spectra, unit mismatch. These become typed `ValidationResult`
 failures or `OperationWarning`s — never a silent `0` or `null`.
+
+## Implementation status (TASK-F04)
+
+The contract, registry, explicit-DI registration, and a reference operation are implemented in
+`SmartAnalysis.Analysis` (Domain + `Microsoft.Extensions.DependencyInjection.Abstractions` only).
+Deltas from the sketch above, and why:
+
+- **`OperationResult.Quality` (`QualityMetrics?`) is deferred.** No MVP operation emits it yet; it is
+  added with the first operation that measures fit residual/SNR. The result still always carries a
+  `ProvenanceStep`.
+- **`OutputKind.InPlaceView` is not defined.** "In place" is a visualization concern, not a domain
+  output; the two domain outputs are `DerivedDataset` and `Artifact`. Added only if a real operation
+  needs a third kind.
+- **`OperationInput.Region` (ROI) is omitted.** `RegionOfInterest` is **D02** (not MVP); MVP operations
+  work on the whole dataset. `OperationInput` gains `Region` when D02 lands.
+- **Execution environment is injected, not self-captured.** `ProvenanceStep` requires an
+  `ExecutionEnvironment` (doc 16). An operation owns no clock/host lookup, so the contract adds
+  `IExecutionEnvironmentProvider` (with a `SystemExecutionEnvironmentProvider` default); the
+  composition root supplies the real app version, tests supply a fixed environment for reproducibility.
+- **Registration surface (ADR-005).** `AddAnalysisOperation<TOp>()` registers one operation;
+  `AddOperationRegistry()` builds the `IOperationRegistry` over whatever modules registered;
+  `AddExecutionEnvironment()` supplies the default provider. Each module exposes its own
+  `AddXxxAnalysis()` (reference module: `AddReferenceAnalysis()`); the composition root calls them
+  explicitly, then `AddOperationRegistry()` once. Duplicate operation ids are rejected at registry
+  construction; an unregistered id is simply not found — there is no central switch/enum/reflection.
+- **Reference operation** `reference.identity` (accepts `ScanImage`, no parameters, `Output = Artifact`)
+  exercises the full path: validate → run headless (progress + cancellation) → emit a `ProvenanceStep`
+  → return an `AnalysisArtifact` derived from the input. It performs no real analysis; it proves the
+  contract, the explicit-DI wiring, and the provenance flow.

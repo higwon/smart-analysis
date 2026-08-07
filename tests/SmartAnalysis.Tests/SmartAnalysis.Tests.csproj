@@ -13,12 +13,15 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- Concrete DI container — to test the explicit per-module registration end-to-end (F04). -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Projects under test (F01: Domain). Tests may reference product projects; this does not
-         affect the "only App references Infrastructure" rule (Tests references neither). -->
+    <!-- Projects under test (F01: Domain; F04: Analysis). Tests may reference product projects; this
+         does not affect the "only App references Infrastructure" rule (Tests references neither). -->
     <ProjectReference Include="..\..\src\SmartAnalysis.Domain\SmartAnalysis.Domain.csproj" />
+    <ProjectReference Include="..\..\src\SmartAnalysis.Analysis\SmartAnalysis.Analysis.csproj" />
   </ItemGroup>
 
 </Project>
