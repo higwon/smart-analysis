@@ -1,0 +1,18 @@
+<Project>
+
+  <!-- Common build settings for all SmartAnalysis projects (TASK-F00). -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!--
+    Warnings-as-errors for the pure core layers (ADR-002/007): Domain and Analysis must stay clean.
+    Applied by project name so the setting lives in one place.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'SmartAnalysis.Domain' or '$(MSBuildProjectName)' == 'SmartAnalysis.Analysis'">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Role: FileFormats + Persistence + External adapters. Implements Application/Domain Ports.
+       References Domain and Application ONLY (Application to implement its Ports — ADR-010).
+       MUST NOT reference UI. Does not own Use Cases. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartAnalysis.Domain\SmartAnalysis.Domain.csproj" />
+    <ProjectReference Include="..\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
+  </ItemGroup>
+
+</Project>

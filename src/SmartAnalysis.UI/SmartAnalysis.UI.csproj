@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Role: WPF Views, ViewModels, and the first-party Design System. References Application/Visualization.
+       MUST NOT reference Infrastructure (ADR-009/010). No external application theme (ADR-008). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
+    <ProjectReference Include="..\SmartAnalysis.Visualization\SmartAnalysis.Visualization.csproj" />
+  </ItemGroup>
+
+</Project>
