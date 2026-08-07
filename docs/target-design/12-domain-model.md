@@ -102,6 +102,15 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
 | `BaseTrayItemModel` (`Id`/`ParentId` + View) | UI/workspace concern; domain keeps only `DatasetId` + provenance lineage |
 | WPF `BitmapImage Thumbnail` | removed from domain; thumbnails are a viz/persistence concern |
 
+## Implemented in F03
+- **Datasets**: `DatasetId` (identity, never a path), `DataSource` (format id + optional path/hash,
+  provenance-only), abstract `AfmDataset` base, and immutable records `ScanImageDataset`,
+  `LineProfileDataset`, `SpectrumDataset`, `ForceCurveDataset`, plus a minimal `AnalysisArtifact` —
+  composed from F01 types with buffer↔axes consistency validated at construction.
+- **Deferred (incremental build):** `ChannelDescriptor`/`ScanMetadata` members → **D01** (value unit
+  is carried as `Unit` for now); `Provenance` member on `AfmDataset`/`AnalysisArtifact` → **F05**
+  (ADR-004); force-curve approach/retract segment model → **D03/EPIC-SPEC01**.
+
 ## Implemented in F01
 - **Units**: `Dimension`, `Unit` (affine `ScaleToBase`/`OffsetToBase`), `PhysicalValue`
   (`TryConvertTo` → typed `UnitConversion`; cross-dimension = typed failure), immutable injected
