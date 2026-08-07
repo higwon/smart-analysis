@@ -141,11 +141,14 @@ Deltas from the sketch above, and why:
   type). An operation pairs value + `Unit` into a `PhysicalValue` when it records provenance — so the
   binding rule is fixed once here, not re-decided per operation.
 - **Schemas validate their own invariants + the values against them.** `ParameterDescriptor` rejects
-  an inconsistent schema at construction (default of the wrong type, default outside range, inverted or
-  non-finite range, range/unit on a non-numeric type). `ParameterSchema.Validate(IParameterSet)` is the
-  common value check every operation composes with its own preconditions: unknown names, missing
-  required (no-default) values, wrong CLR types, out-of-range numbers → typed `ValidationResult`
-  failures. `OperationProgress` rejects a non-finite or out-of-`[0,1]` fraction at construction.
+  an inconsistent schema at construction (default of the wrong type, **non-finite numeric default**,
+  default outside range, inverted or non-finite range, range/unit on a non-numeric type).
+  `ParameterSchema.Validate(IParameterSet)` is the common value check every operation composes with its
+  own preconditions: unknown names, missing required (no-default) values, wrong CLR types, **non-finite
+  (NaN/Infinity) numbers**, and out-of-range numbers → typed `ValidationResult` failures. Finiteness is
+  checked before range, since every IEEE comparison against `NaN` is false and would otherwise slip a
+  `NaN` past a `[min, max]` check into downstream algorithms. `OperationProgress` likewise rejects a
+  non-finite or out-of-`[0,1]` fraction at construction.
 - **`OperationResult.Quality` (`QualityMetrics?`) is deferred.** No MVP operation emits it yet; it is
   added with the first operation that measures fit residual/SNR.
 - **`OutputKind.InPlaceView` is not defined.** "In place" is a visualization concern, not a domain

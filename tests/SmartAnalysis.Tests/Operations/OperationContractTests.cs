@@ -264,6 +264,17 @@ public sealed class OperationContractTests
     public void ParameterDescriptor_rejects_default_outside_range() =>
         Assert.Throws<ArgumentException>(() => new ParameterDescriptor("order", typeof(int), defaultValue: 9, min: 0, max: 3));
 
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void ParameterDescriptor_rejects_non_finite_default(double bad) =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("threshold", typeof(double), defaultValue: bad, min: 0.0, max: 10.0));
+
+    [Fact]
+    public void ParameterDescriptor_rejects_non_finite_default_even_without_a_range() =>
+        Assert.Throws<ArgumentException>(() => new ParameterDescriptor("threshold", typeof(double), defaultValue: double.NaN));
+
     [Fact]
     public void ParameterDescriptor_rejects_range_on_non_numeric_type() =>
         Assert.Throws<ArgumentException>(() => new ParameterDescriptor("name", typeof(string), min: 0, max: 1));
@@ -319,6 +330,13 @@ public sealed class OperationContractTests
     [Fact]
     public void Schema_validate_flags_out_of_range() =>
         Assert.False(TwoParamSchema().Validate(Set(("threshold", 99.0))).IsValid);
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void Schema_validate_flags_non_finite_value(double bad) =>
+        Assert.False(TwoParamSchema().Validate(Set(("threshold", bad))).IsValid);
 
     [Fact]
     public void ParameterSet_rejects_blank_key() =>

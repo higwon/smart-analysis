@@ -66,8 +66,15 @@ public sealed record ParameterDescriptor
                     nameof(defaultValue));
             }
 
-            if ((min is not null || max is not null) && TryToDouble(defaultValue, out var dv))
+            if (TryToDouble(defaultValue, out var dv))
             {
+                // A numeric default must be finite — NaN/Infinity would slip past the range checks
+                // below (every IEEE comparison with NaN is false) and reach downstream algorithms.
+                if (!double.IsFinite(dv))
+                {
+                    throw new ArgumentException("A numeric default must be finite.", nameof(defaultValue));
+                }
+
                 if (min is { } dlo && dv < dlo)
                 {
                     throw new ArgumentException($"Default ({dv}) is below Min ({dlo}).", nameof(defaultValue));
@@ -207,9 +214,16 @@ public sealed class ParameterSchema
                 continue;
             }
 
-            if ((descriptor.Min is not null || descriptor.Max is not null)
-                && ParameterDescriptor.TryToDouble(raw, out var num))
+            if (ParameterDescriptor.TryToDouble(raw, out var num))
             {
+                // Reject NaN/Infinity at the contract boundary — finite check first, since every
+                // range comparison against NaN is false and would otherwise let it through.
+                if (!double.IsFinite(num))
+                {
+                    errors.Add($"Parameter '{descriptor.Name}' must be finite (was {num}).");
+                    continue;
+                }
+
                 if (descriptor.Min is { } lo && num < lo)
                 {
                     errors.Add($"Parameter '{descriptor.Name}' ({num}) is below the minimum {lo}.");

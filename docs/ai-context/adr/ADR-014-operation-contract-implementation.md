@@ -40,8 +40,11 @@ consumer yet and would be speculative to model now.
    adds an internal `AnalysisGuard` (Text / NotNull / NonNegative / DefinedEnum) rather than widening
    Domain's API. Same invariants, enforced at construction.
 5. **Parameters are validated, not just stored.** `ParameterDescriptor` enforces its own invariants at
-   construction (default assignable to `Type`; default within range; `Min`/`Max` finite and `Min ≤ Max`;
-   a range or a `Unit` only on a numeric type). The **value/unit convention** is fixed here: an
+   construction (default assignable to `Type`; **numeric default finite**; default within range;
+   `Min`/`Max` finite and `Min ≤ Max`; a range or a `Unit` only on a numeric type). Finiteness is
+   enforced at the contract boundary — both here and in `ParameterSchema.Validate` — and checked
+   **before** range, because every IEEE comparison against `NaN` is false, so a `NaN` would otherwise
+   pass a `[min, max]` check and reach downstream algorithms. The **value/unit convention** is fixed here: an
    `IParameterSet` holds the **raw CLR value** of `Type`, and `Unit` is metadata naming the unit that
    value is in (an operation forms a `PhysicalValue` from value + `Unit` when recording provenance) —
    so numeric params carry doubles + a unit rather than `PhysicalValue`s, decided once instead of per
@@ -77,9 +80,9 @@ Tests (`OperationContractTests`): explicit-DI registration + discovery (`All`/`T
 headless run — the emitted step is read from the artifact's `ProvenanceRecord` (no result-level step),
 with the expected scalar + lineage; progress reported start→finish; cancellation honored; duplicate-id
 and null-op rejected; unregistered id not found; typed `Validate` failure for a non-`ScanImage` primary;
-descriptor well-formed. Invariants: `OperationProgress` range; `ParameterDescriptor` (wrong-type/out-of-range
+descriptor well-formed. Invariants: `OperationProgress` range; `ParameterDescriptor` (wrong-type/non-finite/out-of-range
 default, inverted/non-finite range, range-or-unit on non-numeric type); `ParameterSchema.Validate`
-(unknown/missing-required/wrong-type/out-of-range); `ParameterSet` blank-key; undefined `DataKind` in
+(unknown/missing-required/wrong-type/non-finite/out-of-range); `ParameterSet` blank-key; undefined `DataKind` in
 `AcceptedInputs` and in `ApplicableTo`. Architecture Guard updated: `SmartAnalysis.Tests` now references
 `SmartAnalysis.Domain` + `SmartAnalysis.Analysis`; Analysis references Domain only (no
-Infrastructure/UI/commercial). 157 tests pass; build clean.
+Infrastructure/UI/commercial). 164 tests pass; build clean.
