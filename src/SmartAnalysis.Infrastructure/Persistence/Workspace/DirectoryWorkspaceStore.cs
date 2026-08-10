@@ -41,16 +41,9 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        Directory.CreateDirectory(path);
-        var buffersPath = Path.Combine(path, BuffersDir);
-        if (Directory.Exists(buffersPath))
-        {
-            Directory.Delete(buffersPath, recursive: true); // clear stale buffers from a previous save
-        }
-
-        Directory.CreateDirectory(buffersPath);
-
-        var datasets = new List<DatasetDto>();
+        // 1. Validate the whole workspace BEFORE touching the filesystem — never begin a destructive
+        //    write we can't finish (an unsupported dataset must not corrupt an existing package).
+        var images = new List<ScanImageDataset>();
         foreach (var dataset in workspace.Datasets)
         {
             if (dataset is not ScanImageDataset image)
@@ -59,6 +52,60 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
                     $"Workspace persistence v1 supports {nameof(ScanImageDataset)} only; got {dataset.GetType().Name}.");
             }
 
+            images.Add(image);
+        }
+
+        // 2. Write the complete new package into a temp sibling directory. The existing package (if any)
+        //    is left untouched until the new one is fully written.
+        string target = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string parent = Path.GetDirectoryName(target) ?? ".";
+        string name = Path.GetFileName(target);
+        string temp = Path.Combine(parent, $".{name}.tmp-{Guid.NewGuid():N}");
+        try
+        {
+            WritePackage(temp, workspace, images);
+        }
+        catch
+        {
+            TryDeleteDirectory(temp);
+            throw;
+        }
+
+        // 3. Swap the temp package into place, keeping the old one until the new is committed; roll back on failure.
+        string backup = Path.Combine(parent, $".{name}.bak-{Guid.NewGuid():N}");
+        bool movedOld = false;
+        try
+        {
+            if (Directory.Exists(target))
+            {
+                Directory.Move(target, backup);
+                movedOld = true;
+            }
+
+            Directory.Move(temp, target);
+        }
+        catch
+        {
+            if (movedOld && !Directory.Exists(target) && Directory.Exists(backup))
+            {
+                try { Directory.Move(backup, target); } catch { /* best-effort restore of the old package */ }
+            }
+
+            TryDeleteDirectory(temp);
+            throw;
+        }
+
+        TryDeleteDirectory(backup); // new package committed; drop the old one
+    }
+
+    private void WritePackage(string dir, SmartAnalysis.Application.Workspaces.Workspace workspace, List<ScanImageDataset> images)
+    {
+        var buffersPath = Path.Combine(dir, BuffersDir);
+        Directory.CreateDirectory(buffersPath); // temp dir is fresh — no stale buffers to clear
+
+        var datasets = new List<DatasetDto>(images.Count);
+        foreach (var image in images)
+        {
             string bufferFile = $"{image.Id.Value:D}.bin";
             WriteBuffer(Path.Combine(buffersPath, bufferFile), image.Data.Memory.Span);
             datasets.Add(ToDto(image, bufferFile));
@@ -73,7 +120,22 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
                 [.. workspace.Active.Comparison.Select(c => c.Value.ToString("D"))]),
             Datasets: datasets);
 
-        File.WriteAllText(Path.Combine(path, ManifestFile), JsonSerializer.Serialize(manifest, Json));
+        File.WriteAllText(Path.Combine(dir, ManifestFile), JsonSerializer.Serialize(manifest, Json));
+    }
+
+    private static void TryDeleteDirectory(string dir)
+    {
+        try
+        {
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+        catch
+        {
+            // best-effort cleanup of a temp/backup directory
+        }
     }
 
     public WorkspaceOpenResult Open(string path)

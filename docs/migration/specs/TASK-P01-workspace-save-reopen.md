@@ -88,6 +88,9 @@ doc 16 (lock schema v1), ADR for container format, INDEX status.
   stays serializer-free (ADR-013) — Infrastructure maps to JSON DTOs; units persist as symbols.
 - **Round-trip restores** datasets, buffers, **original→derived lineage** (provenance parent + steps,
   params-with-units, environment, `ParentResultId`), and the active context.
+- **Non-destructive save:** `Save` validates the whole workspace first, writes the complete new package
+  to a temp sibling directory, then swaps it into place (with rollback) — a failed/interrupted save
+  never corrupts the existing package, and overwrites leave no stale data.
 - **Fail-loud, never lose data:** all file-system exceptions in `Open` → `Io`; unreadable/absent manifest
   → `NotAWorkspace`; version mismatch → `UnsupportedSchemaVersion`; anything else → `Corrupt`. A dangling
   active/comparison reference is **`Corrupt`, not silently dropped**. A buffer must be **exactly**

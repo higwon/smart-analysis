@@ -221,6 +221,58 @@ public sealed class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_failed_save_preserves_the_existing_package()
+    {
+        var store = NewStore();
+        var (origId, derId) = SaveSample(store); // a good package already on disk at _dir
+
+        // A workspace that will fail to save (contains an unsupported dataset kind).
+        using var doomed = new Workspace();
+        doomed.Add(Original(DatasetId.New(), [9f, 9f, 9f, 9f]));
+        doomed.Add(new LineProfileDataset(
+            DatasetId.New(),
+            new DataSource("psia-tiff", "p.tiff"),
+            new Axis("X", StandardUnits.Micrometre, 0, 1, 3),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership([1f, 2f, 3f], 3, 1),
+            ScanMetadata.Unknown,
+            ProvenanceRecord.Root));
+
+        Assert.Throws<NotSupportedException>(() => store.Save(doomed, _dir));
+
+        // The previously-saved package must still open intact — the failed save touched nothing.
+        var result = store.Open(_dir);
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        using var ws = result.Workspace!;
+        Assert.Equal(2, ws.Count);
+        Assert.True(ws.Contains(origId));
+        Assert.True(ws.Contains(derId));
+        Assert.Equal(derId, ws.Active.ActiveId);
+        Assert.Equal([1f, 2f, 3f, 4f], ((ScanImageDataset)ws.Datasets.Single(d => d.Id == origId)).Data.Memory.ToArray());
+    }
+
+    [Fact]
+    public void Overwriting_an_existing_workspace_replaces_it_cleanly()
+    {
+        var store = NewStore();
+        SaveSample(store);
+
+        // Save a different (smaller) workspace to the same path.
+        var soloId = DatasetId.New();
+        using (var ws2 = new Workspace())
+        {
+            ws2.Add(Original(soloId, [7f, 8f, 9f, 10f]));
+            store.Save(ws2, _dir);
+        }
+
+        var result = store.Open(_dir);
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        using var reopened = result.Workspace!;
+        Assert.Equal(1, reopened.Count); // no stale datasets/buffers from the previous save
+        Assert.True(reopened.Contains(soloId));
+    }
+
+    [Fact]
     public void Registers_via_di_and_binds_the_port()
     {
         using var provider = new ServiceCollection().AddWorkspaceStore().BuildServiceProvider();
