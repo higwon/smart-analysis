@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TASK-V00 rendering spike. NOT product code: outside src/, NOT in SmartAnalysis.sln, never ships.
+       This is the doc-20-sanctioned way to evaluate a Candidate library (ScottPlot 5) before the
+       deciding ADR. It implements V01's ICurveView with a ScottPlot backend and renders AFM-scale
+       synthetic curves headlessly to PNG (SkiaSharp — no window), so the adapter-isolation and
+       large-data-rendering claims in ADR-018 are backed by something that actually runs. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ScottPlot" Version="5.0.55" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SmartAnalysis.Visualization\SmartAnalysis.Visualization.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -38,7 +38,7 @@ never add Forbidden, and must NOT install a Candidate into product code before i
 | Microsoft.Extensions.DependencyInjection | **Approved** | DI; MIT |
 | Microsoft.Extensions.Logging | **Approved** | logging; MIT |
 | xUnit, NetArchTest | **Approved** | tests/arch tests |
-| **ScottPlot 5 vs OxyPlot** (XY charts) | **Candidate** | decide via V00 spike + ADR; chrome restyled |
+| **ScottPlot 5** (XY charts, MIT) | **Approved** | ADR-018 (V00 spike): backend for curves/spectra/histogram/PSD; UI/viz-impl only, behind `ICurveView`; chrome restyled. OxyPlot = documented fallback |
 | **Dirkster.AvalonDock** (docking **functionality**) | **Candidate** | ADR near U01; **built-in theme NOT used** |
 | MahApps.Metro / MaterialDesignInXAML / HandyControl / any external **application theme** | **Forbidden as product theme** | first-party design system only (ADR-008) |
 | **CommunityToolkit.Mvvm** (MVVM **functionality**) | **Candidate** | ADR; functionality only, no appearance |

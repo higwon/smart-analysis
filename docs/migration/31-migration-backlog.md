@@ -103,7 +103,7 @@ Prio · MVP · Status**.
 ## Visualization (V)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|
-| V00 | Rendering spike + lib decision (ADR) | F03 | SciChart usage (doc 05) | New (Candidate libs) | P0 | ✅ | planned |
+| V00 | Rendering spike + lib decision (ADR) | F03 | SciChart usage (doc 05) | New (Candidate libs) | P0 | ✅ | review (ADR-018: ScottPlot 5 → Approved; spike renders 1M pts headless via ICurveView) |
 | V01 | Viz adapter interfaces + render inputs | F03 | conversion seam (doc 05) | New | P0 | ✅ | review (render inputs + view ports + Domain→render converters + domain Colormap; lib-agnostic) |
 | V02 | **Basic** 2D image view (render + palette + zoom/pan, **no ROI**) | V00, V01 | WPF image path (survives) | Reuse approach | P0 | ✅ | planned |
 | V03 | XY curve view (chart lib behind adapter) | V00, V01 | SciChart charts | Rewrite | P1 | – | planned |
