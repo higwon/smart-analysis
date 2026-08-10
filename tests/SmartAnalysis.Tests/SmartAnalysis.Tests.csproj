@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\SmartAnalysis.Analysis\SmartAnalysis.Analysis.csproj" />
     <ProjectReference Include="..\..\src\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
     <ProjectReference Include="..\..\src\SmartAnalysis.Infrastructure\SmartAnalysis.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SmartAnalysis.Visualization\SmartAnalysis.Visualization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

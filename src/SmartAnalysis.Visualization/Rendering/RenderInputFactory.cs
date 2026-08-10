@@ -1,0 +1,64 @@
+using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Visualization.Colormaps;
+
+namespace SmartAnalysis.Visualization.Rendering;
+
+/// <summary>
+/// The conversion boundary (doc 15): turns Domain datasets into library-agnostic render inputs. No
+/// chart-library types cross into Domain/Analysis; downsampling/decimation of very large curves is a
+/// documented follow-up. The AFM data colormap is supplied by the caller (theme-independent, ADR-008).
+/// </summary>
+public static class RenderInputFactory
+{
+    /// <summary>Builds an image render input; the value range defaults to the finite data min/max.</summary>
+    public static ImageRenderInput ForImage(ScanImageDataset image, Colormap colormap, ValueRange? range = null)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(colormap);
+
+        var z = image.Data.Memory;
+        var effectiveRange = range ?? ValueRange.FromData(z.Span);
+        return new ImageRenderInput(
+            z,
+            image.X.Count,
+            image.Y.Count,
+            effectiveRange,
+            colormap,
+            AxisView.FromAxis(image.X),
+            AxisView.FromAxis(image.Y),
+            image.Channel.Unit.Symbol);
+    }
+
+    /// <summary>Builds a single-series curve render input from a line profile (x = axis positions, y = values).</summary>
+    public static CurveRenderInput ForLineProfile(LineProfileDataset profile, string? seriesName = null)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        int n = profile.X.Count;
+        var values = profile.Values.Memory.Span;
+        var xs = new double[n];
+        var ys = new double[n];
+        double yMin = double.PositiveInfinity, yMax = double.NegativeInfinity;
+        for (int i = 0; i < n; i++)
+        {
+            xs[i] = profile.X.RawToReal(i);
+            double v = values[i];
+            ys[i] = v;
+            if (double.IsFinite(v))
+            {
+                if (v < yMin) yMin = v;
+                if (v > yMax) yMax = v;
+            }
+        }
+
+        if (yMax < yMin)
+        {
+            yMin = yMax = 0.0; // no finite values
+        }
+
+        var series = new XySeries(seriesName ?? profile.Channel.DisplayName, xs, ys);
+        var xAxis = AxisView.FromAxis(profile.X);
+        var yAxis = new AxisView(profile.Channel.DisplayName, profile.Channel.Unit.Symbol, yMin, yMax, n);
+        return new CurveRenderInput([series], xAxis, yAxis);
+    }
+}

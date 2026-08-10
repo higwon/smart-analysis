@@ -40,6 +40,15 @@ public interface ISurfaceView { void Render(SurfaceRenderInput input); }
 - A concrete backend project (`Visualization.<Impl>`) implements the interfaces; swapping it
   touches no Domain/Analysis code.
 
+### Adapter status (V01 — implemented)
+The library-agnostic seam is implemented in `SmartAnalysis.Visualization` (Domain only): `ImageRenderInput`
+/ `CurveRenderInput` + `XySeries`, `AxisView`, `ValueRange`, a domain **`Colormap`** (256-entry LUT,
+theme-independent) with `Grayscale`/`AfmGold`, the `IImageView`/`ICurveView` ports, and
+`RenderInputFactory` (`ScanImageDataset`/`LineProfileDataset` → render input). No chart-lib/WPF type is
+present. The concrete backends are separate: **V02** renders the image via `WriteableBitmap`+palette; the
+XY backend follows the **V00** pick. ROI overlays (V06), cursors/annotations, 3D surface, and large-curve
+decimation are follow-ups.
+
 ## Candidate libraries (compare, don't pre-commit)
 
 Evaluated against: OSS license, commercial-use OK, notice obligations, maintenance, WPF support,
