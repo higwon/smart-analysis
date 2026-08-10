@@ -104,4 +104,47 @@ public sealed class FlattenOperationTests
         Assert.False(NewOp().Validate(new OperationInput(image), Params((FlattenOperation.OrderParameter, 9))).IsValid);
         Assert.True(NewOp().Validate(new OperationInput(image), Params((FlattenOperation.OrderParameter, 1))).IsValid);
     }
+
+    [Fact]
+    public void Validate_rejects_undefined_enum_parameters()
+    {
+        using var image = Image([1, 2, 3, 4], 2, 2);
+        var op = NewOp();
+
+        Assert.False(op.Validate(new OperationInput(image), Params((FlattenOperation.ScopeParameter, (FlattenScope)999))).IsValid);
+        Assert.False(op.Validate(new OperationInput(image), Params((FlattenOperation.OrientationParameter, (FlattenOrientation)999))).IsValid);
+        Assert.False(op.Validate(new OperationInput(image), Params((FlattenOperation.BasementParameter, (BasementOption)999))).IsValid);
+    }
+
+    [Fact]
+    public async Task Records_all_four_parameters_in_provenance()
+    {
+        using var image = Image([1, 2, 3, 4, 5, 6, 7, 8, 9], 3, 3);
+        var parameters = Params(
+            (FlattenOperation.ScopeParameter, FlattenScope.Surface),
+            (FlattenOperation.OrderParameter, 2),
+            (FlattenOperation.OrientationParameter, FlattenOrientation.SlowAxis),
+            (FlattenOperation.BasementParameter, BasementOption.PreserveOriginalMidpoint));
+
+        var result = await NewOp().RunAsync(new OperationInput(image), parameters, null, CancellationToken.None);
+
+        var p = Assert.Single(result.DerivedDataset!.Provenance.Steps).Parameters;
+        Assert.Equal((int)FlattenScope.Surface, p["scope"].Value);
+        Assert.Equal(2, p["order"].Value);
+        Assert.Equal((int)FlattenOrientation.SlowAxis, p["orientation"].Value);
+        Assert.Equal((int)BasementOption.PreserveOriginalMidpoint, p["basement"].Value);
+    }
+
+    [Fact]
+    public async Task Warns_when_the_fit_is_underdetermined()
+    {
+        // width (2) <= order (3): a Line fit is underdetermined → no-op, but observable.
+        using var image = Image([1, 2, 3, 4], 2, 2);
+        var parameters = Params((FlattenOperation.OrderParameter, 3));
+
+        var result = await NewOp().RunAsync(new OperationInput(image), parameters, null, CancellationToken.None);
+
+        Assert.NotNull(result.DerivedDataset);
+        Assert.Contains(result.Warnings, w => w.Code == "flatten.underdetermined");
+    }
 }

@@ -109,7 +109,10 @@ headlessly (no WPF `Point[]`/ROI/coordinate-system):
   `Fit.Polynomial`; `SurfacePolynomial` = Vandermonde + `MultipleRegression.NormalEquations`) —
   verified against `polynomial-fit-1d/2d.json` (`PolynomialParityTests`).
 - `FlattenOperation` returns a **derived `ScanImageDataset`** (axes/channel/unit preserved) with a
-  `ProvenanceStep {image.flatten v1, order}`; registered via `AddImageAnalysis()`.
+  `ProvenanceStep` recording **all four parameters** — `{image.flatten v1, scope, order, orientation,
+  basement}` (enums as pinned dimensionless integers, mapping fixed with operation version 1) so the
+  run is fully reproducible (order alone can't distinguish Line vs Surface, etc.); registered via
+  `AddImageAnalysis()`.
 
 ### Resolved
 - **Zero-basement** is realized as an **enum** `BasementOption { RegressionToZero (default),
@@ -117,6 +120,14 @@ headlessly (no WPF `Point[]`/ROI/coordinate-system):
   provisional `bool` — clearer and 1:1 with legacy.
 - **Orientation** = `FastAxis` (X) / `SlowAxis` (Y); Line/Whole operate along it. Surface uses the same
   order for the full bivariate polynomial.
+- **Enum parameter validation is systemic:** `ParameterSchema.Validate` (F04) now rejects an undefined
+  enum value (e.g. `(FlattenScope)999`) for any enum-typed parameter, so a nonsense enum can't silently
+  fall through to a default branch — all operations benefit, not just Flatten.
+- **Underdetermined fit = deliberate legacy-parity no-op, but observable:** when there are too few
+  points for the requested order (Line/Whole: line length ≤ order; Surface: pixels < `(order+1)(order+2)/2`),
+  the data is returned unflattened **and** the operation emits a typed `OperationWarning`
+  `flatten.underdetermined` (never a silent success). Truly-unexpected singularities in the fit remain
+  guarded (return original) — a follow-up may narrow that to specific numeric exceptions.
 
 ### Deferred
 - **End-to-end legacy flatten-orchestration golden (T02):** MV00 froze the fit primitives only (the

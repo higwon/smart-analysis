@@ -1,36 +1,40 @@
 namespace SmartAnalysis.Analysis.Flattening;
 
+// NOTE: the explicit numeric values are part of the provenance contract (recorded as dimensionless
+// integers in the ProvenanceStep with operation version 1). Do not renumber without bumping the
+// operation version.
+
 /// <summary>Which regression the flatten subtracts.</summary>
 public enum FlattenScope
 {
     /// <summary>Fit and subtract an independent polynomial per line.</summary>
-    Line,
+    Line = 0,
 
     /// <summary>Fit the perpendicular-averaged profile once and subtract it from every line.</summary>
-    Whole,
+    Whole = 1,
 
     /// <summary>Fit and subtract a single bivariate polynomial surface.</summary>
-    Surface,
+    Surface = 2,
 }
 
 /// <summary>The line direction for Line/Whole flatten.</summary>
 public enum FlattenOrientation
 {
     /// <summary>Lines run along the fast (X / width) axis.</summary>
-    FastAxis,
+    FastAxis = 0,
 
     /// <summary>Lines run along the slow (Y / height) axis.</summary>
-    SlowAxis,
+    SlowAxis = 1,
 }
 
 /// <summary>What to do with the absolute Z level after subtracting the regression (legacy's two options).</summary>
 public enum BasementOption
 {
     /// <summary>Leave the subtracted regression at zero (legacy <c>Set_Regression_Line_To_Zero</c>, default).</summary>
-    RegressionToZero,
+    RegressionToZero = 0,
 
     /// <summary>Shift so the flattened midpoint equals the original midpoint (legacy <c>Preserve_Original_Midpoint</c>).</summary>
-    PreserveOriginalMidpoint,
+    PreserveOriginalMidpoint = 1,
 }
 
 /// <summary>

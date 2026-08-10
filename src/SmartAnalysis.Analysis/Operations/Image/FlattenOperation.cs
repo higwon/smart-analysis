@@ -87,6 +87,15 @@ public sealed class FlattenOperation : IAnalysisOperation
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Observable no-op: an underdetermined fit leaves the data unchanged (legacy-parity guard).
+        var warnings = new List<OperationWarning>();
+        if (IsUnderdetermined(scope, order, orientation, width, height))
+        {
+            warnings.Add(new OperationWarning(
+                "flatten.underdetermined",
+                $"Too few points for a{(scope == FlattenScope.Surface ? " surface" : " line")} fit of order {order}; the data is returned unflattened."));
+        }
+
         var artifactId = DatasetId.New();
         var step = new ProvenanceStep(
             stepId: Guid.NewGuid().ToString("D"),
@@ -96,10 +105,18 @@ public sealed class FlattenOperation : IAnalysisOperation
             operationVersion: Descriptor.Version,
             order: 0,
             environment: _environment.Capture(),
+            // All four parameters are recorded (dimensionless; enums as their pinned integer values) so
+            // the run is fully reproducible from provenance — order alone is not enough (Line vs Surface,
+            // FastAxis vs SlowAxis, and the basement option all change the result). Mapping is fixed with
+            // operation version 1.
             parameters: new Dictionary<string, PhysicalValue>
             {
+                [ScopeParameter] = new((int)scope, StandardUnits.One),
                 [OrderParameter] = new(order, StandardUnits.One),
+                [OrientationParameter] = new((int)orientation, StandardUnits.One),
+                [BasementParameter] = new((int)basement, StandardUnits.One),
             },
+            warnings: warnings,
             parentResultId: artifactId);
 
         var buffer = ScanBuffer<float>.TakeOwnership(flattened, width, height);
@@ -116,12 +133,25 @@ public sealed class FlattenOperation : IAnalysisOperation
                 ProvenanceRecord.DerivedFrom(image.Id, [step]));
 
             progress?.Report(new OperationProgress(1.0, "Done."));
-            return Task.FromResult(OperationResult.Derived(derived));
+            return Task.FromResult(OperationResult.Derived(derived, warnings));
         }
         catch
         {
             buffer.Dispose(); // ctor failed → we still own the buffer (ADR-011/012)
             throw;
         }
+    }
+
+    // Pre-computable rank check: the fit is underdetermined (→ no-op) below these point counts.
+    private static bool IsUnderdetermined(FlattenScope scope, int order, FlattenOrientation orientation, int width, int height)
+    {
+        if (scope == FlattenScope.Surface)
+        {
+            long terms = (long)(order + 1) * (order + 2) / 2; // bivariate monomials of total degree <= order
+            return (long)width * height < terms;
+        }
+
+        int lineLength = orientation == FlattenOrientation.FastAxis ? width : height;
+        return lineLength <= order;
     }
 }

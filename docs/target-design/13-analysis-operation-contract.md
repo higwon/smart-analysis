@@ -145,7 +145,9 @@ Deltas from the sketch above, and why:
   default outside range, inverted or non-finite range, range/unit on a non-numeric type).
   `ParameterSchema.Validate(IParameterSet)` is the common value check every operation composes with its
   own preconditions: unknown names, missing required (no-default) values, wrong CLR types, **non-finite
-  (NaN/Infinity) numbers**, and out-of-range numbers → typed `ValidationResult` failures. Finiteness is
+  (NaN/Infinity) numbers**, out-of-range numbers, and **undefined enum values** (a cast like
+  `(FlattenScope)999` is the right CLR type but a meaningless value — rejected so it can't fall through
+  to a default branch) → typed `ValidationResult` failures. Finiteness is
   checked before range, since every IEEE comparison against `NaN` is false and would otherwise slip a
   `NaN` past a `[min, max]` check into downstream algorithms. `OperationProgress` likewise rejects a
   non-finite or out-of-`[0,1]` fraction at construction.
