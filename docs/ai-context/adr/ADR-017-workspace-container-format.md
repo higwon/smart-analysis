@@ -43,8 +43,22 @@ placement predates the consolidated 8-project structure (ADR-007) — there is n
 - Follow-up: **P03** schema migration; relink-by-reference + moved-source relink; automated
   re-run-to-reproduce (the provenance already carries op id/version + params-with-units); non-image kinds.
 
+## Robustness (a save format must fail loud, never lose data silently)
+- **Typed failures are exhaustive at the boundary:** any file-system exception anywhere in `Open`
+  (`IOException`/`UnauthorizedAccessException`/`SecurityException`/`PathTooLongException`) maps to `Io`;
+  unreadable/absent manifest → `NotAWorkspace`; version mismatch → `UnsupportedSchemaVersion`; anything
+  else malformed → `Corrupt`. `Open` never throws for bad input.
+- **No silent repair:** a dangling active-context / comparison reference (an id not in the package) is
+  `Corrupt`, not silently dropped — the whole point of P01 is that reopen restores state exactly.
+- **Exact buffer validation:** a blob must be **precisely** `width*height*float32` (trailing bytes →
+  `Corrupt`); dimensions are multiplied with `checked` arithmetic (overflow → `Corrupt`).
+- **No path traversal:** the manifest's buffer file name must be a **bare file name**
+  (`Path.GetFileName(x) == x`); `../` or absolute paths are rejected, so opening a package can't read
+  outside it.
+
 ## Compliance
 Round-trip test (save→open restores datasets, buffers, axes/units/channel/metadata, **provenance lineage
-parent→steps**, and active context); unknown-schema-version and corrupt-manifest typed-failure tests.
-Arch test keeps the port in Application (Domain-only) and the adapter/serializer in Infrastructure; no
-UI/commercial references.
+parent→steps**, and active context); typed-failure tests for unknown-schema-version, missing/short/
+**trailing-byte** buffer, dangling active-context reference, path-traversal buffer name, no-manifest, and
+missing-directory. Arch test keeps the port in Application (Domain-only) and the adapter/serializer in
+Infrastructure; no UI/commercial references.

@@ -150,6 +150,58 @@ public sealed class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_dangling_active_context_reference_is_corrupt_not_silently_dropped()
+    {
+        var store = NewStore();
+        SaveSample(store);
+        var manifest = Path.Combine(_dir, "manifest.json");
+        // Point the active id at a dataset that isn't in the package.
+        File.WriteAllText(manifest, File.ReadAllText(manifest)
+            .Replace(SaveSampleActiveIdMarker(manifest), Guid.NewGuid().ToString("D")));
+
+        var result = store.Open(_dir);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(WorkspaceOpenErrorKind.Corrupt, result.Error!.Kind);
+    }
+
+    // Reads the persisted ActiveId back out of the manifest so the test can swap it for a dangling id.
+    private string SaveSampleActiveIdMarker(string manifestPath)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifestPath));
+        return doc.RootElement.GetProperty("Active").GetProperty("ActiveId").GetString()!;
+    }
+
+    [Fact]
+    public void A_buffer_with_trailing_bytes_is_corrupt()
+    {
+        var store = NewStore();
+        SaveSample(store);
+        var bufferFile = Directory.EnumerateFiles(Path.Combine(_dir, "buffers")).First();
+        File.WriteAllBytes(bufferFile, File.ReadAllBytes(bufferFile).Concat(new byte[8]).ToArray());
+
+        var result = store.Open(_dir);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(WorkspaceOpenErrorKind.Corrupt, result.Error!.Kind);
+    }
+
+    [Fact]
+    public void A_buffer_file_name_with_a_path_component_is_rejected()
+    {
+        var store = NewStore();
+        SaveSample(store);
+        var manifest = Path.Combine(_dir, "manifest.json");
+        File.WriteAllText(manifest, System.Text.RegularExpressions.Regex.Replace(
+            File.ReadAllText(manifest), "\"BufferFile\":\\s*\"[^\"]+\"", "\"BufferFile\": \"../escape.bin\"", System.Text.RegularExpressions.RegexOptions.None));
+
+        var result = store.Open(_dir);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(WorkspaceOpenErrorKind.Corrupt, result.Error!.Kind);
+    }
+
+    [Fact]
     public void A_directory_without_a_manifest_is_not_a_workspace()
     {
         Directory.CreateDirectory(_dir);

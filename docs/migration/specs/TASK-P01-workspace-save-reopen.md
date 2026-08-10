@@ -87,10 +87,15 @@ doc 16 (lock schema v1), ADR for container format, INDEX status.
   full `ProvenanceRecord`, and the active context) + `buffers/<id>.bin` (little-endian float32). Domain
   stays serializer-free (ADR-013) — Infrastructure maps to JSON DTOs; units persist as symbols.
 - **Round-trip restores** datasets, buffers, **original→derived lineage** (provenance parent + steps,
-  params-with-units, environment, `ParentResultId`), and the active context. Typed `Open` failures
-  (`Io` / `NotAWorkspace` / `UnsupportedSchemaVersion` / `Corrupt`).
+  params-with-units, environment, `ParentResultId`), and the active context.
+- **Fail-loud, never lose data:** all file-system exceptions in `Open` → `Io`; unreadable/absent manifest
+  → `NotAWorkspace`; version mismatch → `UnsupportedSchemaVersion`; anything else → `Corrupt`. A dangling
+  active/comparison reference is **`Corrupt`, not silently dropped**. A buffer must be **exactly**
+  `width*height*float32` (trailing bytes → `Corrupt`; dims multiplied with `checked`). The manifest's
+  buffer file name must be a **bare name** (no `../`/absolute — path-traversal guard).
 - **Tests:** save→open round-trip (values/axes/units/channel/metadata/lineage/active context);
-  unknown-schema-version, missing-buffer (corrupt), no-manifest, missing-directory; DI wiring.
+  unknown-schema-version, missing/short/trailing-byte buffer, dangling active-context reference,
+  path-traversal buffer name, no-manifest, missing-directory; DI wiring.
 
 ## Resolved (ADR-017)
 - **Container format:** directory-package (JSON manifest + LE-float blobs) — the doc-16 recommended default.

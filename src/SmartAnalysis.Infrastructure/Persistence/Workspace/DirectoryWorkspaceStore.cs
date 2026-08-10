@@ -78,62 +78,78 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
 
     public WorkspaceOpenResult Open(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        if (string.IsNullOrWhiteSpace(path))
         {
-            return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.Io, $"Workspace directory not found: '{path}'.");
+            return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.Io, "Workspace path is empty.");
         }
 
-        var manifestPath = Path.Combine(path, ManifestFile);
-        if (!File.Exists(manifestPath))
-        {
-            return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.NotAWorkspace, $"No {ManifestFile} in '{path}'.");
-        }
-
-        WorkspaceManifest? manifest;
+        SmartAnalysis.Application.Workspaces.Workspace? workspace = null;
         try
         {
-            manifest = JsonSerializer.Deserialize<WorkspaceManifest>(File.ReadAllText(manifestPath), Json);
-        }
-        catch (JsonException ex)
-        {
-            return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.NotAWorkspace, $"Unreadable manifest: {ex.Message}");
-        }
+            if (!Directory.Exists(path))
+            {
+                return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.Io, $"Workspace directory not found: '{path}'.");
+            }
 
-        if (manifest is null || string.IsNullOrWhiteSpace(manifest.SchemaVersion))
-        {
-            return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.NotAWorkspace, "Manifest is empty or has no schema version.");
-        }
+            var manifestPath = Path.Combine(path, ManifestFile);
+            if (!File.Exists(manifestPath))
+            {
+                return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.NotAWorkspace, $"No {ManifestFile} in '{path}'.");
+            }
 
-        if (manifest.SchemaVersion != SchemaVersion)
-        {
-            return WorkspaceOpenResult.Failure(
-                WorkspaceOpenErrorKind.UnsupportedSchemaVersion,
-                $"Schema version '{manifest.SchemaVersion}' is not supported (this build reads '{SchemaVersion}'; migration is P03).");
-        }
+            var manifestText = File.ReadAllText(manifestPath); // a file-system failure here maps to Io (outer catch)
 
-        var workspace = new SmartAnalysis.Application.Workspaces.Workspace();
-        try
-        {
+            WorkspaceManifest? manifest;
+            try
+            {
+                manifest = JsonSerializer.Deserialize<WorkspaceManifest>(manifestText, Json);
+            }
+            catch (JsonException ex)
+            {
+                return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.NotAWorkspace, $"Unreadable manifest: {ex.Message}");
+            }
+
+            if (manifest is null || string.IsNullOrWhiteSpace(manifest.SchemaVersion))
+            {
+                return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.NotAWorkspace, "Manifest is empty or has no schema version.");
+            }
+
+            if (manifest.SchemaVersion != SchemaVersion)
+            {
+                return WorkspaceOpenResult.Failure(
+                    WorkspaceOpenErrorKind.UnsupportedSchemaVersion,
+                    $"Schema version '{manifest.SchemaVersion}' is not supported (this build reads '{SchemaVersion}'; migration is P03).");
+            }
+
+            workspace = new SmartAnalysis.Application.Workspaces.Workspace();
             foreach (var dto in manifest.Datasets ?? [])
             {
                 workspace.Add(FromDto(dto, Path.Combine(path, BuffersDir)));
             }
 
             RestoreActiveContext(workspace, manifest.Active);
+            return WorkspaceOpenResult.Success(workspace);
         }
         catch (WorkspaceCorruptException ex)
         {
-            workspace.Dispose();
+            workspace?.Dispose();
             return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.Corrupt, ex.Message);
+        }
+        catch (Exception ex) when (IsFileSystem(ex))
+        {
+            workspace?.Dispose();
+            return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.Io, $"I/O error reading workspace: {ex.Message}");
         }
         catch (Exception ex)
         {
-            workspace.Dispose();
+            // Any other malformed input becomes a typed Corrupt failure rather than crashing the caller.
+            workspace?.Dispose();
             return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.Corrupt, $"Failed to restore workspace: {ex.Message}");
         }
-
-        return WorkspaceOpenResult.Success(workspace);
     }
+
+    private static bool IsFileSystem(Exception ex)
+        => ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or PathTooLongException;
 
     // --- Save mapping ---
 
@@ -199,6 +215,12 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
         var source = new DataSource(dto.Source.FormatId, dto.Source.OriginalFilePath, dto.Source.ContentHash);
         var provenance = FromProvenanceDto(dto.Provenance);
 
+        // Never trust the manifest's buffer path — a bare file name only (blocks ../ traversal / absolute paths).
+        if (string.IsNullOrEmpty(dto.BufferFile) || Path.GetFileName(dto.BufferFile) != dto.BufferFile)
+        {
+            throw new WorkspaceCorruptException($"Invalid buffer file name '{dto.BufferFile}' for dataset '{dto.Id}'.");
+        }
+
         var buffer = ReadBuffer(Path.Combine(buffersPath, dto.BufferFile), x.Count, y.Count);
         try
         {
@@ -245,11 +267,21 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
             throw new WorkspaceCorruptException($"Missing buffer file '{Path.GetFileName(file)}'.");
         }
 
-        int count = width * height;
-        var bytes = File.ReadAllBytes(file);
-        if (bytes.Length < count * sizeof(float))
+        int count, expectedBytes;
+        try
         {
-            throw new WorkspaceCorruptException($"Buffer '{Path.GetFileName(file)}' is {bytes.Length} bytes; expected {count * sizeof(float)}.");
+            count = checked(width * height);
+            expectedBytes = checked(count * sizeof(float)); // untrusted dims → guard overflow
+        }
+        catch (OverflowException)
+        {
+            throw new WorkspaceCorruptException($"Buffer '{Path.GetFileName(file)}' dimensions {width}x{height} overflow.");
+        }
+
+        var bytes = File.ReadAllBytes(file);
+        if (bytes.Length != expectedBytes) // exact: v1 blob is precisely width*height*float32 (no trailing bytes)
+        {
+            throw new WorkspaceCorruptException($"Buffer '{Path.GetFileName(file)}' is {bytes.Length} bytes; expected exactly {expectedBytes}.");
         }
 
         var data = new float[count];
@@ -268,10 +300,20 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
             return;
         }
 
-        var comparison = (active.Comparison ?? [])
-            .Select(c => ParseId(c, "comparison id"))
-            .Where(workspace.Contains)
-            .ToList();
+        // A dangling active/comparison reference means the package is broken — fail, never silently drop
+        // it (that would be the hardest-to-find data-loss bug). Existence is checked explicitly.
+        var comparison = new List<DatasetId>();
+        foreach (var c in active.Comparison ?? [])
+        {
+            var id = ParseId(c, "comparison id");
+            if (!workspace.Contains(id))
+            {
+                throw new WorkspaceCorruptException($"Comparison references dataset '{c}' that is not in the workspace.");
+            }
+
+            comparison.Add(id);
+        }
+
         if (comparison.Count > 0)
         {
             workspace.SetComparison(comparison);
@@ -280,10 +322,12 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
         if (!string.IsNullOrEmpty(active.ActiveId))
         {
             var id = ParseId(active.ActiveId, "active id");
-            if (workspace.Contains(id))
+            if (!workspace.Contains(id))
             {
-                workspace.SetActive(id);
+                throw new WorkspaceCorruptException($"Active context references dataset '{active.ActiveId}' that is not in the workspace.");
             }
+
+            workspace.SetActive(id);
         }
     }
 
