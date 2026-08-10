@@ -104,15 +104,27 @@ public sealed class StatisticsOperationTests
         Assert.False(NewOp().Validate(new OperationInput(image), parameters).IsValid);
     }
 
-    [Fact]
-    public async Task Warns_on_non_finite_pixels()
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]   // +Inf must warn even though Mean is not NaN
+    [InlineData(float.NegativeInfinity)]
+    public async Task Warns_on_non_finite_pixels(float bad)
     {
-        using var image = Image([1, 2, float.NaN, 4], 2, 2);
+        using var image = Image([1, 2, bad, 4], 2, 2);
 
         var result = await NewOp().RunAsync(new OperationInput(image), ParameterSet.Empty, null, CancellationToken.None);
 
         Assert.NotNull(result.Artifact);
         Assert.Contains(result.Warnings, w => w.Code == "statistics.non-finite");
-        Assert.True(double.IsNaN(result.Artifact!.Scalars["mean"].Value));
+    }
+
+    [Fact]
+    public async Task Does_not_warn_when_all_pixels_are_finite()
+    {
+        using var image = Image([1, 2, 3, 4], 2, 2);
+
+        var result = await NewOp().RunAsync(new OperationInput(image), ParameterSet.Empty, null, CancellationToken.None);
+
+        Assert.DoesNotContain(result.Warnings, w => w.Code == "statistics.non-finite");
     }
 }

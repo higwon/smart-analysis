@@ -46,9 +46,12 @@ It is the measurement counterpart to A01 (transform) and the template for A03 (r
 ## Implementation status (this PR)
 Implemented: pure `SummaryStatistics.Compute(ReadOnlySpan<double>)` + `BuildHistogram`, reproducing the
 legacy formulas (parity verified vs MV00 golden — incl. Sa/Sq, Pearson skew/kurtosis, BPAR, and NaN/Inf
-edges); `StatisticsOperation : IAnalysisOperation` (`image.statistics`) over the image's physical Z;
-Domain `Histogram` value type + optional slot on `AnalysisArtifact`; `AddImageAnalysis()` DI module.
-Tests: pure numeric + histogram, golden parity, operation run/registration/provenance/warnings.
+edges); `StatisticsOperation : IAnalysisOperation` (`image.statistics`) over the image's physical Z; the
+non-finite warning is detected from the **input pixels** (so `±Infinity` is caught, not just `NaN`);
+Domain `Histogram` value object with **structural equality** (`IEquatable`/`==`/`GetHashCode` over
+unit + range + ordered counts) + optional slot on `AnalysisArtifact`; `AddImageAnalysis()` DI module.
+Tests: pure numeric + histogram (+ Histogram invariants/equality), golden parity, operation
+run/registration/provenance, and non-finite warnings for NaN/±Infinity (none when all finite).
 
 ## Still open (follow-up)
 - Histogram has no legacy golden (binning is standard); add one if a legacy histogram baseline is needed.

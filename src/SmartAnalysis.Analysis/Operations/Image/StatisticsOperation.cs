@@ -72,12 +72,20 @@ public sealed class StatisticsOperation : IAnalysisOperation
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Reading pixels."));
 
-        // The image buffer holds physical Z values (FF01); copy to double for the numeric core.
+        // The image buffer holds physical Z values (FF01); copy to double for the numeric core, and
+        // detect non-finite pixels from the INPUT (not from a guessed output — +/-Infinity would slip
+        // past a NaN-only check).
         var pixels = image.Data.Memory.Span;
         var values = new double[pixels.Length];
+        bool hasNonFinite = false;
         for (int i = 0; i < pixels.Length; i++)
         {
-            values[i] = pixels[i];
+            double value = pixels[i];
+            values[i] = value;
+            if (!double.IsFinite(value))
+            {
+                hasNonFinite = true;
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -101,7 +109,7 @@ public sealed class StatisticsOperation : IAnalysisOperation
                 "No histogram produced: the image has no finite value range (empty, constant, or all non-finite)."));
         }
 
-        if (stats.Count > 0 && double.IsNaN(stats.Mean))
+        if (hasNonFinite)
         {
             warnings.Add(new OperationWarning(
                 "statistics.non-finite",

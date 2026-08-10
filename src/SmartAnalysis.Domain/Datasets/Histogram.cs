@@ -9,7 +9,7 @@ namespace SmartAnalysis.Domain.Datasets;
 /// copied). Produced by measurement operations (e.g. image statistics) and carried on an
 /// <see cref="AnalysisArtifact"/>; the domain owns the numbers, rendering is a viz concern.
 /// </summary>
-public sealed class Histogram
+public sealed class Histogram : IEquatable<Histogram>
 {
     public Histogram(Unit unit, double min, double max, IReadOnlyList<long> counts)
     {
@@ -64,4 +64,58 @@ public sealed class Histogram
 
         return Min + ((index + 0.5) * BinWidth);
     }
+
+    // --- Structural equality (value object): unit + range + ordered counts ---
+
+    public bool Equals(Histogram? other)
+    {
+        if (other is null)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
+        if (!Unit.Equals(other.Unit)
+            || !Min.Equals(other.Min)         // bitwise (handles NaN/-0 consistently; ctor already rejects non-finite)
+            || !Max.Equals(other.Max)
+            || Counts.Count != other.Counts.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < Counts.Count; i++)
+        {
+            if (Counts[i] != other.Counts[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as Histogram);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Unit);
+        hash.Add(Min);
+        hash.Add(Max);
+        foreach (var count in Counts)
+        {
+            hash.Add(count); // order-dependent, matching the ordered-sequence equality above
+        }
+
+        return hash.ToHashCode();
+    }
+
+    public static bool operator ==(Histogram? left, Histogram? right)
+        => left is null ? right is null : left.Equals(right);
+
+    public static bool operator !=(Histogram? left, Histogram? right) => !(left == right);
 }
