@@ -101,6 +101,18 @@ policy-driven (`Block` refuses when children exist, `Cascade` removes+disposes t
 the active context; active-context and dataset changes are observable via plain .NET events (no WPF).
 **P01** persists this model and restores lineage on reopen.
 
+### Container format v1 (P01 — implemented, ADR-017)
+The workspace persists as a **directory-package**: `manifest.json` (schema `1.0.0`; timestamps, app
+version, the active context, and one entry per dataset — identity, source, axes, channel, metadata, and
+full `ProvenanceRecord`) + `buffers/<datasetId>.bin` (raw **little-endian float32**, doc 07 M3). It lives
+in Infrastructure (`DirectoryWorkspaceStore`) behind the Application `IWorkspaceStore` port (ADR-010);
+Domain/provenance types stay serializer-free (ADR-013) — the adapter maps them to JSON DTOs, and units
+persist as symbols resolved via the unit registry on load. Buffers are stored **inline** so reopen is
+self-contained and original→derived **lineage always restores** (the C3 fix). `Open` returns typed
+failures (`NotAWorkspace` / `UnsupportedSchemaVersion` / `Corrupt` / `Io`), never a silent loss. MVP
+kind = `ScanImageDataset`. Deferred: relink-by-reference + moved-source relink, automated
+re-run-to-reproduce, lazy/memory-mapped blobs, non-image kinds, and schema **migration** (P03).
+
 ### Schema versioning & migration
 - Every persisted structure carries a `schemaVersion`.
 - Provide forward migration (legacy HDF5 reader hard-fails on unknown version, doc 06 — the new

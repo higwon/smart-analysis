@@ -46,8 +46,9 @@ F03 (datasets), F05 (provenance), W01 (workspace model), FF01 (something to save
 - **Reuse pattern:** the HDF5 strict-validator discipline (doc 04 grade A) as a model for
   robust load validation — but with **migration**, not hard-reject (doc 06).
 
-## Target placement
-`SmartAnalysis.Persistence` → `Domain` + `Workflow`(provenance types). No UI reference.
+## Target placement (ADR-017 — supersedes "SmartAnalysis.Persistence")
+No `SmartAnalysis.Persistence` project exists (8-project structure). Application port `IWorkspaceStore`
+(Domain + `Workspace` only) + Infrastructure adapter `DirectoryWorkspaceStore`. No UI reference.
 
 ## Errors & boundary conditions
 - Missing referenced source file on reopen → relink by content hash, or surface a typed
@@ -79,6 +80,25 @@ A workspace built from a fixture TIFF + one flatten result.
 ## Docs to update on completion
 doc 16 (lock schema v1), ADR for container format, INDEX status.
 
-## Unverified / open
-- Container format (directory vs HDF5 vs zip) — ADR.
+## Implementation status (this PR) — ADR-017
+- **Boundary (supersedes "`SmartAnalysis.Persistence`"):** Application port `IWorkspaceStore` (Domain +
+  `Workspace` only) + Infrastructure adapter `DirectoryWorkspaceStore`; registered via `AddWorkspaceStore()`.
+- **Format = directory-package:** `manifest.json` (schema `1.0.0`; datasets with axes/channel/metadata +
+  full `ProvenanceRecord`, and the active context) + `buffers/<id>.bin` (little-endian float32). Domain
+  stays serializer-free (ADR-013) — Infrastructure maps to JSON DTOs; units persist as symbols.
+- **Round-trip restores** datasets, buffers, **original→derived lineage** (provenance parent + steps,
+  params-with-units, environment, `ParentResultId`), and the active context. Typed `Open` failures
+  (`Io` / `NotAWorkspace` / `UnsupportedSchemaVersion` / `Corrupt`).
+- **Tests:** save→open round-trip (values/axes/units/channel/metadata/lineage/active context);
+  unknown-schema-version, missing-buffer (corrupt), no-manifest, missing-directory; DI wiring.
+
+## Resolved (ADR-017)
+- **Container format:** directory-package (JSON manifest + LE-float blobs) — the doc-16 recommended default.
+- Buffers stored **inline** (self-contained reopen) → MVP does not need relink; the source path + hash are
+  kept as metadata for a future relink-by-reference mode.
+
+## Still open (follow-up)
+- Relink-by-reference + moved-source relink; automated **re-run-to-reproduce** (provenance already carries
+  op id/version + params-with-units); schema **migration** (P03); lazy/memory-mapped blob loading;
+  non-image dataset kinds; single-file (`.zip`) packaging behind the same port.
 - Whether the spectrum library (P02) embeds per-workspace or is user-level.
