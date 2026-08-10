@@ -97,9 +97,33 @@ Scan-image fixtures with known tilt/curvature (from FF01/T01 corpus).
 ## Docs to update on completion
 doc 13 (confirm example), doc 30 (mark flatten done), INDEX, T02 entry.
 
-## Unverified / open
-- Exact zero-basement + orientation semantics vs legacy — verify against `FlattenScopeExecutor`.
-- Whether Surface uses the same order param semantics as Whole/Line.
+## Implementation status (this PR)
+Implemented `image.flatten` in `SmartAnalysis.Analysis` (Domain-only) reproducing the legacy math
+headlessly (no WPF `Point[]`/ROI/coordinate-system):
+- Pure `Flatten.Apply(z, w, h, scope, order, orientation, basement)` — **Line** (per-line poly fit +
+  subtract), **Whole** (fit the perpendicular-averaged profile once, subtract from every line),
+  **Surface** (full bivariate polynomial, total degree ≤ order). Subtraction in **float** precision
+  (legacy parity). Fits use pixel-index positions (predictions invariant under affine reparam, so they
+  match the legacy visual-position fit).
+- Fit primitives reuse the **same MathNet routines** the MV00 golden came from (`Polynomials.Fit1D` =
+  `Fit.Polynomial`; `SurfacePolynomial` = Vandermonde + `MultipleRegression.NormalEquations`) —
+  verified against `polynomial-fit-1d/2d.json` (`PolynomialParityTests`).
+- `FlattenOperation` returns a **derived `ScanImageDataset`** (axes/channel/unit preserved) with a
+  `ProvenanceStep {image.flatten v1, order}`; registered via `AddImageAnalysis()`.
+
+### Resolved
+- **Zero-basement** is realized as an **enum** `BasementOption { RegressionToZero (default),
+  PreserveOriginalMidpoint }` (faithful to the legacy `EFlattenZeroBasementOption`), not the spec's
+  provisional `bool` — clearer and 1:1 with legacy.
+- **Orientation** = `FastAxis` (X) / `SlowAxis` (Y); Line/Whole operate along it. Surface uses the same
+  order for the full bivariate polynomial.
+
+### Deferred
+- **End-to-end legacy flatten-orchestration golden (T02):** MV00 froze the fit primitives only (the
+  legacy orchestrator is WPF/Dialogs-coupled). Parity here is at the primitive level (golden) +
+  orchestration unit tests (a pure tilt/plane/curvature flattens to ~0). Full-orchestration golden is
+  added if a clean legacy-drive path is found.
+- **ROI-restricted flatten** (Difference/DriftCorrection variants, `Region`) — D02/V06.
 
 ---
 
