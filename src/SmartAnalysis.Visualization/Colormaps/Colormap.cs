@@ -30,9 +30,9 @@ public sealed class Colormap
     /// <summary>Samples at a normalized position; input is clamped to [0, 1] (non-finite → first entry).</summary>
     public Rgb SampleNormalized(double t)
     {
-        if (double.IsNaN(t))
+        if (!double.IsFinite(t))
         {
-            return _lut[0];
+            return _lut[0]; // NaN and ±Infinity are all "invalid" → the first entry
         }
 
         t = t < 0.0 ? 0.0 : t > 1.0 ? 1.0 : t;

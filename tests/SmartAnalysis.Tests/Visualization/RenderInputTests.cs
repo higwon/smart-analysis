@@ -52,9 +52,12 @@ public sealed class RenderInputTests
         Assert.InRange(mid.R, (byte)125, (byte)129); // ~half
     }
 
-    [Fact]
-    public void Colormap_maps_non_finite_to_the_first_entry()
-        => Assert.Equal(Colormap.AfmGold.Entries[0], Colormap.AfmGold.Map(double.NaN, new ValueRange(0, 1)));
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void SampleNormalized_maps_all_non_finite_to_the_first_entry(double t)
+        => Assert.Equal(Colormap.AfmGold.Entries[0], Colormap.AfmGold.SampleNormalized(t));
 
     [Fact]
     public void Colormap_requires_256_entries()
@@ -63,17 +66,19 @@ public sealed class RenderInputTests
     // --- AxisView ---
 
     [Fact]
-    public void AxisView_takes_the_direction_resolved_physical_extent()
+    public void AxisView_preserves_scan_direction_in_start_and_end()
     {
-        var forward = AxisView.FromAxis(new Axis("X", StandardUnits.Micrometre, 2.0, 0.5, 5)); // 2.0 .. 4.0
+        // Forward: raw 0 → 2.0 (Start), raw last → 4.0 (End).
+        var forward = AxisView.FromAxis(new Axis("X", StandardUnits.Micrometre, 2.0, 0.5, 5));
         Assert.Equal("um", forward.Unit);
-        Assert.Equal(2.0, forward.Min, 10);
-        Assert.Equal(4.0, forward.Max, 10);
+        Assert.Equal(2.0, forward.Start, 10);
+        Assert.Equal(4.0, forward.End, 10);
         Assert.Equal(5, forward.Count);
 
+        // Reverse: raw 0 → 4.0 (Start), raw last → 2.0 (End) — orientation preserved, not collapsed to min/max.
         var reverse = AxisView.FromAxis(new Axis("Y", StandardUnits.Micrometre, 2.0, 0.5, 5, AxisDirection.Reverse));
-        Assert.Equal(2.0, reverse.Min, 10); // extent is the same regardless of scan direction
-        Assert.Equal(4.0, reverse.Max, 10);
+        Assert.Equal(4.0, reverse.Start, 10);
+        Assert.Equal(2.0, reverse.End, 10);
     }
 
     // --- Converters ---
@@ -135,8 +140,8 @@ public sealed class RenderInputTests
         Assert.Equal([10.0, 20.0, 30.0], series.Y.ToArray());
         Assert.Equal("um", input.X.Unit);
         Assert.Equal("nm", input.Y.Unit);
-        Assert.Equal(10.0, input.Y.Min, 10);
-        Assert.Equal(30.0, input.Y.Max, 10);
+        Assert.Equal(10.0, input.Y.Start, 10);
+        Assert.Equal(30.0, input.Y.End, 10);
     }
 
     [Fact]

@@ -6,7 +6,7 @@ namespace SmartAnalysis.Visualization.Rendering;
 /// A 2D image to render: row-major <see cref="Z"/> (<c>Width×Height</c>) mapped through
 /// <see cref="Colormap"/> over <see cref="Range"/>, with physical <see cref="X"/>/<see cref="Y"/> axes
 /// and the channel (Z) unit. No chart-library or WPF type — the concrete backend (V02) turns this into a
-/// bitmap. Immutable.
+/// bitmap. The record's own fields are immutable, but see the <see cref="Z"/> lifetime contract.
 /// </summary>
 public sealed record ImageRenderInput
 {
@@ -37,6 +37,13 @@ public sealed record ImageRenderInput
         ChannelUnit = channelUnit ?? throw new ArgumentNullException(nameof(channelUnit));
     }
 
+    /// <summary>
+    /// Row-major pixel values — a <b>borrowed read-only view of the source dataset's buffer</b>, not an
+    /// owned copy (ADR-011: a <c>ScanBuffer</c> view must not outlive its owner). It is only valid while
+    /// the source dataset is alive; do not use this render input after disposing that dataset. A backend
+    /// must consume/copy these pixels during <see cref="IImageView.Render"/> and must not retain the span
+    /// beyond the call unless it makes its own owned copy.
+    /// </summary>
     public ReadOnlyMemory<float> Z { get; }
 
     public int Width { get; }

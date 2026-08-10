@@ -20,7 +20,9 @@ headless code + tests describe *what* to render without a chart library.
   Light/Dark never changes it; chart/image *chrome* is themed separately.
 - **`ValueRange`** — finite `[Min,Max]` with `Normalize` (clamp to [0,1]; non-finite → NaN) and
   `FromData` (finite min/max; [0,1] if none).
-- **`AxisView`** — render-facing axis (title/unit/min/max/count), `FromAxis` (direction-resolved extent).
+- **`AxisView`** — render-facing axis (title/unit/**Start**/**End**/count); `FromAxis` keeps
+  `Start = RawToReal(0)`, `End = RawToReal(Count-1)` so **scan direction is preserved** (Reverse →
+  `Start > End`) and a backend never mirrors the image. Ascending extent = `min/max(Start,End)`.
 - **Render inputs** — `ImageRenderInput` (Z + W/H + range + colormap + X/Y `AxisView` + channel unit);
   `CurveRenderInput` + `XySeries` (profiles/spectra).
 - **View ports** — `IImageView.Render(ImageRenderInput)`, `ICurveView.Render(CurveRenderInput)`.
@@ -28,8 +30,16 @@ headless code + tests describe *what* to render without a chart library.
   from finite data), `ForLineProfile(LineProfileDataset)` (x = axis positions, y = values).
 
 ## Errors & boundary conditions
-- Non-finite Z values → colormap maps them to the first entry (an "invalid" sample), never a bogus color.
+- Non-finite colormap input → first entry: `SampleNormalized` maps **NaN and ±Infinity** to entry 0
+  (an "invalid" sample), never a bogus color.
 - `ImageRenderInput` rejects a Z length that mismatches `Width*Height`; `XySeries` requires `|X|==|Y|`.
+
+## Lifetime contract (ADR-011)
+`ImageRenderInput.Z` is a **borrowed read-only view** of the source dataset's `ScanBuffer`, not an owned
+copy (chosen over copying every image for performance). It is valid only while the source dataset is
+alive; an `IImageView.Render` implementation must consume/copy the pixels **during** the call and must
+not retain `Z` afterward (nor use a render input whose source dataset was disposed) unless it makes its
+own owned copy. Documented on `ImageRenderInput.Z` and `IImageView.Render`.
 
 ## Done-when
 - Render-input types + view interfaces + converters exist; unit-tested headlessly (Z passthrough, W/H,
