@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TASK-MV00 legacy-baseline harness. NOT product code: lives outside src/, is NOT in
+       SmartAnalysis.sln, and never ships. It drives the clean legacy numeric primitives to freeze
+       golden data for parity tests (T01/T02/A01/A02).
+
+       It compiles the legacy .cs BY PATH (read-only) — legacy source is never copied into this repo.
+       Set LegacyCalcDir (or the LEGACY_CALC_DIR env var) to the legacy FW.Analysis.Calculate folder.
+       There is NO machine-specific default; the manifest's git provenance is derived from THIS same
+       directory (see Program.cs) so the golden's recorded commit always matches the compiled source.
+       Requires the legacy repo present; it does not build in CI (excluded from the product solution). -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <LegacyCalcDir Condition="'$(LegacyCalcDir)' == ''">$(LEGACY_CALC_DIR)</LegacyCalcDir>
+  </PropertyGroup>
+
+  <Target Name="_RequireLegacyCalcDir" BeforeTargets="CoreCompile" Condition="'$(LegacyCalcDir)' == ''">
+    <Error Text="LegacyCalcDir is not set. Pass -p:LegacyCalcDir=&lt;path&gt; or set the LEGACY_CALC_DIR env var to the legacy FW.Analysis.Calculate folder (read-only)." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+  </ItemGroup>
+
+  <!-- Record the exact directory the legacy source was compiled from, so the runtime derives git
+       provenance (commit/branch/dirty) from the SAME repo — not a separately-supplied path. -->
+  <ItemGroup Condition="'$(LegacyCalcDir)' != ''">
+    <AssemblyMetadata Include="LegacyCalcDir" Value="$(LegacyCalcDir)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(LegacyCalcDir)' != ''">
+    <!-- Legacy numeric primitives, compiled by path (NOT copied into this repo). -->
+    <Compile Include="$(LegacyCalcDir)\SummaryStatisticsCalculator.cs">
+      <Link>Legacy\SummaryStatisticsCalculator.cs</Link>
+    </Compile>
+    <Compile Include="$(LegacyCalcDir)\PolynomialLeastSquaresRegression.cs">
+      <Link>Legacy\PolynomialLeastSquaresRegression.cs</Link>
+    </Compile>
+    <Compile Include="$(LegacyCalcDir)\MultiplePolynomialRegression.cs">
+      <Link>Legacy\MultiplePolynomialRegression.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

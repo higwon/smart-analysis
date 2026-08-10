@@ -83,7 +83,37 @@ Legacy fixture files (scan-image TIFFs; use `NSISBuild/Sample`, `FW.UI.Common/Re
 ## Docs to update on completion
 doc 19 (link the concrete golden corpus), backlog status (MV00 → done), INDEX, T01 spec.
 
-## Unverified / open
-- Whether to drive `FW.Analysis.Calculate` directly vs through a minimal legacy harness — choose
-  the least-invasive path that yields stable outputs (record in the manifest).
-- Exact tolerance per operation (seed in doc 19; refine here).
+## Implementation status (this PR)
+Harness `tools/legacy-baseline/` (net8.0 console, **outside `src/`, not in `SmartAnalysis.sln`**) —
+compiles the legacy numeric `.cs` **by path** (`LegacyCalcDir`; legacy repo read-only, **not copied**)
++ MathNet 5.0.0. Drove the real legacy engine (captured `develop @ 1451945…`) on deterministic
+synthetic inputs → committed golden:
+- `golden/summary-statistics.json` — `SummaryStatisticsCalculator` over ramp/mixed/constant/empty/
+  NaN/Inf (normal + edge). Enables **A02**. (Captures legacy quirks verbatim, e.g. population
+  `StandardDeviation`, legacy `Kurtosis`, `BoundedPointAverageRoughness = NaN`.)
+- `golden/polynomial-fit-1d.json` — `PolynomialLeastSquaresRegression` order 0/1/2 (Line/Whole flatten core).
+- `golden/polynomial-fit-2d.json` — `MultiplePolynomialRegression` order 1/2 plane/surface (Surface flatten core).
+- `golden/manifest.json` — legacy commit/branch, MathNet version, notes.
+Each case records input + **SHA-256**, params, outputs (units where applicable), and tolerance `1e-9`,
+classified normal/edge. `LegacyBaselineGoldenTests` (CI, no legacy engine) guards structure + a known
+value (`ramp-16` Average = 7.5) + self-consistency (exact line/plane fits reproduce their input) +
+**recomputes every `InputSha256`** from the recorded inputs (catches manual golden edits).
+
+**Provenance chain (reviewer-hardened):** git commit/branch are derived from the **same** directory the
+source was compiled from (`LegacyCalcDir` → `git rev-parse --show-toplevel`), so the manifest cannot
+name a different repo than the compiled code; generation **refuses a dirty tree** for the three
+primitive files (the recorded commit always reproduces the golden) and records each source file's
+SHA-256; the manifest carries **no machine-specific absolute path** and `LEGACY_CALC_DIR` is required
+(no personal default).
+
+## Resolved (this PR)
+- **Drive-path decision (was open):** compile the **clean** `FW.Analysis.Calculate` primitives by path
+  (least-invasive; no DevExpress/SciChart, no legacy build, legacy tree untouched). The full
+  Whole/Line/Surface **orchestration** (`FlattenScopeExecutor`/`*FlattenProcess`) is WPF/Dialogs-coupled
+  and **deferred** — A01 rebuilds it headlessly on the poly-fit goldens.
+- **Tolerance:** seeded at `1e-9` (relative); refine per-operation in T02 if needed.
+
+## Still open (follow-up)
+- End-to-end flatten-orchestration golden (needs a clean way to drive the legacy orchestrator, or is
+  validated indirectly via the poly-fit cores + A01's own unit cases).
+- Real-image-derived inputs (vs synthetic) once a committable fixture corpus is agreed (FF01/T01).
