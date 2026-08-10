@@ -18,7 +18,8 @@ public sealed class AnalysisArtifact : IEquatable<AnalysisArtifact>
         DatasetId sourceId,
         string operationId,
         IReadOnlyDictionary<string, PhysicalValue> scalars,
-        ProvenanceRecord provenance)
+        ProvenanceRecord provenance,
+        Histogram? histogram = null)
     {
         if (id.IsEmpty)
         {
@@ -37,6 +38,7 @@ public sealed class AnalysisArtifact : IEquatable<AnalysisArtifact>
         Scalars = new ReadOnlyDictionary<string, PhysicalValue>(
             new Dictionary<string, PhysicalValue>(scalars, StringComparer.Ordinal));
         Provenance = DomainGuard.NotNull(provenance, nameof(provenance));
+        Histogram = histogram;
     }
 
     /// <summary>Stable identity of this artifact.</summary>
@@ -50,6 +52,9 @@ public sealed class AnalysisArtifact : IEquatable<AnalysisArtifact>
 
     /// <summary>Named scalar results with their units (read-only, defensively copied).</summary>
     public IReadOnlyDictionary<string, PhysicalValue> Scalars { get; }
+
+    /// <summary>Optional value distribution (e.g. image statistics histogram); null when the op emits none.</summary>
+    public Histogram? Histogram { get; }
 
     /// <summary>Lineage + step history (F05, ADR-004).</summary>
     public ProvenanceRecord Provenance { get; }
