@@ -22,6 +22,8 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
     public const string SchemaVersion = "1.0.0";
     private const string ManifestFile = "manifest.json";
     private const string BuffersDir = "buffers";
+    private const string TempSuffix = ".tmp";   // deterministic swap siblings (crash-recoverable)
+    private const string BackupSuffix = ".bak";
     private const string ScanImageKind = "ScanImage";
     private const string AppVersion = "0.0.0-dev";
 
@@ -55,12 +57,14 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
             images.Add(image);
         }
 
-        // 2. Write the complete new package into a temp sibling directory. The existing package (if any)
-        //    is left untouched until the new one is fully written.
-        string target = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        string parent = Path.GetDirectoryName(target) ?? ".";
-        string name = Path.GetFileName(target);
-        string temp = Path.Combine(parent, $".{name}.tmp-{Guid.NewGuid():N}");
+        // 2. Finish any prior interrupted swap first, then write the complete new package into the temp
+        //    directory. The existing package is left untouched until the new one is fully written.
+        string target = Normalize(path);
+        string temp = target + TempSuffix;
+        string backup = target + BackupSuffix;
+        RecoverInterruptedSwap(target);
+
+        TryDeleteDirectory(temp);
         try
         {
             WritePackage(temp, workspace, images);
@@ -71,18 +75,19 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
             throw;
         }
 
-        // 3. Swap the temp package into place, keeping the old one until the new is committed; roll back on failure.
-        string backup = Path.Combine(parent, $".{name}.bak-{Guid.NewGuid():N}");
+        // 3. Commit the swap via deterministic .bak/.tmp so an interrupted swap is recoverable on the
+        //    next Open/Save (crash between the two moves → RecoverInterruptedSwap restores .bak → target).
+        TryDeleteDirectory(backup);
         bool movedOld = false;
         try
         {
             if (Directory.Exists(target))
             {
-                Directory.Move(target, backup);
+                Directory.Move(target, backup); // ── crash window: target absent, backup = old, temp = new
                 movedOld = true;
             }
 
-            Directory.Move(temp, target);
+            Directory.Move(temp, target);       // ── crash window: target = new, backup = old
         }
         catch
         {
@@ -97,6 +102,33 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
 
         TryDeleteDirectory(backup); // new package committed; drop the old one
     }
+
+    /// <summary>
+    /// Restores a consistent state after a crash/power-loss during the commit swap. Deterministic
+    /// <c>.bak</c>/<c>.tmp</c> siblings make the interrupted state recognizable: if the target is gone
+    /// but a backup remains, the new package was never committed → roll back to the last committed
+    /// package; if both exist, the swap completed but the backup wasn't cleaned → finish cleanup. Any
+    /// stray temp is discarded. Called at the start of Save and Open.
+    /// </summary>
+    private static void RecoverInterruptedSwap(string target)
+    {
+        string temp = target + TempSuffix;
+        string backup = target + BackupSuffix;
+
+        if (!Directory.Exists(target) && Directory.Exists(backup))
+        {
+            Directory.Move(backup, target); // interrupted before the new package was committed → restore old
+        }
+        else if (Directory.Exists(target) && Directory.Exists(backup))
+        {
+            TryDeleteDirectory(backup); // swap completed; finish the deferred cleanup
+        }
+
+        TryDeleteDirectory(temp); // a leftover temp is never the committed state at this point
+    }
+
+    private static string Normalize(string path)
+        => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     private void WritePackage(string dir, SmartAnalysis.Application.Workspaces.Workspace workspace, List<ScanImageDataset> images)
     {
@@ -148,6 +180,11 @@ public sealed class DirectoryWorkspaceStore : IWorkspaceStore
         SmartAnalysis.Application.Workspaces.Workspace? workspace = null;
         try
         {
+            // Recover a package left mid-swap by a crash before reading (restores .bak → target).
+            var normalized = Normalize(path);
+            RecoverInterruptedSwap(normalized);
+            path = normalized;
+
             if (!Directory.Exists(path))
             {
                 return WorkspaceOpenResult.Failure(WorkspaceOpenErrorKind.Io, $"Workspace directory not found: '{path}'.");

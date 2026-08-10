@@ -44,11 +44,15 @@ placement predates the consolidated 8-project structure (ADR-007) — there is n
   re-run-to-reproduce (the provenance already carries op id/version + params-with-units); non-image kinds.
 
 ## Robustness (a save format must fail loud, never lose data silently)
-- **Non-destructive, transactional `Save`:** the whole workspace is validated first (an unsupported
-  dataset kind throws **before** any filesystem write); the complete new package is written to a temp
-  sibling directory, then swapped into place (move old → backup, move temp → target, delete backup) with
-  rollback on failure. A failed or interrupted save therefore **never corrupts the existing package**,
-  and an overwrite leaves no stale datasets/buffers.
+- **Non-destructive, crash-recoverable `Save`:** the whole workspace is validated first (an unsupported
+  dataset kind throws **before** any filesystem write); the complete new package is written to a
+  deterministic temp sibling (`<name>.tmp`), then committed by a two-step move (`target → <name>.bak`,
+  `<name>.tmp → target`, delete `.bak`). A managed failure rolls back; a **crash/power-loss between the
+  two moves** is recovered on the next `Open`/`Save` — `RecoverInterruptedSwap` sees the deterministic
+  `.bak`/`.tmp` and either rolls back to the last committed package (target gone, backup present) or
+  finishes cleanup (both present). So a failed **or interrupted** save never corrupts the existing
+  package, and an overwrite leaves no stale datasets/buffers. (Not concurrent-save-safe — single-writer,
+  documented.)
 - **Typed failures are exhaustive at the boundary:** any file-system exception anywhere in `Open`
   (`IOException`/`UnauthorizedAccessException`/`SecurityException`/`PathTooLongException`) maps to `Io`;
   unreadable/absent manifest → `NotAWorkspace`; version mismatch → `UnsupportedSchemaVersion`; anything
@@ -65,6 +69,7 @@ placement predates the consolidated 8-project structure (ADR-007) — there is n
 Round-trip test (save→open restores datasets, buffers, axes/units/channel/metadata, **provenance lineage
 parent→steps**, and active context); typed-failure tests for unknown-schema-version, missing/short/
 **trailing-byte** buffer, dangling active-context reference, path-traversal buffer name, no-manifest, and
-missing-directory; **a failed save preserves the existing package** and a clean overwrite leaves no
-stale data. Arch test keeps the port in Application (Domain-only) and the adapter/serializer in
+missing-directory; **a failed save preserves the existing package**, a clean overwrite leaves no stale
+data, and a **swap interrupted by a crash is recovered on the next open** (rolled back to the last
+committed package). Arch test keeps the port in Application (Domain-only) and the adapter/serializer in
 Infrastructure; no UI/commercial references.

@@ -22,7 +22,10 @@ public sealed class WorkspaceStoreTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
+        foreach (var d in new[] { _dir, _dir + ".tmp", _dir + ".bak" })
+        {
+            try { if (Directory.Exists(d)) Directory.Delete(d, recursive: true); } catch { /* best effort */ }
+        }
     }
 
     private static ScanImageDataset Original(DatasetId id, float[] pixels)
@@ -270,6 +273,32 @@ public sealed class WorkspaceStoreTests : IDisposable
         using var reopened = result.Workspace!;
         Assert.Equal(1, reopened.Count); // no stale datasets/buffers from the previous save
         Assert.True(reopened.Contains(soloId));
+    }
+
+    [Fact]
+    public void A_swap_interrupted_by_a_crash_is_recovered_on_open()
+    {
+        var store = NewStore();
+        var (origId, derId) = SaveSample(store);
+
+        // Simulate a crash between the two directory moves: target gone, backup = the committed package,
+        // plus a leftover temp with a half-written new package.
+        Directory.Move(_dir, _dir + ".bak");
+        Directory.CreateDirectory(_dir + ".tmp");
+        File.WriteAllText(Path.Combine(_dir + ".tmp", "manifest.json"), "{ half-written");
+        Assert.False(Directory.Exists(_dir));
+
+        var result = store.Open(_dir);
+
+        // Recovery rolled back to the last committed package; the original data opens intact.
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        using var ws = result.Workspace!;
+        Assert.Equal(2, ws.Count);
+        Assert.True(ws.Contains(origId));
+        Assert.Equal(derId, ws.Active.ActiveId);
+        Assert.True(Directory.Exists(_dir));                 // restored in place
+        Assert.False(Directory.Exists(_dir + ".bak"));       // backup consumed
+        Assert.False(Directory.Exists(_dir + ".tmp"));       // stray temp discarded
     }
 
     [Fact]
