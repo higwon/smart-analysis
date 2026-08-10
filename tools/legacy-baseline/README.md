@@ -14,25 +14,31 @@ writes golden JSON + a manifest:
 - `MultiplePolynomialRegression` (2D) → `golden/polynomial-fit-2d.json` (Surface flatten core).
 - `golden/manifest.json` — the exact **legacy commit/branch**, MathNet version, notes.
 
-The legacy `.cs` are **compiled by path** (see `LegacyCalcDir` in the csproj) — legacy source is
-**never copied** into this repo, and the legacy repo is only ever read.
+The legacy `.cs` are **compiled by path** (`LegacyCalcDir`) — legacy source is **never copied** into
+this repo, and the legacy repo is only ever read.
+
+## Provenance guarantees (why the golden is trustworthy)
+- **Single source of truth:** git commit/branch are derived from the **same** `LegacyCalcDir` the code
+  was compiled from (via `git rev-parse --show-toplevel`) — the manifest can't record a different repo
+  than the one compiled.
+- **Clean tree only:** generation **refuses** (non-zero exit) if the compiled `.cs` have uncommitted
+  changes, so the recorded commit always reproduces the golden. The manifest also records each source
+  file's SHA-256.
+- **No machine paths:** no absolute path is written to the golden; `LegacyCalcDir`/`LEGACY_CALC_DIR` is
+  **required** (no personal default).
 
 ## Regenerate
-Requires the legacy repo present (read-only). From the repo root:
+Requires the legacy repo present (read-only) and a **clean** working tree for the three primitive files.
+From the repo root, set `LEGACY_CALC_DIR` to the legacy `FW.Analysis.Calculate` folder:
 
 ```bash
-dotnet run --project tools/legacy-baseline -- tools/legacy-baseline/golden
+LEGACY_CALC_DIR="<legacy>/Framework/Analysis/FW.Analysis.Calculate" \
+  dotnet run --project tools/legacy-baseline -- tools/legacy-baseline/golden
 ```
 
-Override the legacy source location if needed:
-
-```bash
-dotnet run --project tools/legacy-baseline -- tools/legacy-baseline/golden \
-  --property:LegacyCalcDir="<...>/Framework/Analysis/FW.Analysis.Calculate"
-```
-
-(or set the `LEGACY_CALC_DIR` / `LEGACY_REPO_DIR` env vars). The committed golden JSON is validated in
-CI by `LegacyBaselineGoldenTests` **without** the legacy engine.
+The committed golden JSON is validated in CI by `LegacyBaselineGoldenTests` **without** the legacy
+engine (structure, a hand-checked value, fit self-consistency, and **`InputSha256` recomputed from the
+recorded inputs**).
 
 ## Deferred
 Full **Whole/Line/Surface flatten orchestration** golden — the legacy orchestrator

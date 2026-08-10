@@ -1,10 +1,25 @@
 {
   "Task": "MV00",
-  "GeneratedAtUtc": "2026-08-10T02:27:43.3243287\u002B00:00",
+  "GeneratedAtUtc": "2026-08-10T02:47:42.8163298\u002B00:00",
   "Legacy": {
-    "RepoDir": "C:\\Users\\HyuckJin.Kwon\\SmartAnalysis-Private\\SmartAnalysis-Private",
     "Commit": "1451945acdbcd0949ef0a62d4e070fd9eb4e7107",
-    "Branch": "develop"
+    "Branch": "develop",
+    "Dirty": false,
+    "SourceSet": "FW.Analysis.Calculate",
+    "Sources": [
+      {
+        "Name": "SummaryStatisticsCalculator.cs",
+        "Sha256": "093CF2690109D55994980B50035D8D081043B4254273FC3BB774EDAA048944F8"
+      },
+      {
+        "Name": "PolynomialLeastSquaresRegression.cs",
+        "Sha256": "BBF8730CD9FAC3D2683405AB0B549C925ABA6B318978576F0CDA7C770D8758F4"
+      },
+      {
+        "Name": "MultiplePolynomialRegression.cs",
+        "Sha256": "876C358F7F6F11467C9592DA48506D0014CAD20F762A2328EAB94A4BC2FE9E0A"
+      }
+    ]
   },
   "MathNet": "5.0.0",
   "Notes": "Legacy numeric primitives from FW.Analysis.Calculate driven on synthetic inputs. Full Whole/Line/Surface flatten orchestration is deferred (legacy orchestration is WPF/Dialogs-coupled); these 1D/2D polynomial-fit goldens are the flatten math core A01 reuses."

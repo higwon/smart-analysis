@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -6,24 +7,55 @@ using System.Text.Json.Serialization;
 using FW.Analysis.Calculate;
 
 // TASK-MV00 — freeze the legacy numeric ground truth for the MVP operations.
-// Usage: dotnet run --project tools/legacy-baseline -- <outputDir> [legacyRepoDir]
+// Usage: dotnet run --project tools/legacy-baseline -- <outputDir>
 // Drives the clean legacy primitives (compiled by path via the csproj) on deterministic synthetic
-// inputs and writes golden JSON + a manifest. Runs offline; the golden is committed and consumed by
-// the new parity tests (T01/T02/A01/A02).
+// inputs and writes golden JSON + a manifest. The manifest's git provenance is derived from the SAME
+// directory the source was compiled from (embedded as assembly metadata) and generation REFUSES a
+// dirty tree, so the recorded commit always reproduces the golden.
 
 string outputDir = args.Length > 0 ? args[0] : Path.Combine(Environment.CurrentDirectory, "golden");
-string legacyRepoDir = args.Length > 1
-    ? args[1]
-    : Environment.GetEnvironmentVariable("LEGACY_REPO_DIR")
-      ?? @"C:\Users\HyuckJin.Kwon\SmartAnalysis-Private\SmartAnalysis-Private";
-
 Directory.CreateDirectory(outputDir);
+
+// The directory the legacy source was compiled from (set by the csproj at build time).
+var legacyCalcDir = Assembly.GetExecutingAssembly()
+    .GetCustomAttributes<AssemblyMetadataAttribute>()
+    .FirstOrDefault(a => a.Key == "LegacyCalcDir")?.Value;
+
+if (string.IsNullOrWhiteSpace(legacyCalcDir) || !Directory.Exists(legacyCalcDir))
+{
+    Console.Error.WriteLine($"LegacyCalcDir metadata missing or not found ('{legacyCalcDir}'). Rebuild with LegacyCalcDir/LEGACY_CALC_DIR set.");
+    return 2;
+}
+
+string[] compiledSources =
+[
+    "SummaryStatisticsCalculator.cs",
+    "PolynomialLeastSquaresRegression.cs",
+    "MultiplePolynomialRegression.cs",
+];
+
+// Repo root of the SAME directory the source was compiled from — provenance and source are one repo.
+string repoRoot = Git(legacyCalcDir, "rev-parse --show-toplevel");
+if (repoRoot is "unknown" or "")
+{
+    Console.Error.WriteLine($"Could not resolve a git repository for the legacy source at '{legacyCalcDir}'.");
+    return 2;
+}
+
+// Refuse a dirty tree for the exact files we compiled — a baseline must reproduce from its commit.
+var compiledPaths = compiledSources.Select(s => Path.Combine(legacyCalcDir, s)).ToArray();
+string dirtyProbe = Git(repoRoot, $"status --porcelain -- {string.Join(' ', compiledPaths.Select(p => $"\"{p}\""))}");
+if (!string.IsNullOrWhiteSpace(dirtyProbe))
+{
+    Console.Error.WriteLine("Refusing to generate golden: the compiled legacy source has uncommitted changes:");
+    Console.Error.WriteLine(dirtyProbe);
+    return 3;
+}
 
 var json = new JsonSerializerOptions
 {
     WriteIndented = true,
     NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals, // NaN/Infinity as named literals
-    DefaultIgnoreCondition = JsonIgnoreCondition.Never,
 };
 
 const double Tolerance = 1e-9; // relative tolerance the new parity test (T02) asserts within
@@ -72,7 +104,6 @@ void Multi(string id, string cls, int order, double[] x1, double[] x2, double[] 
     multiCases.Add(new MultiPolyCase(id, cls, order, x1, x2, y, Sha256(x1, x2, y), reg.Infer(x1, x2), Tolerance));
 }
 
-// A 4x4 grid flattened into row-major (x1 = column, x2 = row).
 var g1 = new List<double>();
 var g2 = new List<double>();
 var plane = new List<double>();
@@ -91,11 +122,20 @@ for (int r = 0; r < 4; r++)
 Multi("plane-order1", "normal", 1, [.. g1], [.. g2], [.. plane]);
 Multi("surface-order2", "normal", 2, [.. g1], [.. g2], [.. curve]);
 
-// ---------- Manifest ----------
+// ---------- Manifest (provenance: same repo as the compiled source; clean tree; source hashes) ----------
+var sources = compiledPaths
+    .Select(p => new SourceFile(Path.GetFileName(p), Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p)))))
+    .ToArray();
+
 var manifest = new GoldenManifest(
     Task: "MV00",
     GeneratedAtUtc: DateTimeOffset.UtcNow.ToString("O"),
-    Legacy: new LegacyInfo(legacyRepoDir, Git(legacyRepoDir, "rev-parse HEAD"), Git(legacyRepoDir, "rev-parse --abbrev-ref HEAD")),
+    Legacy: new LegacyInfo(
+        Commit: Git(repoRoot, "rev-parse HEAD"),
+        Branch: Git(repoRoot, "rev-parse --abbrev-ref HEAD"),
+        Dirty: false,
+        SourceSet: "FW.Analysis.Calculate",
+        Sources: sources),
     MathNet: "5.0.0",
     Notes: "Legacy numeric primitives from FW.Analysis.Calculate driven on synthetic inputs. "
          + "Full Whole/Line/Surface flatten orchestration is deferred (legacy orchestration is WPF/Dialogs-coupled); "
@@ -107,7 +147,7 @@ Write("polynomial-fit-1d.json", polyCases);
 Write("polynomial-fit-2d.json", multiCases);
 
 Console.WriteLine($"Wrote golden data to {Path.GetFullPath(outputDir)}");
-Console.WriteLine($"  legacy: {manifest.Legacy.Branch} @ {manifest.Legacy.Commit}");
+Console.WriteLine($"  legacy: {manifest.Legacy.Branch} @ {manifest.Legacy.Commit} (clean)");
 Console.WriteLine($"  stats={statCases.Count} poly1d={polyCases.Count} poly2d={multiCases.Count}");
 return 0;
 
@@ -132,11 +172,11 @@ static string Sha256(params double[][] arrays)
     return Convert.ToHexString(SHA256.HashData(ms.ToArray()));
 }
 
-static string Git(string repoDir, string cmdArgs)
+static string Git(string dir, string cmdArgs)
 {
     try
     {
-        var psi = new ProcessStartInfo("git", $"-C \"{repoDir}\" {cmdArgs}")
+        var psi = new ProcessStartInfo("git", $"-C \"{dir}\" {cmdArgs}")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -150,7 +190,7 @@ static string Git(string repoDir, string cmdArgs)
 
         string outText = p.StandardOutput.ReadToEnd().Trim();
         p.WaitForExit(5000);
-        return string.IsNullOrEmpty(outText) ? "unknown" : outText;
+        return p.ExitCode == 0 ? outText : "unknown";
     }
     catch
     {
@@ -159,7 +199,8 @@ static string Git(string repoDir, string cmdArgs)
 }
 
 sealed record GoldenManifest(string Task, string GeneratedAtUtc, LegacyInfo Legacy, string MathNet, string Notes);
-sealed record LegacyInfo(string RepoDir, string Commit, string Branch);
+sealed record LegacyInfo(string Commit, string Branch, bool Dirty, string SourceSet, SourceFile[] Sources);
+sealed record SourceFile(string Name, string Sha256);
 
 sealed record StatCase(string Id, string Class, double[] Input, string InputSha256, string Unit, double Tolerance, StatOutputs Outputs);
 sealed record StatOutputs(

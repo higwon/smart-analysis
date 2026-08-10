@@ -96,7 +96,15 @@ synthetic inputs → committed golden:
 - `golden/manifest.json` — legacy commit/branch, MathNet version, notes.
 Each case records input + **SHA-256**, params, outputs (units where applicable), and tolerance `1e-9`,
 classified normal/edge. `LegacyBaselineGoldenTests` (CI, no legacy engine) guards structure + a known
-value (`ramp-16` Average = 7.5) + self-consistency (exact line/plane fits reproduce their input).
+value (`ramp-16` Average = 7.5) + self-consistency (exact line/plane fits reproduce their input) +
+**recomputes every `InputSha256`** from the recorded inputs (catches manual golden edits).
+
+**Provenance chain (reviewer-hardened):** git commit/branch are derived from the **same** directory the
+source was compiled from (`LegacyCalcDir` → `git rev-parse --show-toplevel`), so the manifest cannot
+name a different repo than the compiled code; generation **refuses a dirty tree** for the three
+primitive files (the recorded commit always reproduces the golden) and records each source file's
+SHA-256; the manifest carries **no machine-specific absolute path** and `LEGACY_CALC_DIR` is required
+(no personal default).
 
 ## Resolved (this PR)
 - **Drive-path decision (was open):** compile the **clean** `FW.Analysis.Calculate` primitives by path

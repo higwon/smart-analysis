@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Xunit;
 
@@ -31,19 +34,94 @@ public sealed class LegacyBaselineGoldenTests
     }
 
     [Fact]
-    public void Manifest_records_the_legacy_commit_and_branch()
+    public void Manifest_records_clean_legacy_provenance_from_the_compiled_source()
     {
         using var doc = Load("manifest.json");
         var root = doc.RootElement;
 
         Assert.Equal("MV00", root.GetProperty("Task").GetString());
         var legacy = root.GetProperty("Legacy");
+
         var commit = legacy.GetProperty("Commit").GetString();
-        Assert.False(string.IsNullOrWhiteSpace(commit));
         Assert.NotEqual("unknown", commit); // the harness must have captured a real legacy commit
         Assert.Matches("^[0-9a-fA-F]{7,40}$", commit);
         Assert.False(string.IsNullOrWhiteSpace(legacy.GetProperty("Branch").GetString()));
+
+        // Provenance guarantees: a baseline must come from a clean tree and name its source set + hashes.
+        Assert.False(legacy.GetProperty("Dirty").GetBoolean());
+        Assert.Equal("FW.Analysis.Calculate", legacy.GetProperty("SourceSet").GetString());
+        var sources = legacy.GetProperty("Sources").EnumerateArray().ToList();
+        Assert.Equal(3, sources.Count);
+        foreach (var s in sources)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(s.GetProperty("Name").GetString()));
+            Assert.Matches("^[0-9A-F]{64}$", s.GetProperty("Sha256").GetString()!);
+        }
+
+        // No machine-specific absolute path leaks into the committed baseline.
+        Assert.DoesNotContain("Users", doc.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Every_case_input_hash_matches_its_recorded_input()
+    {
+        using (var stats = Load("summary-statistics.json"))
+        {
+            foreach (var c in stats.RootElement.EnumerateArray())
+            {
+                Assert.Equal(c.GetProperty("InputSha256").GetString(), Sha256(Arr(c, "Input")));
+            }
+        }
+
+        using (var poly1d = Load("polynomial-fit-1d.json"))
+        {
+            foreach (var c in poly1d.RootElement.EnumerateArray())
+            {
+                Assert.Equal(c.GetProperty("InputSha256").GetString(), Sha256(Arr(c, "X"), Arr(c, "Y")));
+            }
+        }
+
+        using (var poly2d = Load("polynomial-fit-2d.json"))
+        {
+            foreach (var c in poly2d.RootElement.EnumerateArray())
+            {
+                Assert.Equal(c.GetProperty("InputSha256").GetString(), Sha256(Arr(c, "X1"), Arr(c, "X2"), Arr(c, "Y")));
+            }
+        }
+    }
+
+    // Mirror of the harness hash: little-endian double bits per element, int.MinValue array separator.
+    private static string Sha256(params double[][] arrays)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
+        {
+            foreach (var arr in arrays)
+            {
+                foreach (var v in arr)
+                {
+                    w.Write(v);
+                }
+
+                w.Write(int.MinValue);
+            }
+        }
+
+        return Convert.ToHexString(SHA256.HashData(ms.ToArray()));
+    }
+
+    private static double[] Arr(JsonElement c, string prop) =>
+        c.GetProperty(prop).EnumerateArray().Select(ReadDouble).ToArray();
+
+    private static double ReadDouble(JsonElement e) => e.ValueKind == JsonValueKind.String
+        ? e.GetString() switch
+        {
+            "NaN" => double.NaN,
+            "Infinity" => double.PositiveInfinity,
+            "-Infinity" => double.NegativeInfinity,
+            var s => double.Parse(s!, CultureInfo.InvariantCulture),
+        }
+        : e.GetDouble();
 
     [Fact]
     public void Summary_statistics_cases_are_well_formed_with_a_known_value()
