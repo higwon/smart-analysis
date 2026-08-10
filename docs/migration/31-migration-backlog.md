@@ -87,7 +87,7 @@ Prio · MVP · Status**.
 ## Workspace / Persistence (W / P)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|
-| W01 | Workspace model + active-context | F03, F05 | tray/navigator (fused, doc 02/05) | Rewrite | P0 | ✅ | planned |
+| W01 | Workspace model + active-context | F03, F05 | tray/navigator (fused, doc 02/05) | Rewrite | P0 | ✅ | review |
 | P01 | Workspace file save/reopen w/ lineage | W01, F05, FF01 | **none** (doc 06) | New | P0 | ✅ | planned |
 | P02 | Spectrum library (SQLite) relocate | F03 | `LIB.File.SQLite` (B) | Reuse, fix layering | P2 | – | planned |
 | P03 | Schema versioning + migration | P01 | HDF5 strict validator (no migration) | New | P2 | – | planned |
