@@ -59,6 +59,25 @@ Synthetic workspace (original + one derived).
 ## Docs to update on completion
 doc 16 (workspace model), doc 17 (active context confirmed), INDEX, backlog status.
 
-## Unverified / open
-- Whether `ActiveContext` also models a multi-dataset comparison selection now or later (coordinate
-  with UX01) — recommend modeling "active dataset" + "comparison set" from the start.
+## Implementation status (this PR)
+Implemented in `SmartAnalysis.Application.Workspaces` (Domain-only; no WPF/commercial — arch test green).
+- `Workspace` (IDisposable): `Add` (transfers ownership, rejects dup id), `Datasets` (insertion order),
+  `Contains`/`TryGet`/`Count`; **lineage over provenance** — `Roots`, `ParentOf`, `ChildrenOf`,
+  `DescendantsOf` (cycle-guarded); `Remove(id, RemovalPolicy.Block|Cascade)` → typed `RemoveResult`
+  (`NotFound`/`Blocked(children)`/`Succeeded(ids)`), disposing removed datasets and pruning the active
+  context; `Dispose` disposes all held datasets.
+- `ActiveContext` (immutable): `ActiveId` + ordered, de-duplicated `Comparison` set (modeled from the
+  start, per the open item below). `SetActive`/`ClearActive`/`SetComparison` validate membership.
+- **Observable, UI-free:** `ActiveContextChanged` (prev/current) and `DatasetsChanged` plain .NET events
+  (no `INotifyPropertyChanged`); events fire only on real change.
+- Tests: add/dup, lineage (root/child/grandchild, absent-parent-is-root), active set/clear/compare +
+  event-once, unknown-id rejection, remove Block/Cascade/prune-active/not-found, disposal.
+
+## Resolved (this PR)
+- `ActiveContext` models **active dataset + comparison set from the start** (recommended in the open
+  item). The precise UX semantics of the comparison set are refined with UX01/U02.
+
+## Still open (follow-up)
+- Whether measurement **artifacts** (`AnalysisArtifact`) also live in the workspace/lineage (currently
+  it holds `AfmDataset`s); revisit when a measurement op's output needs workspace placement.
+- P01 serializes/restores this model (lineage on reopen, relink by content hash).

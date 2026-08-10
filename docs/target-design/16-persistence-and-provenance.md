@@ -91,6 +91,16 @@ Design:
   numeric blobs in an efficient binary form (explicit little-endian, doc 07 M3). HDF5 is an
   option for the whole package given the team already ships HDF.PInvoke — evaluate (OPEN).
 
+### In-memory workspace model (W01 — implemented)
+The runtime counterpart the persisted file serializes: `SmartAnalysis.Application.Workspaces.Workspace`
+holds the datasets in play (originals + derived, **owning their buffers**) and a single explicit
+`ActiveContext` (active dataset + comparison set). Lineage is a **view over provenance**
+(`Provenance.ParentId`, ADR-013) — `Roots`/`ParentOf`/`ChildrenOf`/`DescendantsOf`, not a separate UI
+tree (fixes the fused legacy tray/navigator, doc 05). `Add` transfers ownership; `Remove` is
+policy-driven (`Block` refuses when children exist, `Cascade` removes+disposes the subtree) and prunes
+the active context; active-context and dataset changes are observable via plain .NET events (no WPF).
+**P01** persists this model and restores lineage on reopen.
+
 ### Schema versioning & migration
 - Every persisted structure carries a `schemaVersion`.
 - Provide forward migration (legacy HDF5 reader hard-fails on unknown version, doc 06 — the new
