@@ -23,6 +23,13 @@ Every operation's spec states which of its behaviors are parity-locked and which
 2. **Golden-dataset numeric parity** — run the same input through the **legacy engine** and the
    new engine; compare outputs within tolerance. Because the legacy numeric core is UI-free
    (`FW.Analysis.Calculate`, doc 03), it can be driven directly to emit baselines.
+   - **Golden corpus (MV00, implemented):** `tools/legacy-baseline/` drives the clean legacy
+     primitives (`SummaryStatisticsCalculator`, `PolynomialLeastSquaresRegression` 1D,
+     `MultiplePolynomialRegression` 2D) on deterministic synthetic inputs → `tools/legacy-baseline/golden/*.json`
+     (input + SHA-256, params, outputs with units, tolerance `1e-9`, normal/edge) + a manifest with the
+     legacy commit/branch. `LegacyBaselineGoldenTests` guards it in CI (no legacy engine needed). A02
+     asserts stats parity; A01 reuses the poly-fit goldens. Full flatten-orchestration golden is
+     deferred (legacy orchestrator is WPF/Dialogs-coupled) — see the harness README.
 3. **Property/edge tests** — NaN/Infinity, empty data, reversed axes, out-of-range interpolation
    (legacy silently returns 0 — doc 07 M5), corrupted files, unit mismatch.
 4. **Determinism/regression** — deterministic ops must be byte/tolerance-stable across runs and

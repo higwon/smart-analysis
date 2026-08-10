@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TASK-MV00 legacy-baseline harness. NOT product code: lives outside src/, is NOT in
+       SmartAnalysis.sln, and never ships. It drives the clean legacy numeric primitives to freeze
+       golden data for parity tests (T01/T02/A01/A02).
+
+       It compiles the legacy .cs BY PATH (read-only) — legacy source is never copied into this repo.
+       Set LegacyCalcDir (or the LEGACY_CALC_DIR env var) to the legacy FW.Analysis.Calculate folder.
+       Requires the legacy repo to be present; it does not build in CI (and is excluded from the
+       product solution). -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <LegacyCalcDir Condition="'$(LegacyCalcDir)' == ''">$(LEGACY_CALC_DIR)</LegacyCalcDir>
+    <LegacyCalcDir Condition="'$(LegacyCalcDir)' == ''">C:\Users\HyuckJin.Kwon\SmartAnalysis-Private\SmartAnalysis-Private\Framework\Analysis\FW.Analysis.Calculate</LegacyCalcDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Legacy numeric primitives, compiled by path (NOT copied into this repo). -->
+    <Compile Include="$(LegacyCalcDir)\SummaryStatisticsCalculator.cs">
+      <Link>Legacy\SummaryStatisticsCalculator.cs</Link>
+    </Compile>
+    <Compile Include="$(LegacyCalcDir)\PolynomialLeastSquaresRegression.cs">
+      <Link>Legacy\PolynomialLeastSquaresRegression.cs</Link>
+    </Compile>
+    <Compile Include="$(LegacyCalcDir)\MultiplePolynomialRegression.cs">
+      <Link>Legacy\MultiplePolynomialRegression.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+{
+  "Task": "MV00",
+  "GeneratedAtUtc": "2026-08-10T02:27:43.3243287\u002B00:00",
+  "Legacy": {
+    "RepoDir": "C:\\Users\\HyuckJin.Kwon\\SmartAnalysis-Private\\SmartAnalysis-Private",
+    "Commit": "1451945acdbcd0949ef0a62d4e070fd9eb4e7107",
+    "Branch": "develop"
+  },
+  "MathNet": "5.0.0",
+  "Notes": "Legacy numeric primitives from FW.Analysis.Calculate driven on synthetic inputs. Full Whole/Line/Surface flatten orchestration is deferred (legacy orchestration is WPF/Dialogs-coupled); these 1D/2D polynomial-fit goldens are the flatten math core A01 reuses."
+}

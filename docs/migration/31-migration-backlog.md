@@ -47,7 +47,7 @@ Prio · MVP · Status**.
 ## Migration validation & testing (MV / T) — baseline **before** analysis implementation
 | ID | Task | Depends | Legacy | Reuse/rewrite | Done-when | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|---|
-| MV00 | Legacy baseline extraction (golden generation) | legacy repo access only — **NOT** the new domain | `FW.Analysis.Calculate` (UI-free, doc 03) | New (drives legacy engine) | harness/dumps golden JSON (values+units) for chosen ops; records legacy commit/branch, params, input hash, tolerance; normal + edge cases. **Parallel with F00–F05** | P0 | ✅ | planned |
+| MV00 | Legacy baseline extraction (golden generation) | legacy repo access only — **NOT** the new domain | `FW.Analysis.Calculate` (UI-free, doc 03) | New (drives legacy engine) | harness/dumps golden JSON (values+units) for chosen ops; records legacy commit/branch, params, input hash, tolerance; normal + edge cases. **Parallel with F00–F05** | P0 | ✅ | review (statistics + 1D/2D poly-fit primitives; flatten orchestration golden deferred) |
 | T01 | Fixture + golden corpus (freeze) | MV00, FF01 | samples in `NSISBuild/Sample` (doc 04) | New | fixtures committed/env-gated; golden data frozen with provenance | P0 | ✅ | planned |
 | T02 | Per-operation parity test | T01, each A## | — | New | new op output vs golden within tolerance; fails on excess | P1 | – | planned |
 | MV01 | Legacy-vs-new comparison report (per op) | T02 | — | New | report of matches / intentional diffs (ADR-backed) | P1 | – | planned |

@@ -1,0 +1,163 @@
+[
+  {
+    "Id": "ramp-16",
+    "Class": "normal",
+    "Input": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "InputSha256": "1A3A907BDC33C542AE8282572EF0AF30FED5EBD9591EA20425E262649808C1A3",
+    "Unit": "nm",
+    "Tolerance": 1E-09,
+    "Outputs": {
+      "Min": 0,
+      "Max": 15,
+      "MinMax": 15,
+      "Mid": 7.5,
+      "Average": 7.5,
+      "MeanAbsoluteError": 4,
+      "StandardDeviation": 4.6097722286464435,
+      "Skewness": 0,
+      "Kurtosis": 1.7905882352941178,
+      "BoundedPointAverageRoughness": "NaN"
+    }
+  },
+  {
+    "Id": "mixed-8",
+    "Class": "normal",
+    "Input": [
+      1.5,
+      -2,
+      3.25,
+      0,
+      4.5,
+      -1.25,
+      2,
+      0.75
+    ],
+    "InputSha256": "00FFB28CFFC7821D0D93674172C30DB9D83BADA5D0206499964ACA9AC70651C3",
+    "Unit": "nm",
+    "Tolerance": 1E-09,
+    "Outputs": {
+      "Min": -2,
+      "Max": 4.5,
+      "MinMax": 6.5,
+      "Mid": 1.25,
+      "Average": 1.09375,
+      "MeanAbsoluteError": 1.71875,
+      "StandardDeviation": 2.049914251255403,
+      "Skewness": 0.09465573375062034,
+      "Kurtosis": 1.9832823399722914,
+      "BoundedPointAverageRoughness": "NaN"
+    }
+  },
+  {
+    "Id": "constant-4",
+    "Class": "edge",
+    "Input": [
+      5,
+      5,
+      5,
+      5
+    ],
+    "InputSha256": "126E4224DEDF67459138B4B08B64EEF63C4106D345E3A57613C70A5C75C12BD4",
+    "Unit": "nm",
+    "Tolerance": 1E-09,
+    "Outputs": {
+      "Min": 5,
+      "Max": 5,
+      "MinMax": 0,
+      "Mid": 5,
+      "Average": 5,
+      "MeanAbsoluteError": 0,
+      "StandardDeviation": 0,
+      "Skewness": "NaN",
+      "Kurtosis": "NaN",
+      "BoundedPointAverageRoughness": "NaN"
+    }
+  },
+  {
+    "Id": "empty",
+    "Class": "edge",
+    "Input": [],
+    "InputSha256": "6D58692645C9D1CFAF13541CBD258F86193EF63C2F1D38F6BBCA9617372D7BD6",
+    "Unit": "nm",
+    "Tolerance": 1E-09,
+    "Outputs": {
+      "Min": 1.7976931348623157E+308,
+      "Max": -1.7976931348623157E+308,
+      "MinMax": "-Infinity",
+      "Mid": 0,
+      "Average": "NaN",
+      "MeanAbsoluteError": "NaN",
+      "StandardDeviation": "NaN",
+      "Skewness": "NaN",
+      "Kurtosis": "NaN",
+      "BoundedPointAverageRoughness": "NaN"
+    }
+  },
+  {
+    "Id": "with-nan",
+    "Class": "edge",
+    "Input": [
+      1,
+      2,
+      "NaN",
+      4
+    ],
+    "InputSha256": "455B9CD64576D7F47C8520E21C3CBF6A17D24D5AA616905B5BFD80B6D3D0CEFB",
+    "Unit": "nm",
+    "Tolerance": 1E-09,
+    "Outputs": {
+      "Min": "NaN",
+      "Max": "NaN",
+      "MinMax": "NaN",
+      "Mid": "NaN",
+      "Average": "NaN",
+      "MeanAbsoluteError": "NaN",
+      "StandardDeviation": "NaN",
+      "Skewness": "NaN",
+      "Kurtosis": "NaN",
+      "BoundedPointAverageRoughness": "NaN"
+    }
+  },
+  {
+    "Id": "with-inf",
+    "Class": "edge",
+    "Input": [
+      1,
+      2,
+      "Infinity",
+      4
+    ],
+    "InputSha256": "C6E00E811D7A501AC2B0627846B47DB7B240CC26889CD7B613FBD06B94622412",
+    "Unit": "nm",
+    "Tolerance": 1E-09,
+    "Outputs": {
+      "Min": 1,
+      "Max": "Infinity",
+      "MinMax": "Infinity",
+      "Mid": "Infinity",
+      "Average": "Infinity",
+      "MeanAbsoluteError": "NaN",
+      "StandardDeviation": "NaN",
+      "Skewness": "NaN",
+      "Kurtosis": "NaN",
+      "BoundedPointAverageRoughness": "NaN"
+    }
+  }
+]
