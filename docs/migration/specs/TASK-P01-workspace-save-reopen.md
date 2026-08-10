@@ -46,8 +46,9 @@ F03 (datasets), F05 (provenance), W01 (workspace model), FF01 (something to save
 - **Reuse pattern:** the HDF5 strict-validator discipline (doc 04 grade A) as a model for
   robust load validation — but with **migration**, not hard-reject (doc 06).
 
-## Target placement
-`SmartAnalysis.Persistence` → `Domain` + `Workflow`(provenance types). No UI reference.
+## Target placement (ADR-017 — supersedes "SmartAnalysis.Persistence")
+No `SmartAnalysis.Persistence` project exists (8-project structure). Application port `IWorkspaceStore`
+(Domain + `Workspace` only) + Infrastructure adapter `DirectoryWorkspaceStore`. No UI reference.
 
 ## Errors & boundary conditions
 - Missing referenced source file on reopen → relink by content hash, or surface a typed
@@ -79,6 +80,37 @@ A workspace built from a fixture TIFF + one flatten result.
 ## Docs to update on completion
 doc 16 (lock schema v1), ADR for container format, INDEX status.
 
-## Unverified / open
-- Container format (directory vs HDF5 vs zip) — ADR.
+## Implementation status (this PR) — ADR-017
+- **Boundary (supersedes "`SmartAnalysis.Persistence`"):** Application port `IWorkspaceStore` (Domain +
+  `Workspace` only) + Infrastructure adapter `DirectoryWorkspaceStore`; registered via `AddWorkspaceStore()`.
+- **Format = directory-package:** `manifest.json` (schema `1.0.0`; datasets with axes/channel/metadata +
+  full `ProvenanceRecord`, and the active context) + `buffers/<id>.bin` (little-endian float32). Domain
+  stays serializer-free (ADR-013) — Infrastructure maps to JSON DTOs; units persist as symbols.
+- **Round-trip restores** datasets, buffers, **original→derived lineage** (provenance parent + steps,
+  params-with-units, environment, `ParentResultId`), and the active context.
+- **Non-destructive, crash-recoverable save:** `Save` validates the whole workspace first, writes the
+  complete new package to a deterministic `<name>.tmp`, then commits via `target→<name>.bak`,
+  `tmp→target`, delete `.bak`. A managed failure rolls back; a crash between the two moves is recovered
+  on the next `Open`/`Save` (deterministic `.bak`/`.tmp` → roll back to the last committed package). So a
+  failed/interrupted save never corrupts the existing package; overwrites leave no stale data.
+  (Single-writer — not concurrent-save-safe.)
+- **Fail-loud, never lose data:** all file-system exceptions in `Open` → `Io`; unreadable/absent manifest
+  → `NotAWorkspace`; version mismatch → `UnsupportedSchemaVersion`; anything else → `Corrupt`. A dangling
+  active/comparison reference is **`Corrupt`, not silently dropped**. A buffer must be **exactly**
+  `width*height*float32` (trailing bytes → `Corrupt`; dims multiplied with `checked`). The manifest's
+  buffer file name must be a **bare name** (no `../`/absolute — path-traversal guard).
+- **Tests:** save→open round-trip (values/axes/units/channel/metadata/lineage/active context);
+  unknown-schema-version, missing/short/trailing-byte buffer, dangling active-context reference,
+  path-traversal buffer name, no-manifest, missing-directory; failed-save-preserves-existing;
+  clean-overwrite-no-stale; crash-interrupted-swap-recovered-on-open; DI wiring.
+
+## Resolved (ADR-017)
+- **Container format:** directory-package (JSON manifest + LE-float blobs) — the doc-16 recommended default.
+- Buffers stored **inline** (self-contained reopen) → MVP does not need relink; the source path + hash are
+  kept as metadata for a future relink-by-reference mode.
+
+## Still open (follow-up)
+- Relink-by-reference + moved-source relink; automated **re-run-to-reproduce** (provenance already carries
+  op id/version + params-with-units); schema **migration** (P03); lazy/memory-mapped blob loading;
+  non-image dataset kinds; single-file (`.zip`) packaging behind the same port.
 - Whether the spectrum library (P02) embeds per-workspace or is user-level.
