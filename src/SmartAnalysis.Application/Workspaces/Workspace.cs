@@ -84,18 +84,51 @@ public sealed class Workspace : IDisposable
 
     public bool TryGet(DatasetId id, out AfmDataset dataset) => _byId.TryGetValue(id, out dataset!);
 
-    /// <summary>Adds a dataset, transferring its ownership to the workspace. Rejects a duplicate id.</summary>
+    /// <summary>
+    /// Adds a dataset, <b>transferring its ownership</b> to the workspace (the workspace disposes it on
+    /// remove/dispose). Rejects a duplicate id and rejects an add that would create a provenance
+    /// <b>cycle</b> (self-parent, or completing a loop with datasets already present) — lineage must be
+    /// acyclic. On rejection the method throws and does <b>not</b> add or dispose the dataset, so
+    /// <b>ownership stays with the caller</b> (the caller must dispose the rejected dataset).
+    /// </summary>
     public void Add(AfmDataset dataset)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(dataset);
-        if (!_byId.TryAdd(dataset.Id, dataset))
+
+        if (_byId.ContainsKey(dataset.Id))
         {
             throw new InvalidOperationException($"A dataset with id '{dataset.Id}' is already in the workspace.");
         }
 
+        EnsureNoCycle(dataset);
+
+        _byId.Add(dataset.Id, dataset);
         _order.Add(dataset.Id);
         DatasetsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Rejects an add whose provenance parent chain (through datasets already present) reaches the new id.</summary>
+    private void EnsureNoCycle(AfmDataset dataset)
+    {
+        var target = dataset.Id;
+        var walked = new HashSet<DatasetId>();
+        var parent = dataset.Provenance.ParentId;
+        while (parent is { } p)
+        {
+            if (p == target)
+            {
+                throw new InvalidOperationException(
+                    $"Adding dataset '{target}' would create a provenance cycle.");
+            }
+
+            if (!walked.Add(p) || !_byId.TryGetValue(p, out var parentDataset))
+            {
+                return; // chain ends (parent absent) or an existing loop we don't extend
+            }
+
+            parent = parentDataset.Provenance.ParentId;
+        }
     }
 
     // --- Lineage (a view over provenance ParentId) ---
@@ -218,6 +251,11 @@ public sealed class Workspace : IDisposable
     public RemoveResult Remove(DatasetId id, RemovalPolicy policy = RemovalPolicy.Block)
     {
         ThrowIfDisposed();
+        if (!Enum.IsDefined(policy))
+        {
+            throw new ArgumentOutOfRangeException(nameof(policy), policy, "Undefined removal policy.");
+        }
+
         if (!_byId.ContainsKey(id))
         {
             return RemoveResult.NotFound;
@@ -282,7 +320,7 @@ public sealed class Workspace : IDisposable
 
     private void UpdateActive(ActiveContext next)
     {
-        if (_active.SameAs(next))
+        if (_active.Equals(next))
         {
             return;
         }

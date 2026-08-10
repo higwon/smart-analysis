@@ -55,6 +55,58 @@ public sealed class WorkspaceTests
         Assert.Throws<InvalidOperationException>(() => ws.Add(Image(id)));
     }
 
+    [Fact]
+    public void Add_failure_leaves_ownership_with_the_caller()
+    {
+        using var ws = new Workspace();
+        var id = DatasetId.New();
+        ws.Add(Image(id));
+
+        var rejected = Image(id); // duplicate id → Add must reject
+        Assert.Throws<InvalidOperationException>(() => ws.Add(rejected));
+
+        // The rejected dataset was NOT taken over by the workspace → still usable; the caller disposes it.
+        Assert.Equal(4, rejected.Data.Memory.Length);
+        rejected.Dispose();
+    }
+
+    // --- Lineage must stay acyclic ---
+
+    [Fact]
+    public void Add_rejects_a_self_parent_cycle()
+    {
+        using var ws = new Workspace();
+        var a = DatasetId.New();
+        var selfParented = Image(a, parent: a);
+        Assert.Throws<InvalidOperationException>(() => ws.Add(selfParented));
+        selfParented.Dispose(); // caller still owns it
+    }
+
+    [Fact]
+    public void Add_rejects_a_cycle_completed_by_a_new_parent()
+    {
+        using var ws = new Workspace();
+        var a = DatasetId.New();
+        var b = DatasetId.New();
+        ws.Add(Image(a, parent: b)); // A derived-from B; B absent → A is a root for now
+        var loop = Image(b, parent: a); // B derived-from A → adding B closes the loop
+        Assert.Throws<InvalidOperationException>(() => ws.Add(loop));
+        loop.Dispose();
+    }
+
+    [Fact]
+    public void Add_allows_a_linear_chain()
+    {
+        using var ws = new Workspace();
+        var root = DatasetId.New();
+        var child = DatasetId.New();
+        var grandchild = DatasetId.New();
+        ws.Add(Image(root));
+        ws.Add(Image(child, parent: root));
+        ws.Add(Image(grandchild, parent: child)); // no cycle
+        Assert.Equal(3, ws.Count);
+    }
+
     // --- Lineage as a view over provenance ---
 
     [Fact]
@@ -212,6 +264,31 @@ public sealed class WorkspaceTests
     {
         using var ws = new Workspace();
         Assert.Same(RemoveResult.NotFound, ws.Remove(DatasetId.New()));
+    }
+
+    [Fact]
+    public void Remove_rejects_an_undefined_policy()
+    {
+        using var ws = new Workspace();
+        var id = DatasetId.New();
+        ws.Add(Image(id));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ws.Remove(id, (RemovalPolicy)999));
+        Assert.Equal(1, ws.Count); // not removed
+    }
+
+    // --- ActiveContext value equality ---
+
+    [Fact]
+    public void ActiveContext_has_structural_equality()
+    {
+        var x = DatasetId.New();
+        var y = DatasetId.New();
+
+        Assert.Equal(new ActiveContext(x, [x, y]), new ActiveContext(x, [x, y]));
+        Assert.True(new ActiveContext(x, [x, y]) == new ActiveContext(x, [x, y]));
+        Assert.Equal(new ActiveContext(x, [x, y]).GetHashCode(), new ActiveContext(x, [x, y]).GetHashCode());
+        Assert.NotEqual(new ActiveContext(x, [x, y]), new ActiveContext(x, [y, x])); // order matters
+        Assert.NotEqual(new ActiveContext(x, []), new ActiveContext(y, []));
     }
 
     // --- Disposal ---

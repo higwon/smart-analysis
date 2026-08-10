@@ -61,17 +61,23 @@ doc 16 (workspace model), doc 17 (active context confirmed), INDEX, backlog stat
 
 ## Implementation status (this PR)
 Implemented in `SmartAnalysis.Application.Workspaces` (Domain-only; no WPF/commercial — arch test green).
-- `Workspace` (IDisposable): `Add` (transfers ownership, rejects dup id), `Datasets` (insertion order),
-  `Contains`/`TryGet`/`Count`; **lineage over provenance** — `Roots`, `ParentOf`, `ChildrenOf`,
-  `DescendantsOf` (cycle-guarded); `Remove(id, RemovalPolicy.Block|Cascade)` → typed `RemoveResult`
-  (`NotFound`/`Blocked(children)`/`Succeeded(ids)`), disposing removed datasets and pruning the active
-  context; `Dispose` disposes all held datasets.
-- `ActiveContext` (immutable): `ActiveId` + ordered, de-duplicated `Comparison` set (modeled from the
-  start, per the open item below). `SetActive`/`ClearActive`/`SetComparison` validate membership.
+- `Workspace` (IDisposable): `Add` (**transfers ownership**; rejects a duplicate id **and** an add that
+  would create a provenance **cycle** — self-parent or a loop completed with datasets already present;
+  on rejection it throws and does not add/dispose, so **ownership stays with the caller**), `Datasets`
+  (insertion order), `Contains`/`TryGet`/`Count`; **lineage over provenance** — `Roots`, `ParentOf`,
+  `ChildrenOf`, `DescendantsOf`; `Remove(id, RemovalPolicy.Block|Cascade)` (**rejects an undefined
+  policy**) → typed `RemoveResult` (`NotFound`/`Blocked(children)`/`Succeeded(ids)`), disposing removed
+  datasets and pruning the active context; `Dispose` disposes all held datasets.
+- `ActiveContext` (immutable **value object with structural equality** — `sealed class`,
+  `IEquatable`, `==`/`GetHashCode` over the active id + ordered comparison ids): `ActiveId` + ordered,
+  de-duplicated `Comparison` set (modeled from the start, per the open item below).
+  `SetActive`/`ClearActive`/`SetComparison` validate membership.
 - **Observable, UI-free:** `ActiveContextChanged` (prev/current) and `DatasetsChanged` plain .NET events
   (no `INotifyPropertyChanged`); events fire only on real change.
-- Tests: add/dup, lineage (root/child/grandchild, absent-parent-is-root), active set/clear/compare +
-  event-once, unknown-id rejection, remove Block/Cascade/prune-active/not-found, disposal.
+- Tests: add/dup, **add-failure ownership retained**, **cycle rejection** (self-parent + loop-completed;
+  linear chain allowed), lineage (root/child/grandchild, absent-parent-is-root), active
+  set/clear/compare + event-once, unknown-id rejection, remove Block/Cascade/prune-active/not-found/
+  **undefined-policy**, `ActiveContext` structural equality, disposal.
 
 ## Resolved (this PR)
 - `ActiveContext` models **active dataset + comparison set from the start** (recommended in the open

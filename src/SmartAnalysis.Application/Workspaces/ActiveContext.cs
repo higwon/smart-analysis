@@ -5,11 +5,11 @@ namespace SmartAnalysis.Application.Workspaces;
 /// <summary>
 /// The single, explicit "what am I acting on" model (doc 17): one <see cref="ActiveId"/> (the current
 /// dataset, or null when nothing is active) plus an ordered <see cref="Comparison"/> set (for
-/// before/after and multi-dataset views). Immutable value; the <see cref="Workspace"/> owns the
-/// current instance and raises an event when it changes. Replaces the legacy three-way ambiguous
-/// current item (tray vs view vs dock, doc 05).
+/// before/after and multi-dataset views). Immutable <b>value object</b> with <b>structural equality</b>
+/// — two instances are equal when their active id and their ordered comparison ids match. Replaces the
+/// legacy three-way ambiguous current item (tray vs view vs dock, doc 05).
 /// </summary>
-public sealed record ActiveContext
+public sealed class ActiveContext : IEquatable<ActiveContext>
 {
     /// <summary>No active dataset and an empty comparison set.</summary>
     public static ActiveContext Empty { get; } = new(null, []);
@@ -45,15 +45,21 @@ public sealed record ActiveContext
 
     public IReadOnlyList<DatasetId> Comparison { get; }
 
-    /// <summary>Value equality over the active id and the ordered comparison set (records compare the list by reference).</summary>
-    public bool SameAs(ActiveContext other)
+    // --- Structural equality (value object; the ordered comparison set participates) ---
+
+    public bool Equals(ActiveContext? other)
     {
+        if (other is null)
+        {
+            return false;
+        }
+
         if (ReferenceEquals(this, other))
         {
             return true;
         }
 
-        if (other is null || ActiveId != other.ActiveId || Comparison.Count != other.Comparison.Count)
+        if (ActiveId != other.ActiveId || Comparison.Count != other.Comparison.Count)
         {
             return false;
         }
@@ -68,6 +74,25 @@ public sealed record ActiveContext
 
         return true;
     }
+
+    public override bool Equals(object? obj) => Equals(obj as ActiveContext);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(ActiveId);
+        foreach (var id in Comparison)
+        {
+            hash.Add(id); // order-dependent, matching the ordered-sequence equality above
+        }
+
+        return hash.ToHashCode();
+    }
+
+    public static bool operator ==(ActiveContext? left, ActiveContext? right)
+        => left is null ? right is null : left.Equals(right);
+
+    public static bool operator !=(ActiveContext? left, ActiveContext? right) => !(left == right);
 }
 
 /// <summary>Carries the previous and current <see cref="ActiveContext"/> when it changes.</summary>
