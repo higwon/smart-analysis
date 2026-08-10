@@ -55,7 +55,7 @@ Prio · MVP · Status**.
 ## Analysis (A) — each is a registered operation (doc 13, ADR-003/005)
 | ID | Task | Depends | Legacy (grade) | Reuse/rewrite | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|
-| A01 | Flatten (whole/line/surface) op | F04, FF01 | `Whole/Line/SurfaceFlattenProcess` + regressions (A/C) | Reuse numeric, drop WPF Point; **MVP uses full-image region (no ROI)** | P0 | ✅ | planned |
+| A01 | Flatten (whole/line/surface) op | F04, FF01 | `Whole/Line/SurfaceFlattenProcess` + regressions (A/C) | Reuse numeric, drop WPF Point; **MVP uses full-image region (no ROI)** | P0 | ✅ | review (full-image; fit primitives golden-verified; orchestration golden T02 deferred) |
 | A02 | Summary statistics + histogram op | F04 | `SummaryStatisticsCalculator` (A) | Reuse | P0 | ✅ | review |
 | A03 | Roughness (ISO 25178) op | F04 | `RoughnessCalculator` (B) | Reuse (decouple) | P1 | – | planned |
 | A04 | Spatial filters op (11 kernels) | F04 | `ImageFilterProcess`/`ConvolutionFilter` (A/B) | Reuse | P1 | – | planned |

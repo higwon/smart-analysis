@@ -15,6 +15,7 @@ public static class ImageAnalysisModule
         ArgumentNullException.ThrowIfNull(services);
         services.AddExecutionEnvironment();
         services.AddAnalysisOperation<StatisticsOperation>();
+        services.AddAnalysisOperation<FlattenOperation>();
         return services;
     }
 }

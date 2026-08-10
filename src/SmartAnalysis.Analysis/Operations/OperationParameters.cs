@@ -214,6 +214,14 @@ public sealed class ParameterSchema
                 continue;
             }
 
+            // Enum parameters must be a DEFINED value — a cast like (FlattenScope)999 is the right CLR
+            // type but a meaningless value that would otherwise fall through to a default branch.
+            if (descriptor.Type.IsEnum && !Enum.IsDefined(descriptor.Type, raw))
+            {
+                errors.Add($"Parameter '{descriptor.Name}' has an undefined {descriptor.Type.Name} value ({raw}).");
+                continue;
+            }
+
             if (ParameterDescriptor.TryToDouble(raw, out var num))
             {
                 // Reject NaN/Infinity at the contract boundary — finite check first, since every
