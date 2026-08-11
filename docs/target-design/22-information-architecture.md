@@ -21,30 +21,49 @@ depth for the expert, and an assistant panel that proposes into the same operati
 ## 2. On-screen entities (named from the domain)
 | On screen | Domain type | Identity | Shown as |
 |---|---|---|---|
-| **Dataset** (original or derived) | `AfmDataset` (`ScanImageDataset`…) | `DatasetId` (never a file path) | a node in the workspace explorer + the active view |
-| **Derived result** | derived `AfmDataset` **or** `AnalysisArtifact` | `DatasetId` | a child node under its source (lineage) |
+| **Dataset** (original or derived) | `AfmDataset` (`ScanImageDataset`…) | `DatasetId` (never a file path) | a node in the workspace explorer + the active view; **the only thing that can be *active*** |
+| **Derived dataset** (transform output) | derived `AfmDataset` | `DatasetId` | a child node under its source (lineage) |
 | **Analysis Run** | `ProvenanceStep` | step id + order | a row in the History/Provenance panel |
-| **Measurement** | `AnalysisArtifact` (scalars + histogram) | `DatasetId` | a results card/table (+ histogram) |
+| **Measurement** | `AnalysisArtifact` (scalars + histogram) | its own `DatasetId`, but **bound to a source dataset by `SourceId`** | a results **card attached to its source dataset** — presented alongside the active dataset, **not** an independent active target |
 | **Workspace** | `Workspace` (W01) | the open workspace file | the whole window's contents |
-| **Active Context** | `ActiveContext` (W01) | active id + comparison set | selection highlight + what every panel binds to |
+| **Active Context** | `ActiveContext` (W01) | **active dataset id** + comparison set | selection highlight + what every panel binds to |
 
 Every entity has a **stable id** (fixing the legacy caption-string identity, doc 05 §1.4). Lineage is a
 **view over provenance** (`Provenance.ParentId`), not a throwaway tree.
+
+> **What can be *active* (matches the built model):** the `ActiveId` is **always a `Dataset` present in the
+> `Workspace`** — `Workspace` holds `AfmDataset`s and `ActiveContext.SetActive` requires a member id
+> (W01). A **`Measurement`/`AnalysisArtifact` is not an independent active item**; it is an analysis
+> **result attached to its source dataset** (`SourceId`) and shown under/with that dataset. So running
+> Statistics does **not** change the active dataset — it attaches a measurement to it. Independently
+> selecting/comparing artifacts (a generalized `WorkspaceItemId`) is a deliberate **future** concern;
+> the MVP does not overload `DatasetId` as a universal UI-entity id.
 
 ## 3. The single Active Context (fixes the core legacy defect)
 Legacy read "the current item" three ways (`TrayVM.OpenedTiffItem` vs the View vs `DockLayoutManager.ActiveDockItem`),
 doc 05 §1.5. The redesign has **exactly one** source of truth — the workspace's `ActiveContext`:
 
-- **What it is:** an **active dataset** (`ActiveId`, may be none) + an ordered **comparison set** (for
-  before/after and multi-result views). One object; every panel binds to it.
-- **What changes it (explicit + observable):** selecting a node in the explorer; opening a file (the new
-  dataset becomes active); running an operation (the *derived result* becomes active, its source enters
-  the comparison set for instant before/after); "compare" adding datasets to the comparison set. Each
-  change raises the W01 `ActiveContextChanged` event.
-- **What binds to it:** the active view (renders the active dataset), the operations menu
-  (`ApplicableTo(active.Kind)`), the parameter panel (targets the active dataset), the History panel
-  (shows the active dataset's provenance), the assistant (acts on the active context). No panel ever
-  computes "current" independently.
+- **What it is:** an **active dataset** (`ActiveId`, a dataset in the workspace, may be none) + an ordered
+  **comparison set** of **dataset** ids (for before/after and multi-result views). One object; every panel
+  binds to it. There is no per-item "mode" flag — the mutation rules below keep it deterministic.
+- **What changes it (explicit + observable — each raises W01 `ActiveContextChanged`):**
+
+  | Trigger | Result (exact) |
+  |---|---|
+  | Select a dataset node in the explorer | `ActiveId = selected` (comparison unchanged) |
+  | Open a file | new dataset added; `ActiveId = new`; `Comparison = []` |
+  | **Run a transform** (Flatten…) | `ActiveId = newDerivedId`; **`Comparison = [sourceId]`** (auto before/after **replaces** the set with the single source) |
+  | Run a **measurement** (Statistics…) | **active dataset unchanged**; a measurement is attached to it (no active/comparison change) |
+  | **Compare** (explicit multi-select) | `Comparison = the explicitly selected dataset ids` |
+  | **Compare with source** (on a derived dataset) | `Comparison = [active.Provenance.ParentId]` |
+
+  So automatic before/after and explicit comparison never fight: a transform **replaces** the comparison
+  with `[source]`; only an explicit *Compare* sets a user-chosen set. Chained transforms therefore always
+  show the immediate parent (A→B→C ⇒ after C, comparison is `[B]`).
+- **What binds to it:** the active view (renders the active dataset, and its attached measurements), the
+  operations menu (`ApplicableTo(active.Kind)`), the parameter panel (targets the active dataset), the
+  History panel (shows the active dataset's provenance), the assistant (acts on the active context). No
+  panel ever computes "current" independently.
 
 ## 4. Shell regions
 One workspace window, five regions (docking/auto-hide is behavioral only; the design system styles all
@@ -59,8 +78,8 @@ chrome — no control-suite theme):
 │            │                                                  │   the running or  │
 │ Cheese ▸   │   ┌───────────────┐   colormap ▮▮▮▮ [range]      │   selected op)    │  B
 │  └ Flatten*│   │   2D image    │   x: 0–20 µm                 │  Scope  [Line ▾]  │
-│ WaferA     │   │  (WriteableB.)│   y: 0–20 µm  Z: nm          │  Order  [1]       │
-│  └ Stats   │   └───────────────┘                              │  [Apply] [live ✓] │
+│  ◦ Stats   │   │  (WriteableB.)│   y: 0–20 µm  Z: nm          │  Order  [1]       │
+│ WaferA     │   └───────────────┘                              │  [Apply] [live ✓] │
 │            │                                                  │                   │
 ├────────────┴────────────────────────────────────────────────┴───────────────────┤
 │ HISTORY / PROVENANCE  (always visible)     │  ASSISTANT (NL → reviewable steps)   │  C
@@ -72,41 +91,49 @@ chrome — no control-suite theme):
 - **A. Command bar** — open/save/export, the **contextual Operations menu** (built from
   `ApplicableTo(active kind)` — no ribbon-per-type), Compare, and the Assistant toggle.
 - **Workspace Explorer** (left) — datasets as a **lineage tree** (original → derived from provenance);
-  the active node is highlighted; `*` marks the active dataset. Replaces the legacy Tray/TreeList
-  (must-keep capability, UI-only rewrite).
+  the active node is highlighted (`*` = active dataset). `└` is a **derived dataset** (a lineage child,
+  can become active); `◦` is an **attached measurement** (an `AnalysisArtifact` result of its source —
+  shown on the dataset, never itself active). Replaces the legacy Tray/TreeList (must-keep, UI-only rewrite).
 - **Active View** (center) — renders the `ActiveContext` via the V01 seam: 2D image (WriteableBitmap +
   colormap), curve/spectrum (chart backend, ADR-018), before/after split, or a measurement card. The
   **data colormap is theme-independent** (ADR-008).
 - **Parameters** (right) — the **contextual, non-modal** parameter panel for the selected/running
   operation (replaces the modal dialog forest); typed inputs from the operation's `ParameterSchema` with
   defaults/ranges/units; live preview.
-- **History / Provenance** (bottom-left, always visible) — every `ProvenanceStep` of the active dataset
-  as a row; progress/cancel/typed-error for the running op live here. Fixes "history invisible/unpersisted".
+- **History / Provenance** (bottom-left) — every `ProvenanceStep` of the active dataset as a row;
+  progress/cancel/typed-error for the running op live here. Fixes "history invisible/unpersisted". It is a
+  **first-class, always-present** part of the IA; its exact placement/collapse/auto-hide by screen size is
+  a UIX02 responsive decision (this doc does not pin a fixed-height bottom pane).
 - **Assistant** (bottom-right, collapsible) — NL request → **reviewable** proposed step list → approve →
   runs the same registered operations.
 
 ## 5. Core journeys
 1. **Open → explore:** Open a `.tiff` → it loads (FF01) into the workspace, becomes the active dataset,
    renders in the Active View; the Explorer shows it as a root node.
-2. **Analyze:** pick an operation from the contextual Operations menu (e.g. Flatten) → the Parameters
-   panel opens with the schema defaults → adjust → **live preview** in the Active View → Apply. The
-   derived dataset appears under its source in the Explorer, becomes active, and the source is placed in
-   the comparison set for instant **Before/After**.
-3. **Measure:** run Statistics → a measurement card (scalars + histogram) appears; its provenance row is
-   added to History.
-4. **Compare:** select two+ datasets → Compare → the Active View shows them together (curve overlay or
-   image before/after); a results table lists differences.
+2. **Analyze (transform):** pick an operation from the contextual Operations menu (e.g. Flatten) → the
+   Parameters panel opens with the schema defaults → adjust → **live preview** in the Active View → Apply.
+   The derived dataset appears under its source in the Explorer and **becomes active**; the comparison set
+   is **replaced with `[source]`** for instant **Before/After**.
+3. **Measure:** run Statistics → a measurement (scalars + histogram) is **attached to the active dataset**
+   (the active dataset does **not** change); its result card shows in the Active View and its provenance
+   row is added to History.
+4. **Compare:** multi-select two+ datasets → Compare → the comparison set becomes exactly those datasets;
+   the Active View shows them together (curve overlay or image before/after) with a results table.
 5. **Save → reopen:** Save writes the workspace (P01, directory package) with provenance; reopen restores
-   datasets **and lineage and active context** exactly (the C3 fix). A recorded run can be **re-applied**
-   to another dataset (repeat-work efficiency).
+   datasets **and lineage and active context** exactly (the C3 fix). *(Future — provenance already records
+   op id/version + params-with-units, but automated **re-run/replay** onto another dataset is deferred with
+   P01; not an MVP journey.)*
 
 ## 6. Before/After & comparison entry (first-class)
-- **Before/After** is entered automatically on running a transform (source → comparison set) and via a
-  toggle on any derived dataset ("compare with source"). The Active View splits (or slider-overlays) the
-  two; the colormap/range is shared so the difference is real, not an artifact of scaling.
-- **Multi-result comparison** is entered by multi-selecting datasets in the Explorer → Compare. Curves
-  overlay in one chart with a legend + a results table; images show as a small-multiples / difference
-  view. This is a first-class workspace mode, not a manual reconstruction (legacy overlay was view-only).
+- **Before/After** is entered automatically on running a transform (`Comparison = [sourceId]`) and via a
+  "compare with source" toggle on any derived dataset (`Comparison = [active.Provenance.ParentId]`). The
+  Active View splits (or slider-overlays) the active dataset against the comparison entry; the
+  colormap/range is **shared** so the difference is real, not an artifact of scaling.
+- **Multi-result comparison** is entered by multi-selecting datasets in the Explorer → Compare
+  (`Comparison = the selected dataset ids`). Curves overlay in one chart with a legend + a results table;
+  images show as small-multiples / difference. This is the **only** trigger that sets a user-chosen
+  comparison set (transforms always replace it with `[source]`), so the two never conflict. First-class,
+  not a manual reconstruction (legacy overlay was view-only).
 
 ## 7. Parameter-panel behavior
 - **Contextual, non-modal:** the panel targets the active dataset; changing the active dataset retargets
@@ -166,7 +193,7 @@ Empty state (no workspace) shows an inviting "Open a scan / Reopen workspace" pa
 
 **Statistics / measurement result:**
 ```
-┌ Active View: Measurement ──────────────────────────────────────────┐
+┌ Active View: measurement of the active dataset (attached result) ───┐
 │  Sq 1.82 nm   Sa 1.44 nm   mean 0.01 nm   min −3.1  max 5.2  ...    │
 │  Histogram ▁▂▄▆█▆▄▂▁  (256 bins, nm)                                │
 └────────────────────────────────────────────────────────────────────┘

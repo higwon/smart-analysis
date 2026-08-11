@@ -83,6 +83,15 @@ remove vs legacy; and the capabilities the commercial controls actually provided
 artifact** (shell regions + active-context model + MVP flow + wireframes) accompanies it for approval.
 **Awaiting user approval before U01** (the required gate); UIX02 owns the concrete visual design.
 
+**Grounded in the built model (review-hardened):** the `ActiveId` is **always a dataset in the
+`Workspace`** (never an `AnalysisArtifact`) — matching W01, where `Workspace` holds `AfmDataset`s and
+`ActiveContext` targets member ids. A **`Measurement` is an attached result** (`AnalysisArtifact.SourceId`),
+shown with its source dataset, not an independent active target (a generalized item id is a future
+concern). **Comparison mutation is deterministic (no mode flag):** a transform sets
+`Comparison = [sourceId]`; only an explicit *Compare* sets a user-chosen set; "compare with source" =
+`[active.Provenance.ParentId]`. Automated **re-run/replay** onto another dataset is a documented future
+action (deferred with P01), not an MVP journey.
+
 ## Unverified / open
 - Final shell layout depends partly on the docking library (Candidate: AvalonDock) — keep the IA
   library-agnostic; the docking choice is a V00/U01-adjacent ADR.
