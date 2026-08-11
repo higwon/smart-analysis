@@ -122,9 +122,15 @@ state, both themes, rendered from the real tokens). This doc is its written spec
 
 - Entered automatically when a transform runs (`Comparison=[sourceId]`) or via **Compare with source**.
 - **Split view** default: left **BEFORE** (source, labelled, `Chart.Reference` accent bar) | right
-  **AFTER** (derived, `Chart.Query` accent bar), **same axes + same value range** explicitly indicated
-  ("shared range" tag). Optional **slider-overlay** and **difference** modes (toolbar segmented control).
-- **Difference** map uses `Chart.Difference` ramp semantics; a caption states it is (after − before).
+  **AFTER** (derived, `Chart.Query` accent bar). Optional **slider-overlay** and **difference** modes
+  (toolbar segmented control).
+- **Range: same X/Y axes, _independent_ Z ranges by default** — each pane auto-scales its colormap to its
+  own finite min/max and shows its own min/max legend. Rationale (found by rendering real Flatten output,
+  U02): a level-removing transform like Flatten shifts the absolute Z, so a shared/union Z range washes the
+  source to one colormap extreme and the result to the other, hiding the very surface texture the comparison
+  exists to show. The tag reads **"same X/Y · independent Z ranges"** so equal color never implies equal Z.
+  A **"Shared Z range" toggle** (for transforms where absolute-Z comparison matters) is a later refinement.
+- **Difference** map uses `Chart.Difference` ramp semantics; a caption states it is (after − before). *(later)*
 - Source vs result is never distinguished by color alone — always the BEFORE/AFTER labels + position.
 
 ---
@@ -191,7 +197,7 @@ Light and Dark carry **identical** hierarchy and information; only token values 
 - [ ] AFM **colormap identical** across themes (ADR-008).
 - [ ] One accent action per region; state never color-only.
 - [ ] Active ≠ merely selected (accent rail); attached measurement ≠ derived dataset.
-- [ ] Before/After shows shared axes + range; difference labelled (after − before).
+- [ ] Before/After shows **same X/Y axes, independent Z ranges** (each pane its own legend); shared-Z toggle + difference are later.
 - [ ] Empty/Loading/Error/Disabled covered; no modal "Processing…".
 - [ ] Contrast per doc 23 §9 (Error banner uses `#B91C1C` on Light).
 - [ ] **Viewer has no ROI** (V02 scope; ROI is V06/post-MVP) — not even a disabled control.

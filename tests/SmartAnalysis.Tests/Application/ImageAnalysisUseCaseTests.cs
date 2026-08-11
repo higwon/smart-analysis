@@ -73,4 +73,18 @@ public sealed class ImageAnalysisUseCaseTests
         Assert.NotNull(outcome.Error);
         Assert.Equal(1, ws.Count); // nothing added on failure
     }
+
+    [Fact]
+    public async Task ApplyFlatten_with_undefined_enum_fails_typed()
+    {
+        var (ws, image, useCase) = await SetupAsync();
+
+        // A cast out-of-range enum (corrupt/hostile caller) must be rejected, not silently defaulted.
+        var options = FlattenOptions.Default with { Scope = (FlattenScope)999 };
+        var outcome = await useCase.ApplyFlattenAsync(image.Id, options);
+
+        Assert.False(outcome.Success);
+        Assert.NotNull(outcome.Error);
+        Assert.Equal(1, ws.Count);
+    }
 }

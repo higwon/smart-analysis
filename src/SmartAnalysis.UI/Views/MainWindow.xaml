@@ -214,7 +214,7 @@
                                         Background="{DynamicResource SA.Brush.Surface.Hover}"
                                         CornerRadius="{DynamicResource SA.Radius.Sm}" Padding="{DynamicResource SA.Gap.1}"
                                         Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
-                                    <TextBlock Text="before / after · same axes" Style="{StaticResource SA.Text.Micro}"/>
+                                    <TextBlock Text="same X/Y · independent Z ranges" Style="{StaticResource SA.Text.Micro}"/>
                                 </Border>
                             </StackPanel>
                             <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource SA.Brush.Border.Subtle}"
@@ -304,9 +304,11 @@
                     <TextBlock DockPanel.Dock="Top" Text="PARAMETERS" Margin="{DynamicResource SA.Gap.Bottom2}"
                                Style="{StaticResource SA.Text.SectionLabel}"/>
                     <Grid>
-                        <!-- contextual Flatten panel (active dataset is an image) -->
-                        <StackPanel DataContext="{Binding FlattenPanel}"
-                                    Visibility="{Binding HasActiveImage, Converter={StaticResource Bool2Vis}}">
+                        <!-- contextual Flatten panel (active dataset is an image). The outer Grid binds
+                             Visibility on the shell VM (HasActiveImage); the inner panel switches DataContext
+                             to the FlattenPanel VM so its fields bind — the two must not share one element. -->
+                        <Grid Visibility="{Binding HasActiveImage, Converter={StaticResource Bool2Vis}}">
+                        <StackPanel DataContext="{Binding FlattenPanel}">
                             <TextBlock Text="Flatten" Style="{StaticResource SA.Text.Title}"/>
                             <TextBlock Text="Subtract a per-line, averaged, or surface polynomial."
                                        Margin="{DynamicResource SA.Gap.Bottom2}" TextWrapping="Wrap"
@@ -340,6 +342,7 @@
                             <Button Content="Apply" Command="{Binding ApplyCommand}" HorizontalAlignment="Left"
                                     Style="{StaticResource SA.Button.Primary}"/>
                         </StackPanel>
+                        </Grid>
 
                         <!-- placeholder (no image active) -->
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"

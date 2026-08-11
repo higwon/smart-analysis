@@ -29,6 +29,12 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        // Public contract: reject out-of-range (cast) enum values rather than silently defaulting them.
+        if (!Enum.IsDefined(options.Scope) || !Enum.IsDefined(options.Orientation) || !Enum.IsDefined(options.Basement))
+        {
+            return FlattenOutcome.Failed("Flatten options contain an undefined scope/orientation/basement value.");
+        }
+
         if (!_workspace.TryGet(sourceId, out var dataset) || dataset is not ScanImageDataset image)
         {
             return FlattenOutcome.Failed("The source is not an image dataset in the workspace.");
@@ -74,7 +80,19 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         }
 
         // Transform policy (doc 22 §5): derived becomes active; the source enters the comparison set.
-        _workspace.Add(derived);
+        // Ownership transfers to the workspace only on a successful Add (W01); if Add throws (e.g. a
+        // duplicate id / lineage-cycle guard), we still own the derived buffer and must dispose it.
+        try
+        {
+            _workspace.Add(derived);
+        }
+        catch
+        {
+            derived.Dispose();
+            throw;
+        }
+
+        // From here the workspace owns 'derived' — never dispose it on a later failure.
         _workspace.SetActive(derived.Id);
         _workspace.SetComparison([sourceId]);
 
