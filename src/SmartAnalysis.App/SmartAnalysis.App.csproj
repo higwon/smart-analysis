@@ -10,6 +10,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Composition root builds the DI container (F02): needs the concrete container, not just abstractions. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SmartAnalysis.UI\SmartAnalysis.UI.csproj" />
     <ProjectReference Include="..\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
     <ProjectReference Include="..\SmartAnalysis.Infrastructure\SmartAnalysis.Infrastructure.csproj" />
