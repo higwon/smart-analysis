@@ -132,31 +132,43 @@
         </Border>
 
         <!-- Operation launcher popover -->
-        <Popup IsOpen="{Binding IsLauncherOpen}" PlacementTarget="{Binding ElementName=AnalyzeBtn}"
+        <Popup x:Name="LauncherPopup" IsOpen="{Binding IsLauncherOpen}" PlacementTarget="{Binding ElementName=AnalyzeBtn}"
                Placement="Bottom" StaysOpen="False" AllowsTransparency="True" VerticalOffset="4">
             <Border Width="300" Background="{DynamicResource SA.Brush.Surface.Raised}"
                     BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline}"
                     CornerRadius="{DynamicResource SA.Radius.Md}">
-                <StackPanel Margin="{DynamicResource SA.Gap.2}">
-                    <TextBlock Text="PROCESS" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.2}"/>
-                    <Button Command="{Binding LaunchFlattenCommand}" Style="{StaticResource SA.Button.Toolbar}" HorizontalContentAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <ds:IconPresenter Data="{StaticResource SA.Icon.Parameters}" Margin="{DynamicResource SA.Gap.Right2}"/>
-                            <TextBlock Text="Flatten" VerticalAlignment="Center"/>
-                            <TextBlock Text="tilt / bow" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
-                                       Style="{StaticResource SA.Text.Micro}"/>
-                        </StackPanel>
-                    </Button>
-                    <TextBlock Text="MEASURE" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.2}"/>
-                    <Button Command="{Binding RunStatisticsCommand}" Style="{StaticResource SA.Button.Toolbar}" HorizontalContentAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <ds:IconPresenter Data="{StaticResource SA.Icon.Statistics}" Margin="{DynamicResource SA.Gap.Right2}"/>
-                            <TextBlock Text="Statistics" VerticalAlignment="Center"/>
-                            <TextBlock Text="Sq · Sa · skew" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
-                                       Style="{StaticResource SA.Text.Micro}"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
+                <Border.Resources>
+                    <!-- Registry-driven items, grouped by category (Process / Measure / …). -->
+                    <CollectionViewSource x:Key="LauncherView" Source="{Binding LauncherItems}">
+                        <CollectionViewSource.GroupDescriptions>
+                            <PropertyGroupDescription PropertyName="CategoryLabel"/>
+                        </CollectionViewSource.GroupDescriptions>
+                    </CollectionViewSource>
+                </Border.Resources>
+                <ItemsControl ItemsSource="{Binding Source={StaticResource LauncherView}}" Margin="{DynamicResource SA.Gap.2}">
+                    <ItemsControl.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.2}"/>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ItemsControl.GroupStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:OperationLauncherItemViewModel}">
+                            <Button Command="{Binding LaunchCommand}" Style="{StaticResource SA.Button.Toolbar}"
+                                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch"
+                                    ToolTip="{Binding Summary}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ds:IconPresenter Margin="{DynamicResource SA.Gap.Right2}"
+                                                      Data="{Binding IconKey, Converter={StaticResource Key2Geo}}"/>
+                                    <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" Style="{StaticResource SA.Text.Body}"/>
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </Border>
         </Popup>
 
@@ -342,56 +354,104 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Operation config (Flatten) -->
+                    <!-- Operation config: a semantic editor (Flatten) or the generic schema form (U08) -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   Visibility="{Binding RoleIsOperation, Converter={StaticResource Bool2Vis}}">
-                        <StackPanel DataContext="{Binding FlattenPanel}" Margin="{DynamicResource SA.Pad.Panel}">
-                            <TextBlock Text="OPERATION" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
-                            <TextBlock Text="Flatten" Style="{StaticResource SA.Text.Title}"/>
-                            <TextBlock Text="Subtract a per-line, averaged, or surface polynomial."
-                                       TextWrapping="Wrap" Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Secondary}"/>
+                        <ContentControl Content="{Binding OperationEditor}" Margin="{DynamicResource SA.Pad.Panel}">
+                            <ContentControl.Resources>
+                                <!-- Semantic editor: Flatten's hand-built segmented/stepper controls -->
+                                <DataTemplate DataType="{x:Type vm:FlattenPanelViewModel}">
+                                    <StackPanel>
+                                        <TextBlock Text="OPERATION" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                                        <TextBlock Text="Flatten" Style="{StaticResource SA.Text.Title}"/>
+                                        <TextBlock Text="Subtract a per-line, averaged, or surface polynomial."
+                                                   TextWrapping="Wrap" Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Secondary}"/>
 
-                            <TextBlock Text="Scope" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
-                            <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}"
-                                     ItemsSource="{Binding ScopeOptions}" SelectedItem="{Binding Scope, Mode=TwoWay}"
-                                     Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                                        <TextBlock Text="Scope" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                                        <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}"
+                                                 ItemsSource="{Binding ScopeOptions}" SelectedItem="{Binding Scope, Mode=TwoWay}"
+                                                 Margin="{DynamicResource SA.Gap.Bottom2}"/>
 
-                            <TextBlock Text="Order (0–8)" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
-                            <Border BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline}"
-                                    CornerRadius="{DynamicResource SA.Radius.Sm}" HorizontalAlignment="Left" Margin="{DynamicResource SA.Gap.Bottom2}">
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Command="{Binding OrderDownCommand}" Style="{StaticResource SA.Button.Icon}">
-                                        <ds:IconPresenter Data="{StaticResource SA.Icon.ChevronDown}" Width="14" Height="14"/>
-                                    </Button>
-                                    <TextBlock Text="{Binding Order}" MinWidth="34" TextAlignment="Center" VerticalAlignment="Center"
-                                               Style="{StaticResource SA.Text.Numeric}"/>
-                                    <Button Command="{Binding OrderUpCommand}" Style="{StaticResource SA.Button.Icon}">
-                                        <ds:IconPresenter Data="{StaticResource SA.Icon.ChevronRight}" Width="14" Height="14"/>
-                                    </Button>
-                                </StackPanel>
-                            </Border>
+                                        <TextBlock Text="Order (0–8)" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                                        <Border BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                                                CornerRadius="{DynamicResource SA.Radius.Sm}" HorizontalAlignment="Left" Margin="{DynamicResource SA.Gap.Bottom2}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Command="{Binding OrderDownCommand}" Style="{StaticResource SA.Button.Icon}">
+                                                    <ds:IconPresenter Data="{StaticResource SA.Icon.ChevronDown}" Width="14" Height="14"/>
+                                                </Button>
+                                                <TextBlock Text="{Binding Order}" MinWidth="34" TextAlignment="Center" VerticalAlignment="Center"
+                                                           Style="{StaticResource SA.Text.Numeric}"/>
+                                                <Button Command="{Binding OrderUpCommand}" Style="{StaticResource SA.Button.Icon}">
+                                                    <ds:IconPresenter Data="{StaticResource SA.Icon.ChevronRight}" Width="14" Height="14"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
 
-                            <TextBlock Text="Orientation" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
-                            <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}"
-                                     ItemsSource="{Binding OrientationOptions}" SelectedItem="{Binding Orientation, Mode=TwoWay}"
-                                     IsEnabled="{Binding OrientationEnabled}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                                        <TextBlock Text="Orientation" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                                        <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}"
+                                                 ItemsSource="{Binding OrientationOptions}" SelectedItem="{Binding Orientation, Mode=TwoWay}"
+                                                 IsEnabled="{Binding OrientationEnabled}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
 
-                            <TextBlock Text="Basement" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
-                            <ComboBox ItemsSource="{Binding BasementOptions}" SelectedItem="{Binding Basement}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                                        <TextBlock Text="Basement" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                                        <ComboBox ItemsSource="{Binding BasementOptions}" SelectedItem="{Binding Basement}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
 
-                            <Border Style="{StaticResource SA.Banner.Error}" Margin="{DynamicResource SA.Gap.Bottom2}"
-                                    Visibility="{Binding HasError, Converter={StaticResource Bool2Vis}}">
-                                <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
-                            </Border>
-                            <Border Style="{StaticResource SA.Banner.Warning}" Margin="{DynamicResource SA.Gap.Bottom2}"
-                                    Visibility="{Binding HasWarnings, Converter={StaticResource Bool2Vis}}">
-                                <TextBlock Text="{Binding Warnings}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
-                            </Border>
+                                        <Border Style="{StaticResource SA.Banner.Error}" Margin="{DynamicResource SA.Gap.Bottom2}"
+                                                Visibility="{Binding HasError, Converter={StaticResource Bool2Vis}}">
+                                            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
+                                        </Border>
+                                        <Border Style="{StaticResource SA.Banner.Warning}" Margin="{DynamicResource SA.Gap.Bottom2}"
+                                                Visibility="{Binding HasWarnings, Converter={StaticResource Bool2Vis}}">
+                                            <TextBlock Text="{Binding Warnings}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
+                                        </Border>
 
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource SA.Gap.Top2}">
-                                <Button Content="Apply" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
-                            </StackPanel>
-                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource SA.Gap.Top2}">
+                                            <Button Content="Apply" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+
+                                <!-- Generic editor: fields projected from any operation's schema (U08) -->
+                                <DataTemplate DataType="{x:Type vm:ParameterFormViewModel}">
+                                    <StackPanel>
+                                        <TextBlock Text="OPERATION" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                                        <TextBlock Text="{Binding DisplayName}" Style="{StaticResource SA.Text.Title}"/>
+                                        <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Secondary}"/>
+
+                                        <ItemsControl ItemsSource="{Binding Fields}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:ParameterFieldViewModel}">
+                                                    <StackPanel Margin="{DynamicResource SA.Gap.Bottom2}">
+                                                        <TextBlock Text="{Binding Label}" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                                                        <ComboBox ItemsSource="{Binding Options}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                                  SelectedValue="{Binding Value, Mode=TwoWay}"
+                                                                  Visibility="{Binding IsChoice, Converter={StaticResource Bool2Vis}}"/>
+                                                        <TextBox Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Visibility="{Binding IsNumber, Converter={StaticResource Bool2Vis}}"/>
+                                                        <CheckBox IsChecked="{Binding Value, Mode=TwoWay}"
+                                                                  Visibility="{Binding IsBoolean, Converter={StaticResource Bool2Vis}}"/>
+                                                        <TextBox Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Visibility="{Binding IsText, Converter={StaticResource Bool2Vis}}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Border Style="{StaticResource SA.Banner.Error}" Margin="{DynamicResource SA.Gap.Bottom2}"
+                                                Visibility="{Binding HasError, Converter={StaticResource Bool2Vis}}">
+                                            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
+                                        </Border>
+                                        <Border Style="{StaticResource SA.Banner.Warning}" Margin="{DynamicResource SA.Gap.Bottom2}"
+                                                Visibility="{Binding HasWarnings, Converter={StaticResource Bool2Vis}}">
+                                            <TextBlock Text="{Binding Warnings}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
+                                        </Border>
+
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource SA.Gap.Top2}">
+                                            <Button Content="Apply" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ContentControl.Resources>
+                        </ContentControl>
                     </ScrollViewer>
 
                     <!-- Measurement result -->
