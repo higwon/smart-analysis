@@ -1,0 +1,119 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Product components composed from tokens + control styles (doc 21 §7). Keyed 'SA.*'; screens
+        select these. No raw hex / ad-hoc metrics (enforced by DesignSystemStyleTests).
+    -->
+
+    <!-- ===================== Typography (TextBlock roles, doc 23 §4) ===================== -->
+    <Style x:Key="SA.Text.Display" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Display}"/>
+        <Setter Property="LineHeight" Value="{DynamicResource SA.Font.Line.Display}"/>
+        <Setter Property="FontWeight" Value="{DynamicResource SA.Font.Weight.SemiBold}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style x:Key="SA.Text.Title" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Title}"/>
+        <Setter Property="LineHeight" Value="{DynamicResource SA.Font.Line.Title}"/>
+        <Setter Property="FontWeight" Value="{DynamicResource SA.Font.Weight.SemiBold}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+    </Style>
+    <Style x:Key="SA.Text.Subtitle" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Subtitle}"/>
+        <Setter Property="LineHeight" Value="{DynamicResource SA.Font.Line.Subtitle}"/>
+        <Setter Property="FontWeight" Value="{DynamicResource SA.Font.Weight.SemiBold}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+    </Style>
+    <Style x:Key="SA.Text.Body" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
+        <Setter Property="LineHeight" Value="{DynamicResource SA.Font.Line.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+    </Style>
+    <Style x:Key="SA.Text.BodyStrong" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource SA.Text.Body}">
+        <Setter Property="FontWeight" Value="{DynamicResource SA.Font.Weight.SemiBold}"/>
+    </Style>
+    <Style x:Key="SA.Text.Secondary" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource SA.Text.Body}">
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Secondary}"/>
+    </Style>
+    <Style x:Key="SA.Text.Caption" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Caption}"/>
+        <Setter Property="LineHeight" Value="{DynamicResource SA.Font.Line.Caption}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Secondary}"/>
+    </Style>
+    <Style x:Key="SA.Text.Micro" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Micro}"/>
+        <Setter Property="LineHeight" Value="{DynamicResource SA.Font.Line.Micro}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Tertiary}"/>
+    </Style>
+    <Style x:Key="SA.Text.Numeric" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Mono}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Numeric}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+    </Style>
+    <!-- Region header label: uppercase, tracked, tertiary (Explorer/History "WORKSPACE" etc.) -->
+    <Style x:Key="SA.Text.SectionLabel" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Micro}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Tertiary}"/>
+    </Style>
+
+    <!-- ===================== Surfaces / containers ===================== -->
+    <Style x:Key="SA.Card" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Default}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Default}"/>
+        <Setter Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Section}"/>
+    </Style>
+    <Style x:Key="SA.Toolbar" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Background.Toolbar}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Default}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Height" Value="{DynamicResource SA.Size.Toolbar}"/>
+    </Style>
+    <Style x:Key="SA.Divider" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Border.Subtle}"/>
+        <Setter Property="Height" Value="1"/>
+    </Style>
+
+    <!-- Active-context chip (command bar pill) -->
+    <Style x:Key="SA.ActiveChip" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Selected}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Pill}"/>
+        <Setter Property="Height" Value="{DynamicResource SA.Size.Chip}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Chip}"/>
+    </Style>
+
+    <!-- ===================== Status banners (fg+bg pairs; pair with an icon in the view) ===================== -->
+    <Style x:Key="SA.Banner.Success" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Success.Background}"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Success.Foreground}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
+    </Style>
+    <Style x:Key="SA.Banner.Warning" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Warning.Background}"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Warning.Foreground}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
+    </Style>
+    <Style x:Key="SA.Banner.Error" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Error.Background}"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Error.Foreground}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
+    </Style>
+    <Style x:Key="SA.Banner.Info" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Info.Background}"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Info.Foreground}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
+    </Style>
+</ResourceDictionary>

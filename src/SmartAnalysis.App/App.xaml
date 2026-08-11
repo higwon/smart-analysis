@@ -3,9 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnExplicitShutdown">
     <!--
-        Composition root entry point (TASK-F00: minimal shell only).
-        No StartupUri / MainWindow, no DI wiring, no adapter registration yet.
-        Application resources / DI composition arrive with the shell (U01) and design system (UIX03).
+        Composition root. The first-party design system (UIX03) is merged here so every window/control
+        resolves SA.* tokens; ThemeManager (App.xaml.cs) swaps the Light/Dark palette at runtime.
+        Still no StartupUri / MainWindow / DI wiring — the shell arrives at U01.
     -->
-    <Application.Resources />
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/DesignSystem.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>

@@ -139,14 +139,46 @@ DesignSystem/
 └─ Components/
 ```
 
-Define (in UIX03):
-- **Dictionary load order** (Tokens → active color dictionary → ControlStyles → ComponentStyles).
-- **Light/Dark swap** = replace the active color dictionary (Light/DarkColors) at runtime; **same
-  semantic keys** in both so nothing else rebinds.
-- **Control refresh on switch** via `DynamicResource` on theme colors.
-- **Startup theme** selection; optional **system-theme** following; **theme persistence** (settings).
-- **External-control styling adapter** location (where AvalonDock/chart styles are overridden).
-- **Token naming convention** and **resource-key collision-avoidance** rules (namespaced keys).
+### Implemented layout (UIX03)
+The grown structure is realized in `src/SmartAnalysis.UI/DesignSystem/`:
+```
+DesignSystem/
+├─ DesignSystem.xaml         (entry: merges the stack in load order; Light palette by default)
+├─ Tokens.xaml              (typography, spacing, size, radius, border, motion — theme-independent)
+├─ Palettes/{LightColors,DarkColors}.xaml   (semantic + chart/image + banner tokens; identical keys)
+├─ Controls/ControlStyles.xaml              (Base → Variant styles for stock controls)
+├─ Components/ComponentStyles.xaml          (typography roles + product components)
+├─ Adapters/ExternalControlStyles.xaml      (AvalonDock/chart restyle location — placeholder)
+└─ Theming/{AppTheme,ThemeManager,ThemePreferenceStore}.cs
+```
+
+Decisions realized (UIX03):
+- **Dictionary load order:** Tokens → active color palette → ControlStyles → ComponentStyles → external
+  adapter (in `DesignSystem.xaml`). `DynamicResource` resolves across the whole merged set, so order among
+  them doesn't affect resolution — it only fixes a predictable structure.
+- **Light/Dark swap** = `ThemeManager` replaces the single palette dictionary (identical keys) in the
+  merged tree at runtime; every `DynamicResource SA.Brush.*` consumer re-binds live. Tokens/styles load once.
+- **Startup + system-following + persistence:** `ThemeManager.Initialize` applies the persisted
+  preference (`AppTheme.System` on first run → OS `AppsUseLightTheme`); `ThemePreferenceStore` saves it to
+  `%APPDATA%/SmartAnalysis/ui-settings.json` (UI-chrome only). Live OS-change follow attaches at U01 (needs
+  a window HWND); `ReapplyIfFollowingSystem()` is the hook.
+- **Key naming / collision-avoidance:** all keys are namespaced **`SA.`** with dotted paths —
+  `SA.Color.*` (raw), `SA.Brush.*` (consumed), `SA.Font.*`/`SA.Space.*`/`SA.Size.*`/`SA.Radius.*`/
+  `SA.Stroke.*`/`SA.Duration.*` (metrics), `SA.Button.*`/`SA.Text.*`/`SA.Card`/`SA.Banner.*` (styles).
+- **No-hardcoded-values (scoped policy):** raw hex lives **only** under `Palettes/`; **screen/view XAML**
+  (everything in `SmartAnalysis.UI` outside `DesignSystem/`) must use `SA.*` tokens for hex **and** the
+  design metrics FontSize/Margin/Padding/CornerRadius/BorderThickness. **ControlTemplate implementation
+  geometry** inside `DesignSystem/Controls` (glyph box size, focus offset, state layers, tree indent) may
+  be literal — it is template mechanics, not screen design; recurring design metrics still use tokens.
+  Enforced by `DesignSystemStyleTests`: raw-hex-outside-Palettes, **screen-level metric+hex lint**,
+  Light/Dark key parity, brush-reference integrity, Error-banner AA tone.
+- **Variant styling without template duplication:** one shared `SA.Template.Button`; each variant injects
+  its hover/pressed fills via the `ButtonChrome` attached properties (state layers bind to them), so e.g.
+  **Danger darkens (never turns blue) on hover** and new variants add no template copies. Destructive
+  fills use a dedicated `SA.Brush.Control.Danger*` set (not the light-red `Status.Error` text token) so
+  white text stays AA on the fill in both themes.
+- MVP-used controls have full token-driven templates; the rest carry token-driven base setters and grow
+  templates as screens need them (extensible).
 
 ## 8. Per-screen-area design rules (also referenced by doc 17 / UX01)
 

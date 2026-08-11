@@ -1,0 +1,14 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        External functional-control styling adapter (doc 21 §0/§7, ADR-008).
+
+        When AvalonDock (docking) and the ScottPlot host (charting, ADR-018) are added, their visual
+        appearance is overridden HERE to the first-party design system — only their BEHAVIOR is used, never
+        their default look. Restyles must consume SA.* tokens via DynamicResource (no raw hex / ad-hoc
+        metrics), exactly like ControlStyles.xaml, so they theme-swap with everything else.
+
+        Intentionally empty until those libraries are referenced (U01 shell / V03 chart host). Keeping the
+        dictionary in the load order now fixes the adapter's location so later PRs only add entries here.
+    -->
+</ResourceDictionary>
