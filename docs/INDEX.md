@@ -85,6 +85,7 @@ coverage, method, and gaps.
 | [23-design-tokens](target-design/23-design-tokens.md) | UIX01: concrete token *values* (Base ramps, Light+Dark semantic + chart/image chrome, typography, spacing/size/radius/border, focus/motion/elevation/density, contrast targets) realizing doc 21 |
 | [24-mvp-visual-design](target-design/24-mvp-visual-design.md) | UIX02: high-fidelity MVP screens (shell/explorer/viewer/flatten/before-after/history/progress/save + states) in Light+Dark from doc 23 tokens; ★ user-approval gate before UIX03/U01/U02 |
 | [25-iconography](target-design/25-iconography.md) | UIX04: icon policy — Lucide (ISC) vendored as `SA.Icon.*` WPF geometries, `IconPresenter` currentColor/theme-swap, size/style rules, a11y icon+text |
+| [26-product-interaction-architecture](target-design/26-product-interaction-architecture.md) | UX02: product interaction architecture + visual product design — Stage-first shell, surface-depth, operation launcher, role-switching Inspector, comparison mode; command taxonomy + feature-placement matrix; hi-fi Light/Dark artifact; contracts to amend (doc 22/24) |
 
 ### `migration/` — the plan
 | Doc | Covers |
