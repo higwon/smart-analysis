@@ -1,5 +1,14 @@
 # Information Architecture & Core Workflow (TASK-UX01)
 
+> **Amended by UX02 ([doc 26](26-product-interaction-architecture.md), user-approved).** The
+> single-active-context model, the on-screen entities, lineage, before/after entry, and the
+> step-is-not-navigable / measurement-is-attached contracts below **stand unchanged**. The *region model*
+> is updated: the **"Parameters" region → "Inspector"** (one panel, four contextual roles: operation config ·
+> dataset properties · measurement result · read-only step inspector); operations are entered through an
+> **Operation Launcher** (Process/Measure/View/Output) rather than a growing command bar; **History → a
+> compact, collapsible provenance strip docked at the bottom of the Navigator rail**. Where §4/§7/§8 below
+> describe the older five-equal-region shell, doc 26 §4 governs.
+
 The concrete IA that realizes the [UI/UX principles](17-uiux-principles.md) — settled **before** any UI
 code (U01/U02) so the implementation builds a redesigned workflow, not a re-skin of the legacy
 DevExpress tree/docking/dialog forest. **Design only, no code.** It names the on-screen entities in terms

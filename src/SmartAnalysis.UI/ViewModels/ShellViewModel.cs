@@ -8,6 +8,7 @@ using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.Mvvm;
 using SmartAnalysis.UI.Services;
+using SmartAnalysis.Visualization.Colormaps;
 
 namespace SmartAnalysis.UI.ViewModels;
 
@@ -23,6 +24,8 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IScanFileReader _reader;
     private readonly ThemeManager _theme;
     private readonly IScanFilePicker _picker;
+    private readonly IImageAnalysisUseCase _imageAnalysis;
+    private readonly MeasurementStore _measurements;
 
     private string _workspaceName = "Untitled workspace";
     private bool _hasUnsavedChanges;
@@ -33,14 +36,21 @@ public sealed class ShellViewModel : ObservableObject
     private string? _activeMeta;
     private ScanImageDataset? _activeImage;
     private ScanImageDataset? _beforeImage;
+    private InspectorRole _inspectorRole = InspectorRole.DatasetProperties;
+    private bool _isLauncherOpen;
+    private StatisticsResultViewModel? _statistics;
+    private HistoryRowViewModel? _selectedStep;
+    private Colormap _colormap = Colormap.AfmGold;
+    private string _colormapName = "AFM Gold";
 
-    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis)
+    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, MeasurementStore measurements)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _picker = picker ?? throw new ArgumentNullException(nameof(picker));
-        ArgumentNullException.ThrowIfNull(imageAnalysis);
+        _imageAnalysis = imageAnalysis ?? throw new ArgumentNullException(nameof(imageAnalysis));
+        _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
 
         FlattenPanel = new FlattenPanelViewModel(imageAnalysis, () => _workspace.Active.ActiveId);
 
@@ -48,11 +58,19 @@ public sealed class ShellViewModel : ObservableObject
         OpenSampleCommand = new AsyncRelayCommand(OpenSampleAsync, () => SamplePath is not null, OnCommandError);
         ToggleThemeCommand = new RelayCommand(ToggleTheme);
         SaveCommand = new RelayCommand(() => { }, () => false); // stub — persistence UI is a later task (P01)
+        ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => HasActiveImage);
+        LaunchFlattenCommand = new RelayCommand(() => { IsLauncherOpen = false; InspectorRole = InspectorRole.Operation; }, () => HasActiveImage);
+        RunStatisticsCommand = new AsyncRelayCommand(RunStatisticsAsync, () => HasActiveImage, OnCommandError);
+        CycleColormapCommand = new RelayCommand(CycleColormap);
+        ExitCompareCommand = new RelayCommand(() => _workspace.SetComparison([]), () => IsBeforeAfter);
 
         // Topology changes (datasets added/removed) rebuild the tree; an active/comparison change only
         // refreshes existing nodes' state — so selection + expansion in the TreeView are preserved.
         _workspace.DatasetsChanged += (_, _) => RebuildTopology();
         _workspace.ActiveContextChanged += (_, _) => RefreshActiveState();
+        // A new/removed measurement re-surfaces the attached nodes without disturbing the active context
+        // or the current Inspector role (so the just-shown result card survives its own attach).
+        _measurements.MeasurementsChanged += (_, _) => RebuildNodes();
         _theme.ThemeChanged += (_, _) => OnPropertyChanged(nameof(ThemeToggleLabel));
         RebuildTopology();
     }
@@ -108,6 +126,86 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>The contextual Flatten parameter panel (shown when the active dataset is an image).</summary>
     public FlattenPanelViewModel FlattenPanel { get; }
 
+    public ICommand ToggleLauncherCommand { get; }
+    public ICommand LaunchFlattenCommand { get; }
+    public ICommand RunStatisticsCommand { get; }
+    public ICommand CycleColormapCommand { get; }
+    public ICommand ExitCompareCommand { get; }
+
+    /// <summary>Which role the Inspector shows (doc 26 §13).</summary>
+    public InspectorRole InspectorRole
+    {
+        get => _inspectorRole;
+        private set
+        {
+            if (SetProperty(ref _inspectorRole, value))
+            {
+                OnPropertyChanged(nameof(RoleIsDataset));
+                OnPropertyChanged(nameof(RoleIsOperation));
+                OnPropertyChanged(nameof(RoleIsResult));
+                OnPropertyChanged(nameof(RoleIsStep));
+            }
+        }
+    }
+
+    public bool RoleIsDataset => _inspectorRole == InspectorRole.DatasetProperties;
+    public bool RoleIsOperation => _inspectorRole == InspectorRole.Operation;
+    public bool RoleIsResult => _inspectorRole == InspectorRole.Result;
+    public bool RoleIsStep => _inspectorRole == InspectorRole.Step;
+
+    /// <summary>The operation launcher popover (Analyze ▾) open state.</summary>
+    public bool IsLauncherOpen
+    {
+        get => _isLauncherOpen;
+        set => SetProperty(ref _isLauncherOpen, value);
+    }
+
+    /// <summary>The current measurement result card (Result role); null otherwise.</summary>
+    public StatisticsResultViewModel? Statistics { get => _statistics; private set => SetProperty(ref _statistics, value); }
+
+    /// <summary>The selected provenance step (Step role); null otherwise.</summary>
+    public HistoryRowViewModel? SelectedStep { get => _selectedStep; private set => SetProperty(ref _selectedStep, value); }
+
+    /// <summary>The active AFM data colormap (theme-independent). Name is shown on the viewer toolbar.</summary>
+    public Colormap Colormap => _colormap;
+    public string ColormapName { get => _colormapName; private set => SetProperty(ref _colormapName, value); }
+
+    /// <summary>Selecting a provenance step shows it read-only in the Inspector — the active dataset never changes.</summary>
+    public void SelectStep(HistoryRowViewModel? step)
+    {
+        SelectedStep = step;
+        InspectorRole = step is null ? InspectorRole.DatasetProperties : InspectorRole.Step;
+    }
+
+    private async Task RunStatisticsAsync()
+    {
+        IsLauncherOpen = false;
+        if (_workspace.Active.ActiveId is not { } id)
+        {
+            return;
+        }
+
+        var result = await _imageAnalysis.ComputeStatisticsAsync(id).ConfigureAwait(true);
+        if (result.Success)
+        {
+            Statistics = new StatisticsResultViewModel(result);
+            InspectorRole = InspectorRole.Result; // attached to the active dataset — active is unchanged
+        }
+        else
+        {
+            StatusMessage = result.Error;
+            OnPropertyChanged(nameof(HasStatus));
+        }
+    }
+
+    private void CycleColormap()
+    {
+        var toGold = !ReferenceEquals(_colormap, Colormap.AfmGold);
+        _colormap = toGold ? Colormap.AfmGold : Colormap.Grayscale;
+        ColormapName = toGold ? "AFM Gold" : "Grayscale";
+        ImagesChanged?.Invoke(this, EventArgs.Empty); // re-render with the new colormap
+    }
+
     /// <summary>The active dataset when it is a 2D scan image (drives the viewer); null otherwise.</summary>
     public ScanImageDataset? ActiveImage { get => _activeImage; private set => SetProperty(ref _activeImage, value); }
 
@@ -128,12 +226,35 @@ public sealed class ShellViewModel : ObservableObject
 
     public string ThemeToggleLabel => _theme.EffectiveTheme == AppTheme.Dark ? "Light" : "Dark";
 
-    /// <summary>Sets the active dataset when a dataset node is selected (measurements never become active).</summary>
+    /// <summary>
+    /// Handles an explorer selection. A dataset node becomes active; a measurement node instead shows its
+    /// result read-only in the Inspector (attached to its source — the active dataset never changes).
+    /// </summary>
     public void Select(DatasetNodeViewModel? node)
     {
-        if (node is not null && !node.IsMeasurement && _workspace.Contains(node.Id))
+        if (node is null)
+        {
+            return;
+        }
+
+        if (node.IsMeasurement)
+        {
+            SelectMeasurement(node.Id);
+        }
+        else if (_workspace.Contains(node.Id))
         {
             _workspace.SetActive(node.Id);
+        }
+    }
+
+    /// <summary>Shows an attached measurement in the Inspector's Result role; the active dataset is unchanged.</summary>
+    public void SelectMeasurement(DatasetId artifactId)
+    {
+        if (_imageAnalysis.GetMeasurement(artifactId) is { } result)
+        {
+            Statistics = new StatisticsResultViewModel(result);
+            SelectedStep = null;
+            InspectorRole = InspectorRole.Result;
         }
     }
 
@@ -192,8 +313,16 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(HasStatus));
     }
 
-    // Topology: datasets added/removed. Rebuilds the node tree (and the id->node index used by refresh).
+    // Topology: datasets added/removed. Rebuilds the node tree, then refreshes the active header/history.
     private void RebuildTopology()
+    {
+        RebuildNodes();
+        RefreshActiveState();
+    }
+
+    // Rebuilds the explorer node tree (datasets + their attached measurements) and the id->node index the
+    // in-place active refresh uses. Deliberately does NOT touch the active header or the Inspector role.
+    private void RebuildNodes()
     {
         _nodesById.Clear();
         ExplorerNodes.Clear();
@@ -204,7 +333,6 @@ public sealed class ShellViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasWorkspace));
-        RefreshActiveState();
     }
 
     // Active/comparison changed only: update existing nodes in place + the active header + history.
@@ -238,9 +366,19 @@ public sealed class ShellViewModel : ObservableObject
             BeforeImage = null;
         }
 
+        // A new active dataset resets the Inspector to its properties (op config / result / step are transient).
+        Statistics = null;
+        SelectedStep = null;
+        InspectorRole = InspectorRole.DatasetProperties;
+        IsLauncherOpen = false;
+
         OnPropertyChanged(nameof(HasActiveImage));
         OnPropertyChanged(nameof(IsBeforeAfter));
         OnPropertyChanged(nameof(IsSingleImage));
+        (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (LaunchFlattenCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (RunStatisticsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
         ImagesChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -267,6 +405,14 @@ public sealed class ShellViewModel : ObservableObject
             IsInComparison = _workspace.Active.Comparison.Contains(id),
         };
         _nodesById[id] = node;
+
+        // Attached measurements (doc 22 §Measurement): shown under their source, never independently active.
+        foreach (var artifact in _measurements.ForSource(id))
+        {
+            node.Children.Add(new DatasetNodeViewModel(
+                artifact.Id, FriendlyOp(artifact.OperationId), "SA.Icon.Statistics", isMeasurement: true));
+        }
+
         foreach (var childId in _workspace.ChildrenOf(id))
         {
             node.Children.Add(BuildNode(childId));

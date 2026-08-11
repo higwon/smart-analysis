@@ -1,7 +1,10 @@
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.ViewModels;
@@ -22,9 +25,6 @@ public partial class MainWindow : Window
 {
     private const int WmSettingChange = 0x001A;
 
-    // The AFM data colormap (theme-independent, ADR-008). A richer palette picker is a later task.
-    private static readonly Colormap DataColormap = Colormap.AfmGold;
-
     private readonly ShellViewModel _viewModel;
     private readonly ThemeManager _theme;
 
@@ -42,22 +42,62 @@ public partial class MainWindow : Window
     private void ExplorerTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         => _viewModel.Select(e.NewValue as DatasetNodeViewModel);
 
+    // Selecting a provenance step shows it read-only in the Inspector (Step role); active is unchanged.
+    private void ProvenanceList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => _viewModel.SelectStep(ProvenanceList.SelectedItem as HistoryRowViewModel);
+
+    // Fit the active single-image viewer to the stage (toolbar Fit action).
+    private void Fit_Click(object sender, RoutedEventArgs e) => SingleImage.Fit();
+
+    // Export the active view as a PNG. Persistence/export UI is a later task (P01); this is a lightweight
+    // stage capture so the toolbar affordance is real rather than a placeholder.
+    private void Export_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.HasActiveImage)
+        {
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "PNG image (*.png)|*.png",
+            FileName = $"{_viewModel.ActiveTitle ?? "export"}.png",
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        var target = _viewModel.IsBeforeAfter ? (FrameworkElement)CompareContent : SingleImage;
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Max(1, target.ActualWidth),
+            (int)Math.Max(1, target.ActualHeight),
+            96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(target);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(dialog.FileName);
+        encoder.Save(stream);
+    }
+
     // Build transient render inputs and render them; retain nothing borrowed (V02 / ADR-011).
     private void RenderImages()
     {
+        var colormap = _viewModel.Colormap;
         if (_viewModel.IsBeforeAfter && _viewModel.BeforeImage is { } before && _viewModel.ActiveImage is { } after)
         {
             // Each pane uses its OWN data range so both stay legible: a transform like Flatten removes the
             // Z offset, so a union range would wash the source to one extreme and the result to the other —
             // hiding the very texture/tilt the comparison exists to show. (A shared-range toggle is a later
             // refinement.) The axes are identical (same X/Y), which the BEFORE/AFTER labels make explicit.
-            BeforeImageView.Render(RenderInputFactory.ForImage(before, DataColormap));
-            AfterImageView.Render(RenderInputFactory.ForImage(after, DataColormap));
+            BeforeImageView.Render(RenderInputFactory.ForImage(before, colormap));
+            AfterImageView.Render(RenderInputFactory.ForImage(after, colormap));
             SingleImage.Clear();
         }
         else if (_viewModel.ActiveImage is { } image)
         {
-            SingleImage.Render(RenderInputFactory.ForImage(image, DataColormap));
+            SingleImage.Render(RenderInputFactory.ForImage(image, colormap));
             BeforeImageView.Clear();
             AfterImageView.Clear();
         }

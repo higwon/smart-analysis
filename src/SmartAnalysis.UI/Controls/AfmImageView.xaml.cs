@@ -111,7 +111,8 @@ public partial class AfmImageView : UserControl, IImageView
     private static string Format(double value)
         => double.IsFinite(value) ? value.ToString("G4", CultureInfo.InvariantCulture) : "—";
 
-    private void Fit()
+    /// <summary>Fits the image to the viewport and centers it (also the double-click / toolbar Fit action).</summary>
+    public void Fit()
     {
         if (_bmpW <= 0 || _bmpH <= 0 || Viewport.ActualWidth <= 0 || Viewport.ActualHeight <= 0)
         {

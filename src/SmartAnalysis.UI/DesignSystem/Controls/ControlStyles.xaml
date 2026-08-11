@@ -406,6 +406,57 @@
         <Setter Property="Margin" Value="0,4,0,4"/>
     </Style>
 
+    <!-- ===================== Segmented control (single-select, horizontal ListBox) ===================== -->
+    <Style x:Key="SA.Segmented" TargetType="{x:Type ListBox}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Default}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Default}"/>
+        <Setter Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline}"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="ItemsPanel">
+            <Setter.Value><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ListBox}">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{DynamicResource SA.Radius.Sm}" SnapsToDevicePixels="True">
+                        <ItemsPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="SA.Segmented.Item" TargetType="{x:Type ListBoxItem}">
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Secondary}"/>
+        <Setter Property="MinHeight" Value="{DynamicResource SA.Size.Control.Md}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                    <Border x:Name="bd" Background="Transparent" Padding="{DynamicResource SA.Pad.Field}" SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Selected}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Accent.OnSurface}"/>
+                            <Setter Property="FontWeight" Value="{DynamicResource SA.Font.Weight.SemiBold}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===================== Base-setter styles (default template, tokenized) — extensible ===================== -->
     <!-- These give the remaining stock controls consistent color/typography/metrics now; full templates
          are added incrementally as screens need them (doc 21 §7 "extensible"). No hard-coded values. -->

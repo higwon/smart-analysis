@@ -8,6 +8,15 @@ and U01/U02 realize — **it does not re-decide visuals**. **No code here.**
 > **★ Approval gate.** Per doc 32 Checkpoint 4 and ADR-008, **user approval of this visual design is
 > mandatory before UIX03/U01/U02**. Every value traces to doc 23; nothing new is introduced.
 
+> **Superseded for *composition* by UX02 ([doc 26](26-product-interaction-architecture.md), user-approved).**
+> The **token usage, states, colormap-independence, and no-ROI rule** here still hold, but the **visual
+> composition** is now the doc-26 **Stage-first** model: the Active View is the brightest/primary surface
+> and the Navigator/Inspector recede by **surface tone + soft elevation** (not a 1px box per region);
+> Before/After is a **comparison mode** with a clustered compare toolbar and **independent Z ranges** (§5,
+> already amended); the Flatten panel uses **semantic controls** (segmented/stepper/select, §4); the Viewer
+> is a **component** with a contextual toolbar (§3). Where this doc shows the equal-weight five-box shell,
+> doc 26 governs; the reworked implementation (U03) follows doc 26 + its §20 polish notes.
+
 The reviewable deliverable is the **high-fidelity interactive board** (full shell + every region and
 state, both themes, rendered from the real tokens). This doc is its written spec of record.
 

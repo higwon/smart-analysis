@@ -35,8 +35,10 @@ public static class CompositionRoot
         // Application use cases the UI drives (doc 11: UI → Application, not Analysis).
         services.AddSingleton<IImageAnalysisUseCase, ImageAnalysisUseCase>();
 
-        // UI: one workspace session, the theme controller, and the shell (U01).
+        // UI: one workspace session, the measurement store (attached AnalysisArtifacts), the theme
+        // controller, and the shell (U01). The workspace owns datasets only; measurements live beside it.
         services.AddSingleton<Workspace>();
+        services.AddSingleton<MeasurementStore>();
         services.AddSingleton<ThemeManager>();
         services.AddSingleton<IScanFilePicker, WpfScanFilePicker>();
         services.AddSingleton<ShellViewModel>();

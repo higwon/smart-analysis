@@ -87,6 +87,15 @@
     <Thickness x:Key="SA.Stroke.Strong">2</Thickness>
     <Thickness x:Key="SA.Stroke.Focus">2</Thickness>
 
+    <!-- Single-side hairlines: rail edges and section dividers (a divider is an edge, not a box). -->
+    <Thickness x:Key="SA.Stroke.Hairline.Left">1,0,0,0</Thickness>
+    <Thickness x:Key="SA.Stroke.Hairline.Right">0,0,1,0</Thickness>
+    <Thickness x:Key="SA.Stroke.Hairline.Top">0,1,0,0</Thickness>
+    <Thickness x:Key="SA.Stroke.Hairline.Bottom">0,0,0,1</Thickness>
+
+    <!-- ===== Bar spacing (histogram / spark columns) ===== -->
+    <Thickness x:Key="SA.Gap.BarX">1,0,1,0</Thickness>
+
     <!-- ===== Motion (minimal) ===== -->
     <Duration x:Key="SA.Duration.Fast">0:0:0.1</Duration>
     <Duration x:Key="SA.Duration.Base">0:0:0.16</Duration>
