@@ -177,7 +177,14 @@ design + Light/Dark high-fidelity screens, **user-approved**) → `UIX03` (WPF r
 implementation) → `U01`/`U02`. `V00` (rendering spike) may run partly in parallel with UIX01/UIX02.
 See doc 32 (roadmap) and the specs in `docs/migration/specs/TASK-UIX0*.md`.
 
-## OPEN (values decided in UIX01/UIX02, via user review)
-- Concrete palette hex values, type scale numbers, spacing scale, radii, contrast targets.
+## Concrete values (UIX01)
+The concrete proposed **values** for every token group above (Base ramps, Light + Dark semantic tokens,
+chart/image chrome, typography, spacing/sizing/radius/border, focus/motion/elevation/density, and
+contrast targets) are in **[`23-design-tokens.md`](23-design-tokens.md)**. That doc realizes this
+structure; this doc stays the structure/rules of record.
+
+## OPEN (values proposed in UIX01, **finalized with user approval in UIX02**)
+- Final palette hex tuning against real screens (proposals in doc 23).
 - System-theme following on/off by default.
-- Exact chart/image UI token values (kept distinct from the data colormap).
+- Exact chart/image UI token opacities once tested over real colormaps.
+- Optional Compact-density default.

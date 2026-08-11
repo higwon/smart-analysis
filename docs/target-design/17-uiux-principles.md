@@ -41,7 +41,8 @@ the feature inventory (doc 30) under keep/improve/merge/drop.
     internal semantic-token dictionaries — **no external application/control-suite theme**. External
     functional controls (AvalonDock, chart lib) are restyled to the design system; only their
     behavior is used. **UI color ≠ AFM data colormap** — switching theme never changes the data.
-    WPF first; no control-suite lock-in so the shell can evolve (doc 11).
+    WPF first; no control-suite lock-in so the shell can evolve (doc 11). Concrete token values
+    (Light + Dark) are proposed in [`23-design-tokens.md`](23-design-tokens.md) (UIX01).
 11. **Visual design precedes UI code.** The IA (UX01) and the design system + approved MVP visuals
     (UIX01 → UIX02 → user approval → UIX03) are settled **before** U01/U02; the UI realizes an
     approved design, never invents one (doc 21 §9, doc 32).
