@@ -83,6 +83,7 @@ coverage, method, and gaps.
 | [21-design-system](target-design/21-design-system.md) | First-party WPF design system: tokens, control styles, resource structure, simple-modern + per-screen rules |
 | [22-information-architecture](target-design/22-information-architecture.md) | UX01 IA: shell regions, single active context, journeys, before/after & comparison, parameter-panel behaviour, MVP flow, low-fi wireframes, keep/merge/remove |
 | [23-design-tokens](target-design/23-design-tokens.md) | UIX01: concrete token *values* (Base ramps, Light+Dark semantic + chart/image chrome, typography, spacing/size/radius/border, focus/motion/elevation/density, contrast targets) realizing doc 21 |
+| [24-mvp-visual-design](target-design/24-mvp-visual-design.md) | UIX02: high-fidelity MVP screens (shell/explorer/viewer/flatten/before-after/history/progress/save + states) in Light+Dark from doc 23 tokens; ★ user-approval gate before UIX03/U01/U02 |
 
 ### `migration/` — the plan
 | Doc | Covers |

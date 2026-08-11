@@ -183,6 +183,12 @@ chart/image chrome, typography, spacing/sizing/radius/border, focus/motion/eleva
 contrast targets) are in **[`23-design-tokens.md`](23-design-tokens.md)**. That doc realizes this
 structure; this doc stays the structure/rules of record.
 
+## High-fidelity MVP screens (UIX02)
+The token architecture and values above are applied to the concrete MVP screens (Light + Dark) in
+**[`24-mvp-visual-design.md`](24-mvp-visual-design.md)** — shell, explorer, viewer, flatten panel,
+before/after, history, progress, save/reopen, and all common states. That design is the **★ approval
+gate** before UIX03/U01/U02 (ADR-008, doc 32 Checkpoint 4).
+
 ## OPEN (values proposed in UIX01, **finalized with user approval in UIX02**)
 - Final palette hex tuning against real screens (proposals in doc 23).
 - System-theme following on/off by default.

@@ -48,6 +48,18 @@ Intentionally different. No numeric parity. (Workflow must still match the UX01 
 ## Docs to update
 doc 17/21 (link the approved designs), INDEX, backlog status.
 
+## Implementation status (this PR)
+The high-fidelity design is authored in [`../../target-design/24-mvp-visual-design.md`](../../target-design/24-mvp-visual-design.md)
+(design doc, no code) with a **high-fidelity interactive review artifact** rendering every MVP screen in
+**Light and Dark** from the real doc-23 tokens: Application Shell (five regions), Workspace Explorer
+(selected/active/comparison + empty), Image Viewer (cursor/ROI/legend + loading/error), Flatten
+Parameters (default/validation-error) + Statistics results card, Before/After (split + difference),
+History/Provenance (done/running/failed), Progress/Cancel (inline), Save/Reopen, and the common
+empty/loading/error/disabled/selected states. The **AFM colormap is drawn identically in both themes**
+(ADR-008). doc 21/17 link the design; INDEX + backlog updated. **★ Awaiting user approval — this is the
+required gate before UIX03/U01/U02.**
+
 ## Open / unverified
-This phase does not create actual Figma files or images — it specifies what UIX02 must deliver and
-that **user approval is a required gate**. The concrete artifacts are produced in the UIX02 session.
+Concrete overlay opacities re-checked over real colormaps at implementation; Assistant affordances mature
+post-MVP (region fixed); docking library (AvalonDock) is a U01-adjacent ADR — the design stays
+library-agnostic.
