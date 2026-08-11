@@ -10,7 +10,6 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Bool2Vis"/>
         <conv:ResourceKeyToGeometryConverter x:Key="Key2Geo"/>
-        <conv:ResourceKeyToBrushConverter x:Key="Key2Brush"/>
 
         <!-- Explorer lineage node: accent rail + dot when active; icon + label; measurement marker. -->
         <HierarchicalDataTemplate DataType="{x:Type vm:DatasetNodeViewModel}" ItemsSource="{Binding Children}">
@@ -20,6 +19,7 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Width="2" Background="{DynamicResource SA.Brush.Accent.Primary}"
                         Margin="{DynamicResource SA.Gap.Right2}"
@@ -27,14 +27,24 @@
                 <ds:IconPresenter Grid.Column="1" Data="{Binding IconKey, Converter={StaticResource Key2Geo}}"
                                   Margin="{DynamicResource SA.Gap.Right2}"/>
                 <TextBlock Grid.Column="2" Text="{Binding Label}" VerticalAlignment="Center"
-                           Style="{StaticResource SA.Text.Body}"/>
-                <ds:IconPresenter Grid.Column="3" Data="{StaticResource SA.Icon.Dot}"
+                           TextTrimming="CharacterEllipsis" Style="{StaticResource SA.Text.Body}"/>
+                <!-- comparison membership: a small "vs" badge (text, not color-only) — doc 24 -->
+                <Border Grid.Column="3" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Right2}"
+                        Background="{DynamicResource SA.Brush.Surface.Hover}"
+                        BorderBrush="{DynamicResource SA.Brush.Border.Default}"
+                        BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                        CornerRadius="{DynamicResource SA.Radius.Sm}" Padding="{DynamicResource SA.Gap.1}"
+                        Visibility="{Binding IsInComparison, Converter={StaticResource Bool2Vis}}">
+                    <TextBlock Text="vs" Style="{StaticResource SA.Text.Micro}"
+                               Foreground="{DynamicResource SA.Brush.Accent.OnSurface}"/>
+                </Border>
+                <ds:IconPresenter Grid.Column="4" Data="{StaticResource SA.Icon.Dot}"
                                   Foreground="{DynamicResource SA.Brush.Accent.OnSurface}"
                                   Visibility="{Binding IsActive, Converter={StaticResource Bool2Vis}}"/>
             </Grid>
         </HierarchicalDataTemplate>
 
-        <!-- History row. -->
+        <!-- History row. Status maps to a live DynamicResource icon+brush (theme-aware) via triggers. -->
         <DataTemplate DataType="{x:Type vm:HistoryRowViewModel}">
             <Grid Margin="{DynamicResource SA.Gap.Bottom1}">
                 <Grid.ColumnDefinitions>
@@ -43,9 +53,9 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <ds:IconPresenter Grid.Column="0" Width="14" Height="14"
-                                  Data="{Binding StatusIconKey, Converter={StaticResource Key2Geo}}"
-                                  Foreground="{Binding StatusBrushKey, Converter={StaticResource Key2Brush}}"/>
+                <ds:IconPresenter x:Name="StatusIcon" Grid.Column="0" Width="14" Height="14"
+                                  Data="{DynamicResource SA.Icon.Check}"
+                                  Foreground="{DynamicResource SA.Brush.Status.Success}"/>
                 <TextBlock Grid.Column="1" Text="{Binding Order}" Style="{StaticResource SA.Text.Micro}"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2" Text="{Binding Operation}" VerticalAlignment="Center"
@@ -53,6 +63,16 @@
                 <TextBlock Grid.Column="3" Text="{Binding Parameters}" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Style="{StaticResource SA.Text.Caption}"/>
             </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="Running">
+                    <Setter TargetName="StatusIcon" Property="Data" Value="{DynamicResource SA.Icon.Refresh}"/>
+                    <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource SA.Brush.Accent.OnSurface}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Failed">
+                    <Setter TargetName="StatusIcon" Property="Data" Value="{DynamicResource SA.Icon.Error}"/>
+                    <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource SA.Brush.Status.Error}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
     </Window.Resources>
 

@@ -43,11 +43,15 @@ public sealed class ShellViewModel : ObservableObject
         ToggleThemeCommand = new RelayCommand(ToggleTheme);
         SaveCommand = new RelayCommand(() => { }, () => false); // stub — persistence UI is a later task (P01)
 
-        _workspace.DatasetsChanged += (_, _) => Rebuild();
-        _workspace.ActiveContextChanged += (_, _) => Rebuild();
+        // Topology changes (datasets added/removed) rebuild the tree; an active/comparison change only
+        // refreshes existing nodes' state — so selection + expansion in the TreeView are preserved.
+        _workspace.DatasetsChanged += (_, _) => RebuildTopology();
+        _workspace.ActiveContextChanged += (_, _) => RefreshActiveState();
         _theme.ThemeChanged += (_, _) => OnPropertyChanged(nameof(ThemeToggleLabel));
-        Rebuild();
+        RebuildTopology();
     }
+
+    private readonly Dictionary<DatasetId, DatasetNodeViewModel> _nodesById = new();
 
     /// <summary>Path to the bundled sample scan (set by the composition root / render harness).</summary>
     public string? SamplePath { get; set; }
@@ -161,8 +165,10 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(HasStatus));
     }
 
-    private void Rebuild()
+    // Topology: datasets added/removed. Rebuilds the node tree (and the id->node index used by refresh).
+    private void RebuildTopology()
     {
+        _nodesById.Clear();
         ExplorerNodes.Clear();
         foreach (var rootId in _workspace.Roots)
         {
@@ -171,8 +177,20 @@ public sealed class ShellViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasWorkspace));
+        RefreshActiveState();
+    }
 
+    // Active/comparison changed only: update existing nodes in place + the active header + history.
+    // No node objects are replaced, so TreeView selection and expansion survive an active change.
+    private void RefreshActiveState()
+    {
         var active = _workspace.Active;
+        foreach (var (id, node) in _nodesById)
+        {
+            node.IsActive = active.ActiveId == id;
+            node.IsInComparison = active.Comparison.Contains(id);
+        }
+
         if (active.ActiveId is { } activeId && _workspace.TryGet(activeId, out var dataset))
         {
             ActiveTitle = DatasetLabel(dataset);
@@ -198,6 +216,7 @@ public sealed class ShellViewModel : ObservableObject
             IsActive = _workspace.Active.ActiveId == id,
             IsInComparison = _workspace.Active.Comparison.Contains(id),
         };
+        _nodesById[id] = node;
         foreach (var childId in _workspace.ChildrenOf(id))
         {
             node.Children.Add(BuildNode(childId));
@@ -212,14 +231,14 @@ public sealed class ShellViewModel : ObservableObject
         if (dataset.Provenance.IsRoot)
         {
             var file = dataset.Source.OriginalFilePath is { } p ? Path.GetFileName(p) : dataset.Source.FormatId;
-            HistoryRows.Add(new HistoryRowViewModel(1, "Import", file, "SA.Icon.Check", "SA.Brush.Status.Success"));
+            HistoryRows.Add(new HistoryRowViewModel(1, "Import", file, HistoryStatus.Done));
             return;
         }
 
         var order = 1;
         foreach (var step in dataset.Provenance.Steps)
         {
-            HistoryRows.Add(new HistoryRowViewModel(order++, FriendlyOp(step.OperationId), step.OperationId, "SA.Icon.Check", "SA.Brush.Status.Success"));
+            HistoryRows.Add(new HistoryRowViewModel(order++, FriendlyOp(step.OperationId), step.OperationId, HistoryStatus.Done));
         }
     }
 
