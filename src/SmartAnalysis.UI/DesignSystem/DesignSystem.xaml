@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Design-system entry dictionary. Merges the full stack in load order (doc 21 §7):
+            Tokens -> active color palette -> ControlStyles -> ComponentStyles -> external adapter.
+
+        The palette merged here is LIGHT by default (self-sufficient at design-time and as a fallback).
+        At RUNTIME, ThemeManager swaps this palette entry for Light/DarkColors with identical keys, so
+        every DynamicResource consumer re-binds live. Consume this via App.xaml; drive theme via ThemeManager.
+    -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Tokens.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Palettes/LightColors.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Controls/ControlStyles.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Components/ComponentStyles.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Adapters/ExternalControlStyles.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

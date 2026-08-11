@@ -52,6 +52,33 @@ Intentionally different. No numeric parity.
 doc 21 (final key names), backlog status → `review` on PR (user merge → `done`), INDEX; ADR if the
 resource structure deviates from doc 21.
 
+## Implementation status (this PR)
+Implemented in `src/SmartAnalysis.UI/DesignSystem/`:
+- **Palettes** `LightColors.xaml` / `DarkColors.xaml` — every doc-23 semantic + chart/image + status-banner
+  token as `SA.Color.*` + `SA.Brush.*`, **identical keys** (test-enforced). Light Error-banner fg uses the
+  AA-fixed `#B91C1C`.
+- **Tokens.xaml** — typography/spacing/sizing/radius/border/motion (theme-independent).
+- **Controls/ControlStyles.xaml** — Base→Variant: Button (Primary/Secondary/Danger/Icon/Toolbar), Toggle
+  (+Segmented), TextBox, CheckBox, ListBox/Item, TreeView/Item, TabControl/Item, ProgressBar, ToolTip,
+  Separator (full token-driven templates); ComboBox/RadioButton/Slider/Expander/Menu/ContextMenu/DataGrid
+  (token base setters, extensible).
+- **Components/ComponentStyles.xaml** — typography roles (`SA.Text.*`), Card, Toolbar, Divider, ActiveChip,
+  status banners.
+- **Theming** — `ThemeManager` runtime palette swap (identical keys, `DynamicResource`), `AppTheme`
+  (Light/Dark/System), `ThemePreferenceStore` (`%APPDATA%/SmartAnalysis/ui-settings.json`), OS-theme read +
+  `ReapplyIfFollowingSystem()` hook (live subscription attaches at U01).
+- **Adapters/ExternalControlStyles.xaml** — the AvalonDock/ScottPlot restyle location (placeholder).
+- **App wiring** — `App.xaml` merges `DesignSystem.xaml`; `App.xaml.cs` initializes `ThemeManager`.
+- **Validation** — `DesignSystemStyleTests` (4): Light/Dark key parity, no raw hex outside `Palettes/`,
+  brush-reference integrity, Error-banner AA tone. Full suite **270 pass**; solution builds; app-startup
+  smoke exits 0 (pack URIs + palette swap load without throwing).
+
+Key convention: namespaced **`SA.`** dotted keys. **No** external application theme; no MVVM toolkit
+introduced (deferred to U01); registry read needs no extra package on `net8.0-windows`.
+
 ## Open / unverified
-- MVVM toolkit (CommunityToolkit.Mvvm) is a **Candidate** — needs an ADR before use (doc 20).
-- Whether a separate `Visualization.Wpf` project is split now or later (ADR-007 trigger).
+- Visual both-theme **render** is confirmed at **U01** (needs a shell window); here it is build + key-parity
+  + startup smoke. Live OS-theme subscription attaches at U01 (HWND).
+- MVVM toolkit (CommunityToolkit.Mvvm) is a **Candidate** — needs an ADR before use (doc 20); not used here.
+- Whether a separate `Visualization.Wpf` project is split now or later (ADR-007 trigger) — not triggered here.
+- Remaining stock-control full templates (ComboBox/DataGrid/etc.) grow as screens need them (extensible).
