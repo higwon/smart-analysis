@@ -165,9 +165,20 @@ Decisions realized (UIX03):
 - **Key naming / collision-avoidance:** all keys are namespaced **`SA.`** with dotted paths —
   `SA.Color.*` (raw), `SA.Brush.*` (consumed), `SA.Font.*`/`SA.Space.*`/`SA.Size.*`/`SA.Radius.*`/
   `SA.Stroke.*`/`SA.Duration.*` (metrics), `SA.Button.*`/`SA.Text.*`/`SA.Card`/`SA.Banner.*` (styles).
-- **No-hardcoded-values** is enforced by `DesignSystemStyleTests` (raw hex only under `Palettes/`; key
-  parity; brush-reference integrity). MVP-used controls have full token-driven templates; the rest carry
-  token-driven base setters and grow templates as screens need them (extensible).
+- **No-hardcoded-values (scoped policy):** raw hex lives **only** under `Palettes/`; **screen/view XAML**
+  (everything in `SmartAnalysis.UI` outside `DesignSystem/`) must use `SA.*` tokens for hex **and** the
+  design metrics FontSize/Margin/Padding/CornerRadius/BorderThickness. **ControlTemplate implementation
+  geometry** inside `DesignSystem/Controls` (glyph box size, focus offset, state layers, tree indent) may
+  be literal — it is template mechanics, not screen design; recurring design metrics still use tokens.
+  Enforced by `DesignSystemStyleTests`: raw-hex-outside-Palettes, **screen-level metric+hex lint**,
+  Light/Dark key parity, brush-reference integrity, Error-banner AA tone.
+- **Variant styling without template duplication:** one shared `SA.Template.Button`; each variant injects
+  its hover/pressed fills via the `ButtonChrome` attached properties (state layers bind to them), so e.g.
+  **Danger darkens (never turns blue) on hover** and new variants add no template copies. Destructive
+  fills use a dedicated `SA.Brush.Control.Danger*` set (not the light-red `Status.Error` text token) so
+  white text stays AA on the fill in both themes.
+- MVP-used controls have full token-driven templates; the rest carry token-driven base setters and grow
+  templates as screens need them (extensible).
 
 ## 8. Per-screen-area design rules (also referenced by doc 17 / UX01)
 

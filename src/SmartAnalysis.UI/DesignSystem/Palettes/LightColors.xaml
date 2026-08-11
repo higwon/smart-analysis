@@ -45,6 +45,12 @@
     <Color x:Key="SA.Color.Status.Warning">#FFB45309</Color>
     <Color x:Key="SA.Color.Status.Error">#FFDC2626</Color>
     <Color x:Key="SA.Color.Status.Info">#FF2563EB</Color>
+    <!-- Danger CONTROL fill states (destructive buttons). Distinct from the Status.Error TEXT token:
+         white text must stay AA on the fill in BOTH themes, so these are identical across Light/Dark
+         (~4.5:1 / ~5.3:1 / ~6.8:1 for #FFFFFF). Reusing the light-red Dark Status.Error as a fill fails. -->
+    <Color x:Key="SA.Color.Control.Danger">#FFDC2626</Color>
+    <Color x:Key="SA.Color.Control.DangerHover">#FFB91C1C</Color>
+    <Color x:Key="SA.Color.Control.DangerPressed">#FF991B1B</Color>
     <!-- ===== Status inline banners (fg/bg pairs; Error fg is the AA-fixed #B91C1C on tint) ===== -->
     <Color x:Key="SA.Color.Banner.Success.Foreground">#FF15803D</Color>
     <Color x:Key="SA.Color.Banner.Success.Background">#FFDCFCE7</Color>
@@ -97,6 +103,9 @@
     <SolidColorBrush x:Key="SA.Brush.Status.Warning" Color="{StaticResource SA.Color.Status.Warning}"/>
     <SolidColorBrush x:Key="SA.Brush.Status.Error" Color="{StaticResource SA.Color.Status.Error}"/>
     <SolidColorBrush x:Key="SA.Brush.Status.Info" Color="{StaticResource SA.Color.Status.Info}"/>
+    <SolidColorBrush x:Key="SA.Brush.Control.Danger" Color="{StaticResource SA.Color.Control.Danger}"/>
+    <SolidColorBrush x:Key="SA.Brush.Control.DangerHover" Color="{StaticResource SA.Color.Control.DangerHover}"/>
+    <SolidColorBrush x:Key="SA.Brush.Control.DangerPressed" Color="{StaticResource SA.Color.Control.DangerPressed}"/>
     <SolidColorBrush x:Key="SA.Brush.Banner.Success.Foreground" Color="{StaticResource SA.Color.Banner.Success.Foreground}"/>
     <SolidColorBrush x:Key="SA.Brush.Banner.Success.Background" Color="{StaticResource SA.Color.Banner.Success.Background}"/>
     <SolidColorBrush x:Key="SA.Brush.Banner.Warning.Foreground" Color="{StaticResource SA.Color.Banner.Warning.Foreground}"/>

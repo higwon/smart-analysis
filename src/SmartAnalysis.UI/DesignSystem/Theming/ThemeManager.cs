@@ -46,6 +46,13 @@ public sealed class ThemeManager
     /// <summary>Sets the preference, resolves the effective appearance, swaps the palette, and persists.</summary>
     public void Apply(AppTheme preference, bool persist = true)
     {
+        // Apply is public API: normalize any undefined value (e.g. an out-of-range cast) to System so
+        // Preference never holds a value the reapply/compare logic can't reason about.
+        if (!Enum.IsDefined(preference))
+        {
+            preference = AppTheme.System;
+        }
+
         Preference = preference;
         var effective = ResolveEffective(preference);
         SwapPalette(effective);

@@ -43,6 +43,8 @@
     <Thickness x:Key="SA.Pad.Button">14,0,14,0</Thickness>
     <Thickness x:Key="SA.Pad.Section">12</Thickness>
     <Thickness x:Key="SA.Pad.Panel">16</Thickness>
+    <Thickness x:Key="SA.Pad.Chip">10,0,10,0</Thickness>
+    <Thickness x:Key="SA.Pad.Banner">12,8,12,8</Thickness>
 
     <!-- ===== Sizing ===== -->
     <sys:Double x:Key="SA.Size.Control.Sm">24</sys:Double>
@@ -55,12 +57,14 @@
     <sys:Double x:Key="SA.Size.Icon.Sm">14</sys:Double>
     <sys:Double x:Key="SA.Size.Icon.Md">16</sys:Double>
     <sys:Double x:Key="SA.Size.Icon.Lg">20</sys:Double>
+    <sys:Double x:Key="SA.Size.Chip">22</sys:Double>
 
     <!-- ===== Radius ===== -->
     <CornerRadius x:Key="SA.Radius.None">0</CornerRadius>
     <CornerRadius x:Key="SA.Radius.Sm">2</CornerRadius>
     <CornerRadius x:Key="SA.Radius.Md">4</CornerRadius>
     <CornerRadius x:Key="SA.Radius.Lg">6</CornerRadius>
+    <CornerRadius x:Key="SA.Radius.Pill">11</CornerRadius>
 
     <!-- ===== Border thickness ===== -->
     <Thickness x:Key="SA.Stroke.Hairline">1</Thickness>

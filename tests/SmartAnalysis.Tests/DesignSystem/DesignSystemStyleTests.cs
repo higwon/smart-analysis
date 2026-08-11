@@ -13,7 +13,7 @@ public sealed class DesignSystemStyleTests
 {
     private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-    private static string DesignSystemDir()
+    private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "SmartAnalysis.sln")))
@@ -22,8 +22,11 @@ public sealed class DesignSystemStyleTests
         }
 
         Assert.True(dir is not null, "Could not locate repo root (SmartAnalysis.sln).");
-        return Path.Combine(dir!.FullName, "src", "SmartAnalysis.UI", "DesignSystem");
+        return dir!.FullName;
     }
+
+    private static string UiProjectDir() => Path.Combine(RepoRoot(), "src", "SmartAnalysis.UI");
+    private static string DesignSystemDir() => Path.Combine(UiProjectDir(), "DesignSystem");
 
     private static string LightPath() => Path.Combine(DesignSystemDir(), "Palettes", "LightColors.xaml");
     private static string DarkPath() => Path.Combine(DesignSystemDir(), "Palettes", "DarkColors.xaml");
@@ -108,6 +111,50 @@ public sealed class DesignSystemStyleTests
 
         Assert.True(offenders.Count == 0,
             "Raw hex colors are only allowed in Palettes/. Offenders:\n" + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void Screen_xaml_uses_tokens_not_ad_hoc_metrics_or_hex()
+    {
+        // The no-hardcoded-values rule at the SCREEN/view level (doc 21 §6, the reviewer's split):
+        // view XAML (everything in SmartAnalysis.UI OUTSIDE DesignSystem/) must not hard-code hex or the
+        // design metrics FontSize/Margin/Padding/CornerRadius/BorderThickness — they use SA.* tokens.
+        // ControlTemplate implementation geometry inside DesignSystem/ is intentionally exempt (that is
+        // template mechanics, not screen design). No screens exist yet, so this actively guards U01/U02.
+        var metricAttrs = new HashSet<string> { "FontSize", "Margin", "Padding", "CornerRadius", "BorderThickness" };
+        var hex = new Regex(@"#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{3})\b");
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(UiProjectDir(), "*.xaml", SearchOption.AllDirectories))
+        {
+            if (file.Replace('\\', '/').Contains("/DesignSystem/"))
+            {
+                continue; // the design system itself defines the tokens / template geometry
+            }
+
+            var doc = XDocument.Load(file);
+            foreach (var element in doc.Descendants())
+            {
+                foreach (var attr in element.Attributes())
+                {
+                    var value = attr.Value.Trim();
+                    var isResourceRef = value.StartsWith('{'); // {StaticResource ...} / {DynamicResource ...}
+
+                    if (metricAttrs.Contains(attr.Name.LocalName) && !isResourceRef && value != "0")
+                    {
+                        offenders.Add($"{Path.GetFileName(file)}: {attr.Name.LocalName}=\"{value}\" (use an SA.* token)");
+                    }
+
+                    if (hex.IsMatch(value))
+                    {
+                        offenders.Add($"{Path.GetFileName(file)}: {attr.Name.LocalName}=\"{value}\" (hex — use an SA.Brush.* token)");
+                    }
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Screen/view XAML must use design tokens, not ad-hoc metrics/hex. Offenders:\n" + string.Join("\n", offenders));
     }
 
     [Fact]

@@ -38,7 +38,11 @@ public sealed class ThemePreferenceStore
 
             using var stream = File.OpenRead(_path);
             var dto = JsonSerializer.Deserialize<PreferenceDto>(stream);
-            return dto is not null && Enum.TryParse<AppTheme>(dto.Theme, ignoreCase: true, out var theme)
+            // Enum.TryParse also succeeds for numeric strings like "999" (→ an undefined enum value), so a
+            // corrupt settings file could otherwise inject an out-of-range AppTheme. Require a DEFINED value.
+            return dto is not null
+                   && Enum.TryParse<AppTheme>(dto.Theme, ignoreCase: true, out var theme)
+                   && Enum.IsDefined(theme)
                 ? theme
                 : AppTheme.System;
         }

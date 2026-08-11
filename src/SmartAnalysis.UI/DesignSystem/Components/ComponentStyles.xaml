@@ -86,9 +86,9 @@
     <!-- Active-context chip (command bar pill) -->
     <Style x:Key="SA.ActiveChip" TargetType="{x:Type Border}">
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Selected}"/>
-        <Setter Property="CornerRadius" Value="11"/>
-        <Setter Property="Height" Value="22"/>
-        <Setter Property="Padding" Value="10,0,10,0"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Pill}"/>
+        <Setter Property="Height" Value="{DynamicResource SA.Size.Chip}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Chip}"/>
     </Style>
 
     <!-- ===================== Status banners (fg+bg pairs; pair with an icon in the view) ===================== -->
@@ -96,24 +96,24 @@
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Success.Background}"/>
         <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Success.Foreground}"/>
         <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
-        <Setter Property="Padding" Value="12,8,12,8"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
     </Style>
     <Style x:Key="SA.Banner.Warning" TargetType="{x:Type Border}">
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Warning.Background}"/>
         <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Warning.Foreground}"/>
         <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
-        <Setter Property="Padding" Value="12,8,12,8"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
     </Style>
     <Style x:Key="SA.Banner.Error" TargetType="{x:Type Border}">
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Error.Background}"/>
         <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Error.Foreground}"/>
         <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
-        <Setter Property="Padding" Value="12,8,12,8"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
     </Style>
     <Style x:Key="SA.Banner.Info" TargetType="{x:Type Border}">
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Banner.Info.Background}"/>
         <Setter Property="TextElement.Foreground" Value="{DynamicResource SA.Brush.Banner.Info.Foreground}"/>
         <Setter Property="CornerRadius" Value="{DynamicResource SA.Radius.Md}"/>
-        <Setter Property="Padding" Value="12,8,12,8"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Banner}"/>
     </Style>
 </ResourceDictionary>
