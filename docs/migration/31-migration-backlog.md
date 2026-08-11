@@ -57,7 +57,7 @@ Prio · MVP · Status**.
 |---|---|---|---|---|---|---|---|
 | A01 | Flatten (whole/line/surface) op | F04, FF01 | `Whole/Line/SurfaceFlattenProcess` + regressions (A/C) | Reuse numeric, drop WPF Point; **MVP uses full-image region (no ROI)** | P0 | ✅ | review (full-image; fit primitives golden-verified; orchestration golden T02 deferred) |
 | A02 | Summary statistics + histogram op | F04 | `SummaryStatisticsCalculator` (A) | Reuse | P0 | ✅ | review |
-| A03 | Roughness (ISO 25178) op | F04 | `RoughnessCalculator` (B) | Reuse (decouple) | P1 | – | planned |
+| A03 | Roughness (ISO 25178) op | F04 | `RoughnessCalculator` (B) | Clean-room (reuse MV00 golden core) | P1 | ✅ | review (`image.roughness` — parameterless areal height parameters **Sa/Sq/Sp/Sv/Sz/Ssk/Sku** relative to the mean plane; numeric core is the MV00-golden `SummaryStatistics` (Sp=max−mean, Sv=mean−min, Sz=peak-to-peak) so parameters are golden by construction; artifact attached to source; 6 tests incl. ISO identity Sz=Sp+Sv + launcher end-to-end. **Surfaces in the launcher + opens the generic form with no shell/UI edits** — the U08 payoff, render-verified) |
 | A04 | Spatial filters op (11 kernels) | F04 | `ImageFilterProcess`/`ConvolutionFilter` (A/B) | Reuse | P1 | – | planned |
 | A05 | Fourier filter / FFT op | F04 | `Image2DFourierFilter` (A) | Reuse | P1 | – | planned |
 | A06 | Deglitch op (point/line/region) | F04, D02 | `DeglitchProcess` (C) | Extract numeric core | P1 | – | planned |
