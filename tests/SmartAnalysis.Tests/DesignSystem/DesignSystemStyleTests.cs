@@ -171,10 +171,22 @@ public sealed class DesignSystemStyleTests
         var iconKeys = doc.Root!.Elements()
             .Select(e => (string?)e.Attribute(X + "Key"))
             .Where(k => k is not null)
-            .ToArray();
+            .Select(k => k!)
+            .ToHashSet();
 
-        Assert.True(iconKeys.Length >= 20, $"Expected the MVP icon set (>=20); found {iconKeys.Length}.");
-        Assert.All(iconKeys, k => Assert.StartsWith("SA.Icon.", k));
+        // Exact-set contract for the MVP icons: a dropped/renamed/extra icon fails, not just a size change.
+        var expected = new HashSet<string>
+        {
+            "SA.Icon.Assistant", "SA.Icon.Check", "SA.Icon.ChevronDown", "SA.Icon.ChevronRight",
+            "SA.Icon.Circle", "SA.Icon.Close", "SA.Icon.Colormap", "SA.Icon.Compare", "SA.Icon.Cursor",
+            "SA.Icon.Dataset", "SA.Icon.Dot", "SA.Icon.Error", "SA.Icon.FolderOpen", "SA.Icon.Import",
+            "SA.Icon.Parameters", "SA.Icon.Refresh", "SA.Icon.Save", "SA.Icon.Scalebar",
+            "SA.Icon.Statistics", "SA.Icon.Theme", "SA.Icon.Warning", "SA.Icon.ZoomFit",
+        };
+        var missing = expected.Except(iconKeys).OrderBy(k => k).ToArray();
+        var unexpected = iconKeys.Except(expected).OrderBy(k => k).ToArray();
+        Assert.True(missing.Length == 0 && unexpected.Length == 0,
+            $"MVP icon set changed.\nMissing: {string.Join(", ", missing)}\nUnexpected: {string.Join(", ", unexpected)}");
 
         var empties = doc.Descendants()
             .Where(e => e.Name.LocalName == "PathGeometry")
@@ -187,10 +199,14 @@ public sealed class DesignSystemStyleTests
     [Fact]
     public void Lucide_license_notice_is_retained()
     {
-        // ISC requires the copyright notice to travel with the vendored icons.
+        // ISC (Lucide) + MIT (Feather-derived icons) notices must travel with the vendored icons — assert
+        // the substantive permission text, not just the acronym, so a truncated/stubbed file fails.
         var license = Path.Combine(DesignSystemDir(), "Icons", "LUCIDE-LICENSE.txt");
-        Assert.True(File.Exists(license), "Icons/LUCIDE-LICENSE.txt (ISC notice) must be committed with the vendored icons.");
-        Assert.Contains("ISC", File.ReadAllText(license));
+        Assert.True(File.Exists(license), "Icons/LUCIDE-LICENSE.txt must be committed with the vendored icons.");
+        var text = File.ReadAllText(license);
+        Assert.Contains("ISC License", text);
+        Assert.Contains("Permission to use, copy, modify", text); // ISC grant body
+        Assert.Contains("MIT License", text);                     // Feather-derived icons
     }
 
     [Fact]
