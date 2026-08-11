@@ -45,7 +45,8 @@ the feature inventory (doc 30) under keep/improve/merge/drop.
     (Light + Dark) are proposed in [`23-design-tokens.md`](23-design-tokens.md) (UIX01).
 11. **Visual design precedes UI code.** The IA (UX01) and the design system + approved MVP visuals
     (UIX01 → UIX02 → user approval → UIX03) are settled **before** U01/U02; the UI realizes an
-    approved design, never invents one (doc 21 §9, doc 32).
+    approved design, never invents one (doc 21 §9, doc 32). The high-fidelity MVP screens are in
+    [`24-mvp-visual-design.md`](24-mvp-visual-design.md) (UIX02, the approval gate).
 
 ## Keep / Improve / Merge / Remove (lens applied per feature in doc 30)
 
