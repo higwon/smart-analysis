@@ -158,6 +158,42 @@ public sealed class DesignSystemStyleTests
     }
 
     [Fact]
+    public void Icon_geometries_are_present_and_non_empty()
+    {
+        // UIX04: every SA.Icon.* is a PathGeometry (Figures) or a GeometryGroup of PathGeometry, each with
+        // non-empty Figures. Guards an accidental empty/malformed conversion and keeps the set from silently
+        // shrinking. (Visual correctness is checked by rendering a sheet; the split-per-primitive invariant
+        // lives in the converter, tools/icon-import.)
+        var iconsPath = Path.Combine(DesignSystemDir(), "Icons", "Icons.xaml");
+        Assert.True(File.Exists(iconsPath), "Icons.xaml is missing.");
+
+        var doc = XDocument.Load(iconsPath);
+        var iconKeys = doc.Root!.Elements()
+            .Select(e => (string?)e.Attribute(X + "Key"))
+            .Where(k => k is not null)
+            .ToArray();
+
+        Assert.True(iconKeys.Length >= 20, $"Expected the MVP icon set (>=20); found {iconKeys.Length}.");
+        Assert.All(iconKeys, k => Assert.StartsWith("SA.Icon.", k));
+
+        var empties = doc.Descendants()
+            .Where(e => e.Name.LocalName == "PathGeometry")
+            .Where(e => string.IsNullOrWhiteSpace((string?)e.Attribute("Figures")))
+            .Select(e => (string?)e.Parent?.Attribute(X + "Key") ?? "(inline)")
+            .ToArray();
+        Assert.True(empties.Length == 0, "PathGeometry with empty Figures: " + string.Join(", ", empties));
+    }
+
+    [Fact]
+    public void Lucide_license_notice_is_retained()
+    {
+        // ISC requires the copyright notice to travel with the vendored icons.
+        var license = Path.Combine(DesignSystemDir(), "Icons", "LUCIDE-LICENSE.txt");
+        Assert.True(File.Exists(license), "Icons/LUCIDE-LICENSE.txt (ISC notice) must be committed with the vendored icons.");
+        Assert.Contains("ISC", File.ReadAllText(license));
+    }
+
+    [Fact]
     public void Every_referenced_brush_token_exists_in_the_palette()
     {
         // Guards typos: each SA.Brush.* referenced by Controls/Components must be a real palette key.
