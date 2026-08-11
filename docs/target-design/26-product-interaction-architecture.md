@@ -382,7 +382,31 @@ Active View always wins layout priority; nothing pushes the data below the fold.
 The rework is **composition + a handful of new controls**, reusing every kept contract and token. No task
 below the UI changes.
 
-## 20. Approval mapping
+## 20. Implementation polish notes (UX02 review)
+
+Direction approved; these are the "concept → shipping product" refinements to carry into the WPF
+implementation (and partly already tightened in the artifact). **Binding guidance for U02-rework:**
+
+1. **Remove placeholder-feeling symbols.** No decorative/large chevrons on rail headers; a disclosure caret
+   appears only where something actually collapses (the provenance strip). Icons earn their place.
+2. **Dataset properties = hierarchy, not a table.** No per-row rules. A **primary block** (dimensions ·
+   size · channel) reads first (higher contrast, slightly larger); **acquisition metadata** (format · unit
+   · instrument · date) is a quieter grouped block separated by a caps section-label + spacing + tone.
+   Tighten row density. Never a WinForms property-grid.
+3. **Compare toolbar in three clusters.** Left = mode switch (Split/Overlay/Difference); center = state
+   indicator (Synced-nav · "Same X/Y · Independent Z"); right = mode actions (Exit · Keep). Dividers/spacing
+   separate the clusters so no single row carries five unrelated roles.
+4. **Light theme needs deliberate depth.** Dark comes easily; Light must not go flat. Lean on **surface
+   tone steps + soft elevation on the Stage** (rails read recessed), minimal borders, a clear active/selected
+   treatment, and viewer depth. Verify Light separately at implementation, not as an inverted Dark.
+5. **Viewer chrome: four relationships to resolve.** Compose *dataset title/meta ↔ tool affordances ↔
+   legend ↔ canvas* deliberately: context as a calm left cluster, tools as a divided right cluster (navigate
+   | output), the legend visually tied to the canvas. The AFM image stays the loudest thing; chrome recedes.
+
+These are **polish, not architecture** — the region model, command taxonomy, and contracts above are
+unchanged. They are gating criteria for the *visual* acceptance of the reworked U02, not for this design gate.
+
+## 21. Approval mapping
 
 The artifact + this doc are built to answer the §27 approval questions YES: Stage-first hierarchy (Q13),
 premium non-WPF look in both themes (Q9–12,15), launcher-based command scaling (Q3,6,7), clear Inspector
