@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
+using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
@@ -30,13 +31,18 @@ public sealed class ShellViewModel : ObservableObject
     private string? _activeTitle;
     private string? _activeSubtitle;
     private string? _activeMeta;
+    private ScanImageDataset? _activeImage;
+    private ScanImageDataset? _beforeImage;
 
-    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker)
+    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _picker = picker ?? throw new ArgumentNullException(nameof(picker));
+        ArgumentNullException.ThrowIfNull(imageAnalysis);
+
+        FlattenPanel = new FlattenPanelViewModel(imageAnalysis, () => _workspace.Active.ActiveId);
 
         ImportCommand = new AsyncRelayCommand(ImportAsync, onError: OnCommandError);
         OpenSampleCommand = new AsyncRelayCommand(OpenSampleAsync, () => SamplePath is not null, OnCommandError);
@@ -98,6 +104,27 @@ public sealed class ShellViewModel : ObservableObject
     public string? ActiveTitle { get => _activeTitle; private set { if (SetProperty(ref _activeTitle, value)) OnPropertyChanged(nameof(HasActive)); } }
     public string? ActiveSubtitle { get => _activeSubtitle; private set => SetProperty(ref _activeSubtitle, value); }
     public string? ActiveMeta { get => _activeMeta; private set => SetProperty(ref _activeMeta, value); }
+
+    /// <summary>The contextual Flatten parameter panel (shown when the active dataset is an image).</summary>
+    public FlattenPanelViewModel FlattenPanel { get; }
+
+    /// <summary>The active dataset when it is a 2D scan image (drives the viewer); null otherwise.</summary>
+    public ScanImageDataset? ActiveImage { get => _activeImage; private set => SetProperty(ref _activeImage, value); }
+
+    /// <summary>The comparison "before" image (the source) when in Before/After; null otherwise.</summary>
+    public ScanImageDataset? BeforeImage { get => _beforeImage; private set => SetProperty(ref _beforeImage, value); }
+
+    public bool HasActiveImage => _activeImage is not null;
+    public bool IsBeforeAfter => _activeImage is not null && _beforeImage is not null;
+    public bool IsSingleImage => _activeImage is not null && _beforeImage is null;
+
+    /// <summary>
+    /// Raised when the images to display change. The <b>view</b> handles rendering: it builds a fresh
+    /// <c>ImageRenderInput</c> from <see cref="ActiveImage"/>/<see cref="BeforeImage"/> and calls
+    /// <c>AfmImageView.Render(...)</c> — the render input (which borrows the dataset buffer) is never held
+    /// by the view-model (ADR-011 / V02 lifetime contract).
+    /// </summary>
+    public event EventHandler? ImagesChanged;
 
     public string ThemeToggleLabel => _theme.EffectiveTheme == AppTheme.Dark ? "Light" : "Dark";
 
@@ -197,6 +224,8 @@ public sealed class ShellViewModel : ObservableObject
             ActiveContextText = $"Active ▸ {ActiveTitle}";
             (ActiveSubtitle, ActiveMeta) = Describe(dataset);
             BuildHistory(dataset);
+            ActiveImage = dataset as ScanImageDataset;
+            BeforeImage = FirstComparisonImage(active);
         }
         else
         {
@@ -205,7 +234,28 @@ public sealed class ShellViewModel : ObservableObject
             ActiveSubtitle = null;
             ActiveMeta = null;
             HistoryRows.Clear();
+            ActiveImage = null;
+            BeforeImage = null;
         }
+
+        OnPropertyChanged(nameof(HasActiveImage));
+        OnPropertyChanged(nameof(IsBeforeAfter));
+        OnPropertyChanged(nameof(IsSingleImage));
+        ImagesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // The first comparison-set member that is an image in the workspace (the Before of Before/After).
+    private ScanImageDataset? FirstComparisonImage(ActiveContext active)
+    {
+        foreach (var id in active.Comparison)
+        {
+            if (_workspace.TryGet(id, out var d) && d is ScanImageDataset image)
+            {
+                return image;
+            }
+        }
+
+        return null;
     }
 
     private DatasetNodeViewModel BuildNode(DatasetId id)

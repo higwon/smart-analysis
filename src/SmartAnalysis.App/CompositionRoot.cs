@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.Services;
@@ -30,6 +31,9 @@ public static class CompositionRoot
         // Analysis operations (explicit per-module registration, ADR-005) + the registry over them.
         services.AddImageAnalysis();    // Statistics + Flatten (+ IExecutionEnvironmentProvider)
         services.AddOperationRegistry();
+
+        // Application use cases the UI drives (doc 11: UI → Application, not Analysis).
+        services.AddSingleton<IImageAnalysisUseCase, ImageAnalysisUseCase>();
 
         // UI: one workspace session, the theme controller, and the shell (U01).
         services.AddSingleton<Workspace>();

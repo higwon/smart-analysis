@@ -116,7 +116,7 @@ Prio · MVP · Status**.
 | ID | Task | Depends | Legacy | Reuse/rewrite | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|
 | U01 | Shell (five-region; first-party styled) + workspace explorer | F02, W01, UX01, **UIX03 (visual design approved, ADR-008)** | DevExpress shell | Rewrite | P0 | ✅ | review (MainWindow + ShellViewModel over the real Workspace; SA.*/SA.Icon.* only; Import/sample via IScanFileReader; theme toggle; L/D render verified. **Fixed-Grid layout — AvalonDock docking deferred to a follow-up + its ADR**; lightweight in-house MVVM) |
-| U02 | Image analysis page + flatten panel (before/after) | U01, V02, A01 | ImageAnalysis + ImageProcess | Rewrite | P0 | ✅ | planned |
+| U02 | Image analysis page + flatten panel (before/after) | U01, V02, A01 | ImageAnalysis + ImageProcess | Rewrite | P0 | ✅ | review (AfmImageView in Active View via render-orchestration; contextual 4-param Flatten panel → `IImageAnalysisUseCase` (Application, so UI ⊄ Analysis) → derived active + Before/After split; use-case unit-tested; L render verified) |
 | U03 | Operation parameter panel framework | U01, F04 | process dialogs | Rewrite (registry-driven) | P1 | – | planned |
 | U04 | **Profile analysis UI** (split from old curve/spectrum umbrella → U06, U07) | U01, V03, A10 | Profile pages | Rewrite | P2 | – | planned |
 | U05 | Provenance/history panel | U01, F05 | (none visible) | New | P1 | – | planned |
