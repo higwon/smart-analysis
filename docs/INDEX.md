@@ -81,6 +81,7 @@ coverage, method, and gaps.
 | [19-testing-and-validation](target-design/19-testing-and-validation.md) | Legacy-vs-new comparison & numeric verification strategy |
 | [20-library-policy](target-design/20-library-policy.md) | License rules + OSS replacements + Forbidden/Approved/Candidate + no-external-theme |
 | [21-design-system](target-design/21-design-system.md) | First-party WPF design system: tokens, control styles, resource structure, simple-modern + per-screen rules |
+| [22-information-architecture](target-design/22-information-architecture.md) | UX01 IA: shell regions, single active context, journeys, before/after & comparison, parameter-panel behaviour, MVP flow, low-fi wireframes, keep/merge/remove |
 
 ### `migration/` — the plan
 | Doc | Covers |
