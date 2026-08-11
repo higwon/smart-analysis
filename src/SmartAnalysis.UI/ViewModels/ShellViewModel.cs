@@ -69,7 +69,10 @@ public sealed class ShellViewModel : ObservableObject
         OpenSampleCommand = new AsyncRelayCommand(OpenSampleAsync, () => SamplePath is not null, OnCommandError);
         ToggleThemeCommand = new RelayCommand(ToggleTheme);
         SaveCommand = new RelayCommand(() => { }, () => false); // stub — persistence UI is a later task (P01)
-        ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => HasActiveImage);
+        // Enabled by the launcher's own state — whether ANY operation is applicable to the active dataset —
+        // not by the dataset being an image. So a future Profile/Spectrum operation registered in the
+        // registry opens the launcher with no shell edits (the U08 goal); an empty launcher stays disabled.
+        ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => LauncherItems.Count > 0);
         _runStatistics = new AsyncRelayCommand(RunStatisticsAsync, () => HasActiveImage, OnCommandError);
         CycleColormapCommand = new RelayCommand(CycleColormap);
         ExitCompareCommand = new RelayCommand(() => _workspace.SetComparison([]), () => IsBeforeAfter);
