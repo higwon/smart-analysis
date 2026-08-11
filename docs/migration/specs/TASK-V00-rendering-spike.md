@@ -62,6 +62,24 @@ Representative large curves/spectra + a scan image (from FF01/T01 or synthetic).
 doc 15 (record decision), doc 20 (move lib Candidate→Approved), doc 41 open-decisions (OD-2 →
 decided), INDEX, backlog status; the ADR itself.
 
+## Implementation status (this PR) — ADR-018
+The `tools/render-spike` (throwaway, not product code) verifies, with **two real backends** behind V01's
+`ICurveView`:
+- **Candidate comparison:** ScottPlot 5 vs OxyPlot render the identical AFM-scale data (100k / 1M points);
+  median-of-5 timing shows ScottPlot ~5× faster at 1M points (large-data need met).
+- **Swap test / isolation:** both backends run through the same `RenderWith(ICurveView, input)` path with
+  no downcast — a real swap, proving the adapter hides the library.
+- **Interaction API:** ScottPlot composes markers, text annotation, crosshair (cursor), right/secondary
+  axis (multi-axis), and programmatic axis limits (zoom).
+- **Decision:** ADR-018 selects ScottPlot 5, Candidate → Approved.
+
+**Acceptance reconciliation (was "demonstrate required interactions/perf on AFM-scale data"):** the
+headless spike can and does demonstrate rendering, large-data perf, the multi-backend swap, and the
+interaction/multi-axis **API**. **Live mouse zoom/pan/cursor** is a WPF-runtime behavior of the
+`ScottPlot.WPF` control and is validated when the concrete curve backend lands (**V03/U02**), not in this
+headless spike.
+
 ## Unverified / open
-- Whether to unify the whole 2D pipeline on SkiaSharp (doc 15 OPEN) — evaluate in the spike.
-- Docking library (AvalonDock) — may be a separate ADR near U01.
+- Whether to unify the whole 2D pipeline on SkiaSharp (doc 15 OPEN) — evaluate when the image+curve UI lands.
+- Docking library (AvalonDock) — a separate ADR near U01.
+- `ReadOnlyMemory→array` copy for `SignalXY`: keep or optimize — decide in V03 when the real backend is built.

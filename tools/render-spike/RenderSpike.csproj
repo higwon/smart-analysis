@@ -15,7 +15,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Both XY candidates, so the spike can compare them AND swap them behind one ICurveView. -->
     <PackageReference Include="ScottPlot" Version="5.0.55" />
+    <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
+    <PackageReference Include="OxyPlot.SkiaSharp" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>

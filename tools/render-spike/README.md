@@ -5,21 +5,28 @@ Throwaway spike behind the **V00** XY-chart-library decision (ADR-018). **Not pr
 **Candidate** library (ScottPlot 5) before the deciding ADR promotes it.
 
 ## What it shows
-- **ScottPlot 5** renders AFM-scale synthetic curves **headlessly to PNG** (SkiaSharp — no window).
-- It renders **through V01's `ICurveView` port** (`ScottPlotCurveView` is the only place the ScottPlot
-  type appears) — evidence that the adapter isolates the library from Domain/Analysis and is swappable.
+- **Two real backends** (ScottPlot 5 and OxyPlot) render AFM-scale synthetic curves **headlessly to PNG**
+  (SkiaSharp — no window), for a like-for-like comparison.
+- Both run **through V01's `ICurveView` port** via the same `RenderWith(ICurveView, input)` call path,
+  with timing measured by the caller (no downcast to a concrete backend) — a real **swap test** proving
+  the adapter isolates the library.
+- A ScottPlot **interaction-API check** builds markers, a text annotation, a crosshair, a right/secondary
+  axis (multi-axis), and programmatic axis limits (zoom).
 
 ## Run
 ```bash
 dotnet run --project tools/render-spike -- tools/render-spike/spike-out
 ```
 
-## Result (this machine, net8.0, warm)
-| case | series | points | render |
-|---|---|---|---|
-| spectrum-100k | 1 | 100,000 | ~144 ms (first, incl. warmup) |
-| spectrum-1M | 1 | 1,000,000 | ~46 ms |
-| multi-series | 2 | 100,000 | ~31 ms |
+## Result (this machine, net8.0, warm-up + median of 5)
+| backend | points | median render |
+|---|---|---|
+| ScottPlot 5 | 100,000 | ~46 ms |
+| OxyPlot | 100,000 | ~35 ms |
+| **ScottPlot 5** | **1,000,000** | **~42 ms** |
+| **OxyPlot** | **1,000,000** | **~226 ms** |
 
-Large-point-count XY rendering is well within interactive budgets — the reason SciChart was used is met
-by a free MIT library. Output PNGs are git-ignored (regenerate with the command above).
+At 100k both are fine; at **1M points ScottPlot is ~5× faster** than OxyPlot — the large-data need that
+drove SciChart is met by a free MIT library. Numbers are single-process observations that include the
+`ReadOnlyMemory→array` copy; **live mouse** zoom/pan/cursor is a WPF-runtime concern of the `ScottPlot.WPF`
+control (UI layer), not this headless spike. Output PNGs are git-ignored (regenerate with the command above).
