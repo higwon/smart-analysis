@@ -123,7 +123,7 @@ Prio · MVP · Status**.
 | U05 | Provenance/history panel | U01, F05 | (none visible) | New | P1 | – | planned |
 | U06 | Spectroscopy analysis UI | U01, V03, A11 | Spectroscopy pages | Rewrite | P2 | – | planned |
 | U07 | PiFM analysis UI | U01, V03, A15 | PiFM pages | Rewrite | P2 | – | planned |
-| U08 | **Operation UI framework** (registry-driven launcher + parameter-editor strategy) — the generic layer U03's hardcoded launcher stands in for | U03, F04 | process dialogs | New (registry-driven) | P1 | – | planned (registry → launcher item model via `ApplicableTo(kind)`; Process/Measure/View/Output categories + metadata; parameter-editor strategy: generic schema editor vs operation-specific semantic editor (e.g. Flatten); lets A03+ operations appear in the launcher with **no shell edits**) |
+| U08 | **Operation UI framework** (registry-driven launcher + parameter-editor strategy) — replaces U03's hardcoded launcher | U03, F04 | process dialogs | New (registry-driven) | P1 | ✅ | review (`IOperationLauncher` (Application) projects the operation registry → launcher items via `ApplicableTo(kind)`, grouped by category from `OutputKind` (Process/Measure); `GetForm` projects any operation's `ParameterSchema` → generic editor fields; `RunAsync` coerces UI value primitives back to CLR types, validates, and applies the output-kind policy (transform → derived active + Before/After; artifact → attached measurement). Shell launcher is data-bound to the registry; editor strategy = semantic override (Flatten hand-built, Statistics run-now) else the generic `ParameterFormViewModel`; **A03+ ops appear with no shell edits**; 8 headless tests; launcher + editors L render verified) |
 
 ## AI / ML / Docs
 | ID | Task | Depends | Prio | MVP | Status |

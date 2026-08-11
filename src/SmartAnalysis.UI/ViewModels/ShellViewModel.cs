@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Input;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.FileFormats;
+using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.UI.DesignSystem.Theming;
@@ -25,7 +26,15 @@ public sealed class ShellViewModel : ObservableObject
     private readonly ThemeManager _theme;
     private readonly IScanFilePicker _picker;
     private readonly IImageAnalysisUseCase _imageAnalysis;
+    private readonly IOperationLauncher _launcher;
     private readonly MeasurementStore _measurements;
+    private readonly AsyncRelayCommand _runStatistics;
+
+    // The one piece of operation-specific knowledge left in the shell (doc 26 / U08): the semantic-editor
+    // override registry. An id here bypasses the generic schema form for a hand-built editor / direct run;
+    // everything else falls through to the generic parameter form. Adding a new operation needs no entry.
+    private const string FlattenId = "image.flatten";
+    private const string StatisticsId = "image.statistics";
 
     private string _workspaceName = "Untitled workspace";
     private bool _hasUnsavedChanges;
@@ -38,18 +47,20 @@ public sealed class ShellViewModel : ObservableObject
     private ScanImageDataset? _beforeImage;
     private InspectorRole _inspectorRole = InspectorRole.DatasetProperties;
     private bool _isLauncherOpen;
+    private object? _operationEditor;
     private StatisticsResultViewModel? _statistics;
     private HistoryRowViewModel? _selectedStep;
     private Colormap _colormap = Colormap.AfmGold;
     private string _colormapName = "AFM Gold";
 
-    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, MeasurementStore measurements)
+    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, IOperationLauncher launcher, MeasurementStore measurements)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _picker = picker ?? throw new ArgumentNullException(nameof(picker));
         _imageAnalysis = imageAnalysis ?? throw new ArgumentNullException(nameof(imageAnalysis));
+        _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
 
         FlattenPanel = new FlattenPanelViewModel(imageAnalysis, () => _workspace.Active.ActiveId);
@@ -58,9 +69,11 @@ public sealed class ShellViewModel : ObservableObject
         OpenSampleCommand = new AsyncRelayCommand(OpenSampleAsync, () => SamplePath is not null, OnCommandError);
         ToggleThemeCommand = new RelayCommand(ToggleTheme);
         SaveCommand = new RelayCommand(() => { }, () => false); // stub — persistence UI is a later task (P01)
-        ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => HasActiveImage);
-        LaunchFlattenCommand = new RelayCommand(() => { IsLauncherOpen = false; InspectorRole = InspectorRole.Operation; }, () => HasActiveImage);
-        RunStatisticsCommand = new AsyncRelayCommand(RunStatisticsAsync, () => HasActiveImage, OnCommandError);
+        // Enabled by the launcher's own state — whether ANY operation is applicable to the active dataset —
+        // not by the dataset being an image. So a future Profile/Spectrum operation registered in the
+        // registry opens the launcher with no shell edits (the U08 goal); an empty launcher stays disabled.
+        ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => LauncherItems.Count > 0);
+        _runStatistics = new AsyncRelayCommand(RunStatisticsAsync, () => HasActiveImage, OnCommandError);
         CycleColormapCommand = new RelayCommand(CycleColormap);
         ExitCompareCommand = new RelayCommand(() => _workspace.SetComparison([]), () => IsBeforeAfter);
 
@@ -127,10 +140,15 @@ public sealed class ShellViewModel : ObservableObject
     public FlattenPanelViewModel FlattenPanel { get; }
 
     public ICommand ToggleLauncherCommand { get; }
-    public ICommand LaunchFlattenCommand { get; }
-    public ICommand RunStatisticsCommand { get; }
     public ICommand CycleColormapCommand { get; }
     public ICommand ExitCompareCommand { get; }
+
+    /// <summary>The registry-driven launcher entries applicable to the active dataset (grouped in the view).</summary>
+    public ObservableCollection<OperationLauncherItemViewModel> LauncherItems { get; } = new();
+
+    /// <summary>The current Operation-role editor: a semantic editor (e.g. <see cref="FlattenPanel"/>) or a
+    /// generic <see cref="ParameterFormViewModel"/>; null when the Operation role is not showing an editor.</summary>
+    public object? OperationEditor { get => _operationEditor; private set => SetProperty(ref _operationEditor, value); }
 
     /// <summary>Which role the Inspector shows (doc 26 §13).</summary>
     public InspectorRole InspectorRole
@@ -175,6 +193,53 @@ public sealed class ShellViewModel : ObservableObject
     {
         SelectedStep = step;
         InspectorRole = step is null ? InspectorRole.DatasetProperties : InspectorRole.Step;
+    }
+
+    // Resolves an editor strategy for a launcher choice (doc 26 / U08): a semantic override for the two
+    // known ids, else the generic schema form. The shell holds no other operation-specific knowledge.
+    private void LaunchOperation(string operationId)
+    {
+        IsLauncherOpen = false;
+        switch (operationId)
+        {
+            case FlattenId:
+                OperationEditor = FlattenPanel;         // hand-built semantic editor
+                InspectorRole = InspectorRole.Operation;
+                break;
+            case StatisticsId:
+                _runStatistics.Execute(null);           // parameterless measurement → run directly
+                break;
+            default:
+                if (_launcher.GetForm(operationId) is { } form)
+                {
+                    OperationEditor = new ParameterFormViewModel(_launcher, form, OnGenericRunCompleted);
+                    InspectorRole = InspectorRole.Operation;
+                }
+
+                break;
+        }
+    }
+
+    // A generic run completed. A derived output already moved the active context (the shell reacts to that
+    // via ActiveContextChanged); a measurement output is shown in the Result role, active unchanged.
+    private void OnGenericRunCompleted(OperationRunResult result)
+    {
+        if (result.Measurement is { } measurement)
+        {
+            Statistics = new StatisticsResultViewModel(measurement);
+            InspectorRole = InspectorRole.Result;
+        }
+    }
+
+    // Re-populates the launcher from the registry for the active dataset's kind (empty when none active).
+    private void RebuildLauncherItems()
+    {
+        LauncherItems.Clear();
+        foreach (var item in _launcher.ApplicableToActive())
+        {
+            var id = item.Id;
+            LauncherItems.Add(new OperationLauncherItemViewModel(item, () => LaunchOperation(id)));
+        }
     }
 
     private async Task RunStatisticsAsync()
@@ -366,18 +431,20 @@ public sealed class ShellViewModel : ObservableObject
             BeforeImage = null;
         }
 
-        // A new active dataset resets the Inspector to its properties (op config / result / step are transient).
+        // A new active dataset resets the Inspector to its properties (op editor / result / step are transient)
+        // and re-populates the launcher from the registry for the new active dataset's kind.
         Statistics = null;
         SelectedStep = null;
+        OperationEditor = null;
         InspectorRole = InspectorRole.DatasetProperties;
         IsLauncherOpen = false;
+        RebuildLauncherItems();
 
         OnPropertyChanged(nameof(HasActiveImage));
         OnPropertyChanged(nameof(IsBeforeAfter));
         OnPropertyChanged(nameof(IsSingleImage));
         (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
-        (LaunchFlattenCommand as RelayCommand)?.RaiseCanExecuteChanged();
-        (RunStatisticsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        _runStatistics.RaiseCanExecuteChanged();
         (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
         ImagesChanged?.Invoke(this, EventArgs.Empty);
     }
