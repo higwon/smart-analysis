@@ -58,6 +58,10 @@
     <sys:Double x:Key="SA.Size.Icon.Md">16</sys:Double>
     <sys:Double x:Key="SA.Size.Icon.Lg">20</sys:Double>
     <sys:Double x:Key="SA.Size.Chip">22</sys:Double>
+    <!-- Icon geometry space (Lucide 24-grid) + stroke width in that space; scaled uniformly by the
+         IconPresenter Viewbox, so the stroke stays proportional at any display size (UIX04). -->
+    <sys:Double x:Key="SA.Icon.Grid">24</sys:Double>
+    <sys:Double x:Key="SA.Icon.StrokeWidth">2</sys:Double>
 
     <!-- ===== Radius ===== -->
     <CornerRadius x:Key="SA.Radius.None">0</CornerRadius>

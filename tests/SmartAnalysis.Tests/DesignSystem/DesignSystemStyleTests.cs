@@ -158,6 +158,58 @@ public sealed class DesignSystemStyleTests
     }
 
     [Fact]
+    public void Icon_geometries_are_present_and_non_empty()
+    {
+        // UIX04: every SA.Icon.* is a PathGeometry (Figures) or a GeometryGroup of PathGeometry, each with
+        // non-empty Figures. Guards an accidental empty/malformed conversion and keeps the set from silently
+        // shrinking. (Visual correctness is checked by rendering a sheet; the split-per-primitive invariant
+        // lives in the converter, tools/icon-import.)
+        var iconsPath = Path.Combine(DesignSystemDir(), "Icons", "Icons.xaml");
+        Assert.True(File.Exists(iconsPath), "Icons.xaml is missing.");
+
+        var doc = XDocument.Load(iconsPath);
+        var iconKeys = doc.Root!.Elements()
+            .Select(e => (string?)e.Attribute(X + "Key"))
+            .Where(k => k is not null)
+            .Select(k => k!)
+            .ToHashSet();
+
+        // Exact-set contract for the MVP icons: a dropped/renamed/extra icon fails, not just a size change.
+        var expected = new HashSet<string>
+        {
+            "SA.Icon.Assistant", "SA.Icon.Check", "SA.Icon.ChevronDown", "SA.Icon.ChevronRight",
+            "SA.Icon.Circle", "SA.Icon.Close", "SA.Icon.Colormap", "SA.Icon.Compare", "SA.Icon.Cursor",
+            "SA.Icon.Dataset", "SA.Icon.Dot", "SA.Icon.Error", "SA.Icon.FolderOpen", "SA.Icon.Import",
+            "SA.Icon.Parameters", "SA.Icon.Refresh", "SA.Icon.Save", "SA.Icon.Scalebar",
+            "SA.Icon.Statistics", "SA.Icon.Theme", "SA.Icon.Warning", "SA.Icon.ZoomFit",
+        };
+        var missing = expected.Except(iconKeys).OrderBy(k => k).ToArray();
+        var unexpected = iconKeys.Except(expected).OrderBy(k => k).ToArray();
+        Assert.True(missing.Length == 0 && unexpected.Length == 0,
+            $"MVP icon set changed.\nMissing: {string.Join(", ", missing)}\nUnexpected: {string.Join(", ", unexpected)}");
+
+        var empties = doc.Descendants()
+            .Where(e => e.Name.LocalName == "PathGeometry")
+            .Where(e => string.IsNullOrWhiteSpace((string?)e.Attribute("Figures")))
+            .Select(e => (string?)e.Parent?.Attribute(X + "Key") ?? "(inline)")
+            .ToArray();
+        Assert.True(empties.Length == 0, "PathGeometry with empty Figures: " + string.Join(", ", empties));
+    }
+
+    [Fact]
+    public void Lucide_license_notice_is_retained()
+    {
+        // ISC (Lucide) + MIT (Feather-derived icons) notices must travel with the vendored icons — assert
+        // the substantive permission text, not just the acronym, so a truncated/stubbed file fails.
+        var license = Path.Combine(DesignSystemDir(), "Icons", "LUCIDE-LICENSE.txt");
+        Assert.True(File.Exists(license), "Icons/LUCIDE-LICENSE.txt must be committed with the vendored icons.");
+        var text = File.ReadAllText(license);
+        Assert.Contains("ISC License", text);
+        Assert.Contains("Permission to use, copy, modify", text); // ISC grant body
+        Assert.Contains("MIT License", text);                     // Feather-derived icons
+    }
+
+    [Fact]
     public void Every_referenced_brush_token_exists_in_the_palette()
     {
         // Guards typos: each SA.Brush.* referenced by Controls/Components must be a real palette key.

@@ -84,6 +84,7 @@ coverage, method, and gaps.
 | [22-information-architecture](target-design/22-information-architecture.md) | UX01 IA: shell regions, single active context, journeys, before/after & comparison, parameter-panel behaviour, MVP flow, low-fi wireframes, keep/merge/remove |
 | [23-design-tokens](target-design/23-design-tokens.md) | UIX01: concrete token *values* (Base ramps, Light+Dark semantic + chart/image chrome, typography, spacing/size/radius/border, focus/motion/elevation/density, contrast targets) realizing doc 21 |
 | [24-mvp-visual-design](target-design/24-mvp-visual-design.md) | UIX02: high-fidelity MVP screens (shell/explorer/viewer/flatten/before-after/history/progress/save + states) in Light+Dark from doc 23 tokens; ★ user-approval gate before UIX03/U01/U02 |
+| [25-iconography](target-design/25-iconography.md) | UIX04: icon policy — Lucide (ISC) vendored as `SA.Icon.*` WPF geometries, `IconPresenter` currentColor/theme-swap, size/style rules, a11y icon+text |
 
 ### `migration/` — the plan
 | Doc | Covers |
@@ -101,7 +102,7 @@ coverage, method, and gaps.
 | [40-ai-working-agreement](ai-context/40-ai-working-agreement.md) | Mandatory common baseline for every implementation session (incl. §15 GitHub procedure) |
 | [41-doc-maintenance-and-adr](ai-context/41-doc-maintenance-and-adr.md) | Which code change updates which doc; status flow ↔ GitHub; ADR process; completion report |
 | [42-github-delivery-workflow](ai-context/42-github-delivery-workflow.md) | **The delivery contract**: Backlog→Epic→Issue→Branch→Draft PR→review→merge; labels; templates; ready-to-use prompts |
-| [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..015 (append-only; ADR-009 amends ADR-007, ADR-010 completes it: `Infrastructure → Application` for Ports; ADR-014 = F04 operation-contract impl; ADR-015 = TIFF reader library/boundary/fixtures; ADR-016 = empty-input statistics divergence; ADR-017 = workspace container format; ADR-018 = XY chart lib ScottPlot 5) |
+| [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..015 (append-only; ADR-009 amends ADR-007, ADR-010 completes it: `Infrastructure → Application` for Ports; ADR-014 = F04 operation-contract impl; ADR-015 = TIFF reader library/boundary/fixtures; ADR-016 = empty-input statistics divergence; ADR-017 = workspace container format; ADR-018 = XY chart lib ScottPlot 5; ADR-019 = iconography (Lucide/ISC → SA.Icon.* geometries)) |
 | [.github/](../.github/) | Issue templates (`epic.yml`, `task.yml`) + `pull_request_template.md` |
 
 ## 5. Current status

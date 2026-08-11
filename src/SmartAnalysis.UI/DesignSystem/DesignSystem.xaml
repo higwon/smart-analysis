@@ -13,6 +13,8 @@
         <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Palettes/LightColors.xaml"/>
         <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Controls/ControlStyles.xaml"/>
         <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Components/ComponentStyles.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Icons/Icons.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Icons/IconStyles.xaml"/>
         <ResourceDictionary Source="pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/Adapters/ExternalControlStyles.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 </ResourceDictionary>

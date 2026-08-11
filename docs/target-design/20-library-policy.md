@@ -39,6 +39,7 @@ never add Forbidden, and must NOT install a Candidate into product code before i
 | Microsoft.Extensions.Logging | **Approved** | logging; MIT |
 | xUnit, NetArchTest | **Approved** | tests/arch tests |
 | **ScottPlot 5** (XY charts, MIT) | **Approved** | ADR-018 (V00 spike): backend for curves/spectra/histogram/PSD; UI/viz-impl only, behind `ICurveView`; chrome restyled. OxyPlot = documented fallback |
+| **Lucide** icons (**ISC**) | **Approved** | ADR-019 (UIX04): icon source. **Vendored** as `SA.Icon.*` WPF geometries (not a runtime dep); license notice retained (`Icons/LUCIDE-LICENSE.txt`); stroked in a token brush, theme-swapped. No icon font/commercial pack |
 | **Dirkster.AvalonDock** (docking **functionality**) | **Candidate** | ADR near U01; **built-in theme NOT used** |
 | MahApps.Metro / MaterialDesignInXAML / HandyControl / any external **application theme** | **Forbidden as product theme** | first-party design system only (ADR-008) |
 | **CommunityToolkit.Mvvm** (MVVM **functionality**) | **Candidate** | ADR; functionality only, no appearance |
