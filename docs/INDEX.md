@@ -125,7 +125,7 @@ classification; backlog = status source of truth; MVP split into 4 checkpoints).
 | GitHub delivery workflow + templates | ✅ Added |
 | AI working agreement + doc-maintenance + ADRs (001–013) | ✅ Recorded |
 | Task status source of truth | ✅ Backlog (single SoT); status flow ↔ GitHub |
-| **New product code / `.sln`** | 🟢 Headless MVP **merged** on `main`: F00/F01/F03/D01/F05 (Domain) · F04 (operation contract+registry) · FF01 (PSIA-TIFF import) · W01 (workspace) · MV00 (golden baseline) · A01/A02 (flatten/statistics) · P01 (save/reopen) · V01/V00 (viz seam + ScottPlot). Design track: UX01/UIX01/UIX02 (design, approved) · **UIX03 first-party WPF design system merged/under review** (`SmartAnalysis.UI/DesignSystem`). 🟡 Next: **U01** shell. |
+| **New product code / `.sln`** | 🟢 Headless MVP **merged** on `main`: F00/F01/F03/D01/F05 (Domain) · F04 (operation contract+registry) · FF01 (PSIA-TIFF import) · W01 (workspace) · MV00 (golden baseline) · A01/A02 (flatten/statistics) · P01 (save/reopen) · V01/V00 (viz seam + ScottPlot). Design track: UX01/UIX01/UIX02/UIX03/UIX04 (design system + icons, merged). 🟢 **F02 DI composition root + NetArchTest matrix** (under review). 🟡 Next: **U01** shell (resolves from the container). |
 
 Decisions still **OPEN** (Candidate, need an ADR) are centralized in
 [`ai-context/41-doc-maintenance-and-adr.md`](ai-context/41-doc-maintenance-and-adr.md) §4 →

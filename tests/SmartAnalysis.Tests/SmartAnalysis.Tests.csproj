@@ -13,6 +13,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- F02: type/namespace-level architecture matrix (doc 20 Approved). -->
+    <PackageReference Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Concrete DI container — to test the explicit per-module registration end-to-end (F04). -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
