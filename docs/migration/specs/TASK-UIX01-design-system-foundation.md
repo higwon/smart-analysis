@@ -46,6 +46,17 @@ Intentionally different (new design language). No numeric parity.
 ## Docs to update
 doc 21 (fill values), doc 17 (link), INDEX, backlog status; ADR only if a policy in ADR-008 changes.
 
+## Implementation status (this PR)
+The concrete values are authored in [`../../target-design/23-design-tokens.md`](../../target-design/23-design-tokens.md)
+(design doc, no code), realizing doc 21's structure: Base ramps (Neutral/Accent/Status) with hex; Light +
+Dark semantic tokens (identical keys) for Background/Surface/Border/Text/Accent/Status + status inline
+pairs; chart/image chrome tokens kept separate from the data colormap; typography scale; spacing/sizing/
+radius/border; focus/motion/elevation/density; the theme-swap principle; simple-modern rules + forbidden
+patterns; and WCAG-AA contrast targets with spot-checks. A **low-fidelity review artifact** (Light/Dark
+swatch board + type/spacing/component preview) accompanies it. doc 21 now links doc 23 as its values of
+record; doc 17, INDEX, backlog updated. **Awaiting user review**; values are finalized at UIX02 against the
+high-fidelity screens.
+
 ## Open / unverified
 Concrete values are proposals — **finalized with user approval in UIX02**; contrast/accessibility
-targets to confirm.
+targets to confirm against the real screens.
