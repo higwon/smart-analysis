@@ -71,12 +71,17 @@ state, both themes, rendered from the real tokens). This doc is its written spec
 
 ## 3. Image Viewer (Active View center)
 
-- **Data area first.** A thin `h=40` toolbar (view actions only: zoom-fit, cursor, ROI, colormap
-  picker, scalebar toggle) over the image; `Surface.Default` toolbar, `Border.Subtle` divider.
+> **MVP scope = V02 "Basic 2D image view" — render + palette + zoom/pan, _no ROI_.** ROI overlay and
+> interaction are **V06** (depends on D02 ROI types), explicitly **post-MVP**. So the MVP viewer shows
+> **no ROI affordance at all** — not even a disabled one — to keep UIX03/U02 inside the V02 contract. The
+> `Image.RoiBorder/RoiFill` tokens exist in doc 23 for V06 but are **not used** on any MVP screen.
+
+- **Data area first.** A thin `h=40` toolbar with **view actions only: Zoom-fit · Cursor · Colormap
+  picker · Scalebar toggle** (no ROI); `Surface.Default` toolbar, `Border.Subtle` divider.
 - **2D AFM image** fills the region, painted with the **domain colormap** (theme-independent). A
   `Chart.Axis` scale bar + `Micro` unit label sit in a corner with a contrasting halo.
 - **Cursor / crosshair** — `Image.Crosshair` with a 1px opposite-tone halo (stays visible over any
-  colormap pixel). **ROI** — `Image.RoiBorder` outline + `Image.RoiFill` @12–14%.
+  colormap pixel). (A read-only value cursor is fine in V02; region selection is V06.)
 - **Colormap legend** — a vertical ramp + min/max in `Numeric` mono, right edge; **unchanged by theme**.
 - **Loading** — the image area shows a determinate/indeterminate bar over `Surface.Sunken` with
   "Reading scan…"; **Error** — inline panel (icon + `Status.Error` + message + Retry), not a MessageBox.
@@ -86,14 +91,27 @@ state, both themes, rendered from the real tokens). This doc is its written spec
 ## 4. Flatten Parameter Panel (right, contextual, non-modal)
 
 - Replaces the legacy modal dialog forest (doc 17). Header `Type.Title` "Flatten" + a one-line help.
-- **Schema-driven fields** (from `ParameterSchema`): `Order` (int, 0–3), `Direction`
-  (Line/Whole/Surface enum), each a `Label / Input / Unit / inline-validation` row on a 28px control.
+- **Schema-driven fields — the real `image.flatten` v1 contract has _four_ parameters** (from
+  `FlattenOperation.Descriptor.Parameters`); the panel must not collapse them into one "Direction":
+
+  | Field | Param | Type | Default | Range / values |
+  |---|---|---|---|---|
+  | **Scope** | `scope` | `FlattenScope` enum | `Line` | Line · Whole · Surface |
+  | **Order** | `order` | int | `1` | **0–8** |
+  | **Orientation** | `orientation` | `FlattenOrientation` enum | `FastAxis` | Fast Axis · Slow Axis |
+  | **Basement** | `basement` | `BasementOption` enum | `RegressionToZero` | Regression to Zero · Preserve Original Midpoint |
+
+  Each renders as a `Label / Input / inline-validation` row on a 28px control (enum → dropdown/segmented,
+  int → stepper). All four fields come from the schema and **all four are recorded in provenance**.
+- **Scope = Surface** makes `orientation` meaningless (a surface fit has no line direction). The **UI
+  layer** may disable/hide the Orientation field then — but the **schema stays four parameters**; the
+  value is still submitted (its default is harmless for Surface). Never merge the schema down to one field.
 - **Live preview** toggle (☑) — deterministic ops preview in the Active View (debounced); the panel
   shows a "preview" hint in `Text.Secondary`.
 - **One primary action**: **Apply** (`Button.Primary`, accent). Secondary: **Reset**. A
   `Accent.OnSurface` text-link "**Compare with source**" sets `Comparison=[parent]`.
 - **Validation error** — the offending field gets a 2px `Status.Error` border + an icon+message row
-  (never red-only); Apply disables while invalid.
+  (never red-only); Apply disables while invalid (e.g. `order` outside 0–8, or an undefined enum).
 - **Statistics variant** — when the op is a measurement, the panel is a **results card** (Sq/Sa/Rq… in
   `Numeric` mono, tabular) with a small histogram; note "attached to the active dataset — active
   unchanged" (doc 22 §5).
@@ -115,7 +133,17 @@ state, both themes, rendered from the real tokens). This doc is its written spec
 
 - Every `ProvenanceStep` of the **active dataset** as a **row** (order # · op name · key params · status
   icon · timestamp), `Numeric` mono for params. A reproducible step view, **not a plain log** (doc 17).
-- **Selecting a row** re-targets the Active View + Parameters to that step's dataset+params (read-back).
+- **Selecting a row does _not_ change the active dataset.** The `ProvenanceRecord` model is a single
+  `ParentId` + an ordered list of `Steps`; a `ProvenanceStep` is **not** a materialized workspace
+  dataset (it carries `operationId` + `operationVersion` + `order` + `parameters` for the *input* it ran
+  on, not a distinct navigable dataset id). So the safe MVP contract is:
+  - keep the **active dataset unchanged**;
+  - show the selected step's **operation id/version + parameters read-only** in the Parameters panel (a
+    "recorded step" inspector, not the editable op form);
+  - optionally emphasize that step within the active dataset's provenance detail.
+
+  Navigating "to the step's dataset" is deferred until a provenance-step ↔ materialized-intermediate
+  mapping exists (post-MVP); the UI must not require an identity the current model doesn't have.
 - Row status: *done* (✓ `Status.Success`), *running* (spinner + label), *failed* (✕ `Status.Error` +
   message on the row, expandable). Progress + **Cancel** live here and on the Apply control — no opaque
   modal "Processing…".
@@ -166,6 +194,9 @@ Light and Dark carry **identical** hierarchy and information; only token values 
 - [ ] Before/After shows shared axes + range; difference labelled (after − before).
 - [ ] Empty/Loading/Error/Disabled covered; no modal "Processing…".
 - [ ] Contrast per doc 23 §9 (Error banner uses `#B91C1C` on Light).
+- [ ] **Viewer has no ROI** (V02 scope; ROI is V06/post-MVP) — not even a disabled control.
+- [ ] **Flatten shows the real four params** (`scope`, `order` 0–8, `orientation`, `basement`) — never merged into one.
+- [ ] **History row select keeps the active dataset** and shows the step's op+params read-only (no step→dataset navigation).
 
 ## 11. Open (finalized at approval / deferred)
 - Exact overlay opacities re-checked over real colormaps (doc 23 §11).
