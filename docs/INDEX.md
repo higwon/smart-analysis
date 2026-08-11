@@ -98,7 +98,7 @@ coverage, method, and gaps.
 | [40-ai-working-agreement](ai-context/40-ai-working-agreement.md) | Mandatory common baseline for every implementation session (incl. §15 GitHub procedure) |
 | [41-doc-maintenance-and-adr](ai-context/41-doc-maintenance-and-adr.md) | Which code change updates which doc; status flow ↔ GitHub; ADR process; completion report |
 | [42-github-delivery-workflow](ai-context/42-github-delivery-workflow.md) | **The delivery contract**: Backlog→Epic→Issue→Branch→Draft PR→review→merge; labels; templates; ready-to-use prompts |
-| [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..015 (append-only; ADR-009 amends ADR-007, ADR-010 completes it: `Infrastructure → Application` for Ports; ADR-014 = F04 operation-contract impl; ADR-015 = TIFF reader library/boundary/fixtures; ADR-016 = empty-input statistics divergence; ADR-017 = workspace container format) |
+| [adr/](ai-context/adr/) | Architecture Decision Records — ADR-001..015 (append-only; ADR-009 amends ADR-007, ADR-010 completes it: `Infrastructure → Application` for Ports; ADR-014 = F04 operation-contract impl; ADR-015 = TIFF reader library/boundary/fixtures; ADR-016 = empty-input statistics divergence; ADR-017 = workspace container format; ADR-018 = XY chart lib ScottPlot 5) |
 | [.github/](../.github/) | Issue templates (`epic.yml`, `task.yml`) + `pull_request_template.md` |
 
 ## 5. Current status

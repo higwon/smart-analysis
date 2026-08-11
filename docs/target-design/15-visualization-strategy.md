@@ -108,7 +108,12 @@ the design-system **chart/image UI tokens** (doc 21 §3), kept in a separate dic
 colormap so the two can never be confused. Export path (image/3D) must be rebuilt free of
 SciChart/DevExpress (legacy export is grade E, doc 04).
 
+## Decisions
+- **XY chart backend = ScottPlot 5 (ADR-018, V00):** the rendering spike rendered up to 1M-point curves
+  headlessly (SkiaSharp) in tens of ms **through V01's `ICurveView`**, confirming both large-data perf
+  and adapter isolation. ScottPlot 5 is now **Approved** (doc 20), referenced only by the UI/viz-impl
+  backend; OxyPlot stays the documented fallback.
+
 ## OPEN decisions (resolve via a spike + ADR)
-- ScottPlot vs OxyPlot final pick — spike with real curve/spectrum sizes and interaction needs.
 - Whether to standardize the entire 2D pipeline (image + curves) on SkiaSharp for consistency.
 - Whether AvalonDock meets the multi-document + auto-hide needs the DevExpress shell provided.
