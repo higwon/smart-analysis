@@ -49,6 +49,11 @@ and rules; this doc owns the *numbers*. **No XAML/code here** — UIX03 turns th
 | Error   | `#DC2626` | `#EF4444` | `#FEE2E2` | `#7F1D1D` |
 | Info    | `#2563EB` | `#3B82F6` | `#DBEAFE` | `#1E3A5F` |
 
+Error also carries a darker banner tone **`Error.700 #B91C1C`** — used as the **Light Error-banner
+foreground** on the `#FEE2E2` tint so the banner (an essential message at 13px/400) clears AA. The
+`Status.Error` *semantic* token stays `#DC2626` (it is text/icon on the App bg, where it clears AA at
+~4.54:1); only the banner-on-tint fg needs the darker tone. See §2 pairs and §9.
+
 ---
 
 ## 2. Semantic color tokens (role-based, theme-swapped — **identical keys** in Light & Dark)
@@ -74,7 +79,7 @@ Views bind to these via `DynamicResource`, never to §1.
 | `Color.Border.Focus` | `#3B82F6` | `#60A5FA` | focus ring |
 | `Color.Text.Primary` | `#171B22` | `#F7F8FA` | body/headings |
 | `Color.Text.Secondary` | `#5B6472` | `#A7AEB9` | labels, secondary |
-| `Color.Text.Tertiary` | `#7C8494` | `#7C8494` | hints (large/non-essential only — see §12) |
+| `Color.Text.Tertiary` | `#7C8494` | `#7C8494` | hints only — ~3.54:1 on Light bg / ~4.59:1 on Dark bg; large/non-essential only (§12) |
 | `Color.Text.Disabled` | `#A7AEB9` | `#5B6472` | disabled text |
 | `Color.Text.OnAccent` | `#FFFFFF` | `#FFFFFF` | text on accent fill |
 | `Color.Accent.Primary` | `#2563EB` | `#2563EB` | primary-button fill (same both themes so on-accent white stays AA) |
@@ -93,12 +98,18 @@ Views bind to these via `DynamicResource`, never to §1.
 > (`#2563EB` text on `#171B22` is only ~3:1). Screens must not use `Accent.Primary` for text on dark.
 
 ### Status inline pairs (banner fg / bg)
-| Role | Light fg / bg | Dark fg / bg |
-|---|---|---|
-| Success | `#15803D` / `#DCFCE7` | `#4ADE80` / `#14532D` |
-| Warning | `#B45309` / `#FEF3C7` | `#FBBF24` / `#78350F` |
-| Error   | `#DC2626` / `#FEE2E2` | `#FCA5A5` / `#7F1D1D` |
-| Info    | `#1D4ED8` / `#DBEAFE` | `#93C5FD` / `#1E3A5F` |
+Banner fg is the on-tint value (may be darker than the `Status.*` semantic token, which is on the App bg).
+All four pairs meet AA (≥ 4.5:1) — see §9.
+| Role | Light fg / bg | Light AA | Dark fg / bg |
+|---|---|---|---|
+| Success | `#15803D` / `#DCFCE7` | ~4.57:1 ✅ | `#4ADE80` / `#14532D` |
+| Warning | `#B45309` / `#FEF3C7` | ~4.51:1 ✅ | `#FBBF24` / `#78350F` |
+| Error   | `#B91C1C` / `#FEE2E2` | ~5.30:1 ✅ | `#FCA5A5` / `#7F1D1D` |
+| Info    | `#1D4ED8` / `#DBEAFE` | ~5.49:1 ✅ | `#93C5FD` / `#1E3A5F` |
+
+> **Error fg = `Error.700 #B91C1C`, not `#DC2626`.** `#DC2626` on the `#FEE2E2` tint is only ~3.95:1 —
+> below AA for an essential message. `#B91C1C` lifts it to ~5.30:1. (Success/Warning sit just over the
+> 4.5:1 line and are kept; they're re-checked against the real UIX02 banners.)
 
 ---
 
@@ -234,9 +245,10 @@ text on dark (use `Accent.OnSurface`) · distinguishing channel/state/result **b
 |---|---|---|
 | Primary text on App bg | ≥ 7:1 (AAA) | L `#171B22`/`#F7F8FA` ≈ 16:1 ✅ · D `#F7F8FA`/`#171B22` ≈ 15:1 ✅ |
 | Secondary text on App bg | ≥ 4.5:1 (AA) | L `#5B6472` ≈ 5.6:1 ✅ · D `#A7AEB9` ≈ 7:1 ✅ |
-| Tertiary text | large/non-essential only | ~3.7–4:1 — **not** for essential small text |
-| White on `Accent.Primary` | ≥ 4.5:1 | `#FFFFFF`/`#2563EB` ≈ 4.7:1 ✅ (both themes) |
-| `Accent.OnSurface` text | ≥ 4.5:1 | L `#2563EB`/`#F7F8FA` ≈ 4.8:1 ✅ · D `#60A5FA`/`#171B22` ≈ 6:1 ✅ |
+| Tertiary text | large/non-essential only | L `#7C8494`/`#F7F8FA` ≈ **3.54:1** · D `#7C8494`/`#171B22` ≈ **4.59:1** — **not** for essential small text (§12) |
+| White on `Accent.Primary` | ≥ 4.5:1 | `#FFFFFF`/`#2563EB` ≈ **5.17:1** ✅ (both themes) |
+| `Accent.OnSurface` text | ≥ 4.5:1 | L `#2563EB`/`#F7F8FA` ≈ 4.86:1 ✅ · D `#60A5FA`/`#171B22` ≈ 6.79:1 ✅ |
+| Status inline banners (essential) | ≥ 4.5:1 | L Success ≈ 4.57 · Warning ≈ 4.51 · **Error `#B91C1C` ≈ 5.30** · Info ≈ 5.49 — all ✅ |
 | UI/graphical (borders, focus, icons) | ≥ 3:1 | focus ring, axis, ROI meet 3:1 |
 
 Rules: never encode meaning by color alone; focus is ring+offset (not color); Light and Dark carry
@@ -269,6 +281,7 @@ optional Compact-density default. **Deferred to UIX03:** the XAML resources, key
 dictionary load order, external-control (AvalonDock/ScottPlot) styling adapter.
 
 ## 12. Note on tertiary text
-`Color.Text.Tertiary` (`#7C8494`) sits near the 4.5:1 line on both themes. Use it **only** for
-non-essential hints or ≥ `Type.Subtitle` sizes; never for essential small body text — promote to
-`Text.Secondary` there. Flagged for confirmation in UIX02.
+`Color.Text.Tertiary` (`#7C8494`) measures **~3.54:1 on the Light App bg** and **~4.59:1 on the Dark App
+bg** — i.e. it clears AA on Dark but **not** on Light. Use it **only** for non-essential hints or ≥
+`Type.Subtitle` sizes; never for essential small body text — promote to `Text.Secondary` there. This is a
+deliberate low-emphasis role, not an accessibility target; re-confirmed against real screens in UIX02.
