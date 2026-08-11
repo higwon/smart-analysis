@@ -25,6 +25,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly ThemeManager _theme;
     private readonly IScanFilePicker _picker;
     private readonly IImageAnalysisUseCase _imageAnalysis;
+    private readonly MeasurementStore _measurements;
 
     private string _workspaceName = "Untitled workspace";
     private bool _hasUnsavedChanges;
@@ -42,13 +43,14 @@ public sealed class ShellViewModel : ObservableObject
     private Colormap _colormap = Colormap.AfmGold;
     private string _colormapName = "AFM Gold";
 
-    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis)
+    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, MeasurementStore measurements)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _picker = picker ?? throw new ArgumentNullException(nameof(picker));
         _imageAnalysis = imageAnalysis ?? throw new ArgumentNullException(nameof(imageAnalysis));
+        _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
 
         FlattenPanel = new FlattenPanelViewModel(imageAnalysis, () => _workspace.Active.ActiveId);
 
@@ -66,6 +68,9 @@ public sealed class ShellViewModel : ObservableObject
         // refreshes existing nodes' state — so selection + expansion in the TreeView are preserved.
         _workspace.DatasetsChanged += (_, _) => RebuildTopology();
         _workspace.ActiveContextChanged += (_, _) => RefreshActiveState();
+        // A new/removed measurement re-surfaces the attached nodes without disturbing the active context
+        // or the current Inspector role (so the just-shown result card survives its own attach).
+        _measurements.MeasurementsChanged += (_, _) => RebuildNodes();
         _theme.ThemeChanged += (_, _) => OnPropertyChanged(nameof(ThemeToggleLabel));
         RebuildTopology();
     }
@@ -221,12 +226,35 @@ public sealed class ShellViewModel : ObservableObject
 
     public string ThemeToggleLabel => _theme.EffectiveTheme == AppTheme.Dark ? "Light" : "Dark";
 
-    /// <summary>Sets the active dataset when a dataset node is selected (measurements never become active).</summary>
+    /// <summary>
+    /// Handles an explorer selection. A dataset node becomes active; a measurement node instead shows its
+    /// result read-only in the Inspector (attached to its source — the active dataset never changes).
+    /// </summary>
     public void Select(DatasetNodeViewModel? node)
     {
-        if (node is not null && !node.IsMeasurement && _workspace.Contains(node.Id))
+        if (node is null)
+        {
+            return;
+        }
+
+        if (node.IsMeasurement)
+        {
+            SelectMeasurement(node.Id);
+        }
+        else if (_workspace.Contains(node.Id))
         {
             _workspace.SetActive(node.Id);
+        }
+    }
+
+    /// <summary>Shows an attached measurement in the Inspector's Result role; the active dataset is unchanged.</summary>
+    public void SelectMeasurement(DatasetId artifactId)
+    {
+        if (_imageAnalysis.GetMeasurement(artifactId) is { } result)
+        {
+            Statistics = new StatisticsResultViewModel(result);
+            SelectedStep = null;
+            InspectorRole = InspectorRole.Result;
         }
     }
 
@@ -285,8 +313,16 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(HasStatus));
     }
 
-    // Topology: datasets added/removed. Rebuilds the node tree (and the id->node index used by refresh).
+    // Topology: datasets added/removed. Rebuilds the node tree, then refreshes the active header/history.
     private void RebuildTopology()
+    {
+        RebuildNodes();
+        RefreshActiveState();
+    }
+
+    // Rebuilds the explorer node tree (datasets + their attached measurements) and the id->node index the
+    // in-place active refresh uses. Deliberately does NOT touch the active header or the Inspector role.
+    private void RebuildNodes()
     {
         _nodesById.Clear();
         ExplorerNodes.Clear();
@@ -297,7 +333,6 @@ public sealed class ShellViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasWorkspace));
-        RefreshActiveState();
     }
 
     // Active/comparison changed only: update existing nodes in place + the active header + history.
@@ -370,6 +405,14 @@ public sealed class ShellViewModel : ObservableObject
             IsInComparison = _workspace.Active.Comparison.Contains(id),
         };
         _nodesById[id] = node;
+
+        // Attached measurements (doc 22 §Measurement): shown under their source, never independently active.
+        foreach (var artifact in _measurements.ForSource(id))
+        {
+            node.Children.Add(new DatasetNodeViewModel(
+                artifact.Id, FriendlyOp(artifact.OperationId), "SA.Icon.Statistics", isMeasurement: true));
+        }
+
         foreach (var childId in _workspace.ChildrenOf(id))
         {
             node.Children.Add(BuildNode(childId));

@@ -19,8 +19,15 @@ public interface IImageAnalysisUseCase
 
     /// <summary>
     /// Computes whole-image summary statistics for the image identified by <paramref name="sourceId"/>.
-    /// The measurement is attached to that image and does <b>not</b> change the active dataset; returns the
-    /// readouts + histogram for the Inspector result card (a typed error on failure).
+    /// The resulting measurement (a real <c>AnalysisArtifact</c> entity) is <b>attached to that image</b> in
+    /// the measurement store and does <b>not</b> change the active dataset; returns the readouts + histogram
+    /// for the Inspector result card (a typed error on failure).
     /// </summary>
     Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Re-reads an already-attached measurement by its artifact id into the UI DTO (e.g. when its explorer
+    /// node is selected). Returns <c>null</c> when no such measurement is attached. Never changes active state.
+    /// </summary>
+    StatisticsResult? GetMeasurement(DatasetId artifactId);
 }

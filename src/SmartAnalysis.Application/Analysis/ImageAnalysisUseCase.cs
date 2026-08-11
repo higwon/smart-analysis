@@ -26,11 +26,13 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
 
     private readonly Workspace _workspace;
     private readonly IOperationRegistry _registry;
+    private readonly MeasurementStore _measurements;
 
-    public ImageAnalysisUseCase(Workspace workspace, IOperationRegistry registry)
+    public ImageAnalysisUseCase(Workspace workspace, IOperationRegistry registry, MeasurementStore measurements)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
     }
 
     public async Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken cancellationToken = default)
@@ -146,6 +148,23 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
             return StatisticsResult.Failed("Statistics produced no result.");
         }
 
+        // Preserve the real measurement entity (Id/SourceId/OperationId/Provenance) attached to its source;
+        // the active dataset is deliberately unchanged (doc 22 §Measurement). The workspace/ActiveContext are
+        // NOT touched — a measurement is not a dataset — it lives in the parallel MeasurementStore.
+        _measurements.Attach(artifact);
+        return Map(artifact);
+    }
+
+    /// <summary>
+    /// Re-reads a previously attached measurement (e.g. when its explorer node is selected) into the
+    /// UI-facing DTO. Returns <c>null</c> if no measurement with that id is attached.
+    /// </summary>
+    public StatisticsResult? GetMeasurement(DatasetId artifactId)
+        => _measurements.TryGet(artifactId, out var artifact) ? Map(artifact) : null;
+
+    // Maps a stored artifact to the UI DTO (the scalar-key → label projection lives here, in Application).
+    private StatisticsResult Map(AnalysisArtifact artifact)
+    {
         var readouts = new List<StatisticsReadout>();
         foreach (var (key, label) in StatKeys)
         {
@@ -156,8 +175,8 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         }
 
         var histogram = artifact.Histogram is { } h ? h.Counts.Select(c => (int)Math.Min(c, int.MaxValue)).ToArray() : [];
-        // Measurement attaches to the source; the active dataset is deliberately unchanged (doc 22/26).
-        return new StatisticsResult(true, DatasetLabel(image), readouts, histogram, null);
+        var sourceLabel = _workspace.TryGet(artifact.SourceId, out var source) ? DatasetLabel(source) : null;
+        return new StatisticsResult(true, sourceLabel, readouts, histogram, null);
     }
 
     private static string DatasetLabel(AfmDataset d)
