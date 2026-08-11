@@ -5,23 +5,21 @@
         xmlns:ctl="clr-namespace:SmartAnalysis.UI.Controls"
         xmlns:conv="clr-namespace:SmartAnalysis.UI.Converters"
         xmlns:vm="clr-namespace:SmartAnalysis.UI.ViewModels"
-        Title="SmartAnalysis" Height="720" Width="1180" MinHeight="520" MinWidth="900"
+        Title="SmartAnalysis" Height="740" Width="1220" MinHeight="560" MinWidth="1000"
         Background="{DynamicResource SA.Brush.Background.App}"
         TextElement.Foreground="{DynamicResource SA.Brush.Text.Primary}">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Bool2Vis"/>
         <conv:InverseBooleanToVisibilityConverter x:Key="NotBool2Vis"/>
         <conv:ResourceKeyToGeometryConverter x:Key="Key2Geo"/>
+        <conv:RatioToHeightConverter x:Key="Ratio2H"/>
 
-        <!-- Explorer lineage node: accent rail + dot when active; icon + label; measurement marker. -->
+        <!-- Explorer lineage node -->
         <HierarchicalDataTemplate DataType="{x:Type vm:DatasetNodeViewModel}" ItemsSource="{Binding Children}">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Width="2" Background="{DynamicResource SA.Brush.Accent.Primary}"
                         Margin="{DynamicResource SA.Gap.Right2}"
@@ -30,7 +28,6 @@
                                   Margin="{DynamicResource SA.Gap.Right2}"/>
                 <TextBlock Grid.Column="2" Text="{Binding Label}" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Style="{StaticResource SA.Text.Body}"/>
-                <!-- comparison membership: a small "vs" badge (text, not color-only) — doc 24 -->
                 <Border Grid.Column="3" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Right2}"
                         Background="{DynamicResource SA.Brush.Surface.Hover}"
                         BorderBrush="{DynamicResource SA.Brush.Border.Default}"
@@ -46,66 +43,50 @@
             </Grid>
         </HierarchicalDataTemplate>
 
-        <!-- History row. Status maps to a live DynamicResource icon+brush (theme-aware) via triggers. -->
+        <!-- Provenance row -->
         <DataTemplate DataType="{x:Type vm:HistoryRowViewModel}">
-            <Grid Margin="{DynamicResource SA.Gap.Bottom1}">
+            <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="20"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <ds:IconPresenter x:Name="StatusIcon" Grid.Column="0" Width="14" Height="14"
-                                  Data="{DynamicResource SA.Icon.Check}"
+                <ds:IconPresenter Grid.Column="0" Width="13" Height="13" Data="{DynamicResource SA.Icon.Check}"
                                   Foreground="{DynamicResource SA.Brush.Status.Success}"/>
                 <TextBlock Grid.Column="1" Text="{Binding Order}" Style="{StaticResource SA.Text.Micro}"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2" Text="{Binding Operation}" VerticalAlignment="Center"
-                           Margin="{DynamicResource SA.Gap.Right2}" Style="{StaticResource SA.Text.Body}"/>
+                           Margin="{DynamicResource SA.Gap.Right2}" Style="{StaticResource SA.Text.Caption}"/>
                 <TextBlock Grid.Column="3" Text="{Binding Parameters}" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" Style="{StaticResource SA.Text.Caption}"/>
+                           TextTrimming="CharacterEllipsis" Style="{StaticResource SA.Text.Micro}"/>
             </Grid>
-            <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding Status}" Value="Running">
-                    <Setter TargetName="StatusIcon" Property="Data" Value="{DynamicResource SA.Icon.Refresh}"/>
-                    <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource SA.Brush.Accent.OnSurface}"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Status}" Value="Failed">
-                    <Setter TargetName="StatusIcon" Property="Data" Value="{DynamicResource SA.Icon.Error}"/>
-                    <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource SA.Brush.Status.Error}"/>
-                </DataTrigger>
-            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Statistics readout row -->
+        <DataTemplate DataType="{x:Type vm:ReadoutViewModel}">
+            <Grid Margin="{DynamicResource SA.Gap.Bottom1}">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding Name}" Style="{StaticResource SA.Text.Caption}"/>
+                <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource SA.Text.Numeric}"/>
+            </Grid>
         </DataTemplate>
     </Window.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 
-        <!-- ============ Command bar ============ -->
-        <Border Grid.Row="0" Style="{StaticResource SA.Toolbar}">
+        <!-- ============ Command bar (global only) ============ -->
+        <Border Grid.Row="0" Style="{StaticResource SA.Toolbar}" Panel.ZIndex="2">
             <Grid Margin="{DynamicResource SA.Pad.Bar}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Left: workspace identity + primary actions -->
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="16" Height="16" CornerRadius="{DynamicResource SA.Radius.Sm}"
+                    <Border Width="18" Height="18" CornerRadius="{DynamicResource SA.Radius.Sm}"
                             Background="{DynamicResource SA.Brush.Accent.Primary}" Margin="{DynamicResource SA.Gap.Right2}"/>
-                    <TextBlock Text="{Binding WorkspaceName}" VerticalAlignment="Center"
-                               Style="{StaticResource SA.Text.Subtitle}"/>
+                    <TextBlock Text="{Binding WorkspaceName}" VerticalAlignment="Center" Style="{StaticResource SA.Text.Subtitle}"/>
                     <Ellipse Width="6" Height="6" Fill="{DynamicResource SA.Brush.Accent.Primary}"
                              Margin="{DynamicResource SA.Gap.Left2}" VerticalAlignment="Center"
                              Visibility="{Binding HasUnsavedChanges, Converter={StaticResource Bool2Vis}}"/>
-                    <Border Width="1" Height="20" Background="{DynamicResource SA.Brush.Border.Default}"
-                            Margin="{DynamicResource SA.Gap.3}"/>
-                    <Button Command="{Binding ImportCommand}" Style="{StaticResource SA.Button.Secondary}"
-                            Margin="{DynamicResource SA.Gap.Right2}">
+                    <Border Width="1" Height="20" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.3}"/>
+                    <Button Command="{Binding ImportCommand}" Style="{StaticResource SA.Button.Secondary}" Margin="{DynamicResource SA.Gap.Right2}">
                         <StackPanel Orientation="Horizontal">
                             <ds:IconPresenter Data="{StaticResource SA.Icon.Import}" Margin="{DynamicResource SA.Gap.Right2}"
                                               Foreground="{DynamicResource SA.Brush.Text.Primary}"/>
@@ -120,215 +101,283 @@
                             <TextBlock Text="Save" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                </StackPanel>
-
-                <!-- Center: active-context chip -->
-                <Border Grid.Column="1" Style="{StaticResource SA.ActiveChip}" HorizontalAlignment="Center"
-                        Visibility="{Binding HasActive, Converter={StaticResource Bool2Vis}}">
-                    <TextBlock Text="{Binding ActiveContextText}" VerticalAlignment="Center"
-                               Foreground="{DynamicResource SA.Brush.Accent.OnSurface}"
-                               Style="{StaticResource SA.Text.BodyStrong}"/>
-                </Border>
-
-                <!-- Right: compare / theme / assistant -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource SA.Button.Toolbar}" IsEnabled="False"
-                            ToolTip="Compare arrives with the analysis UI." Margin="{DynamicResource SA.Gap.Right2}">
+                    <Border Width="1" Height="20" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.3}"/>
+                    <Button x:Name="AnalyzeBtn" Command="{Binding ToggleLauncherCommand}"
+                            Style="{StaticResource SA.Button.Primary}" Margin="{DynamicResource SA.Gap.Right2}">
+                        <StackPanel Orientation="Horizontal">
+                            <ds:IconPresenter Data="{StaticResource SA.Icon.Parameters}" Margin="{DynamicResource SA.Gap.Right2}"
+                                              Foreground="{DynamicResource SA.Brush.Text.OnAccent}"/>
+                            <TextBlock Text="Analyze" VerticalAlignment="Center"/>
+                            <ds:IconPresenter Data="{StaticResource SA.Icon.ChevronDown}" Width="14" Height="14"
+                                              Margin="{DynamicResource SA.Gap.Left2}" Foreground="{DynamicResource SA.Brush.Text.OnAccent}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource SA.Button.Toolbar}" IsEnabled="False" ToolTip="Multi-dataset compare (later).">
                         <StackPanel Orientation="Horizontal">
                             <ds:IconPresenter Data="{StaticResource SA.Icon.Compare}" Margin="{DynamicResource SA.Gap.Right2}"/>
                             <TextBlock Text="Compare" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Command="{Binding ToggleThemeCommand}" Style="{StaticResource SA.Button.Toolbar}"
-                            Margin="{DynamicResource SA.Gap.Right2}">
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Command="{Binding ToggleThemeCommand}" Style="{StaticResource SA.Button.Toolbar}" Margin="{DynamicResource SA.Gap.Right2}">
                         <StackPanel Orientation="Horizontal">
                             <ds:IconPresenter Data="{StaticResource SA.Icon.Theme}" Margin="{DynamicResource SA.Gap.Right2}"/>
                             <TextBlock Text="{Binding ThemeToggleLabel}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <ds:IconPresenter Data="{StaticResource SA.Icon.Assistant}"
-                                      Foreground="{DynamicResource SA.Brush.Accent.OnSurface}"/>
+                    <ds:IconPresenter Data="{StaticResource SA.Icon.Assistant}" Foreground="{DynamicResource SA.Brush.Accent.OnSurface}"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ============ Main body ============ -->
+        <!-- Operation launcher popover -->
+        <Popup IsOpen="{Binding IsLauncherOpen}" PlacementTarget="{Binding ElementName=AnalyzeBtn}"
+               Placement="Bottom" StaysOpen="False" AllowsTransparency="True" VerticalOffset="4">
+            <Border Width="300" Background="{DynamicResource SA.Brush.Surface.Raised}"
+                    BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                    CornerRadius="{DynamicResource SA.Radius.Md}">
+                <StackPanel Margin="{DynamicResource SA.Gap.2}">
+                    <TextBlock Text="PROCESS" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.2}"/>
+                    <Button Command="{Binding LaunchFlattenCommand}" Style="{StaticResource SA.Button.Toolbar}" HorizontalContentAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <ds:IconPresenter Data="{StaticResource SA.Icon.Parameters}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                            <TextBlock Text="Flatten" VerticalAlignment="Center"/>
+                            <TextBlock Text="tilt / bow" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
+                                       Style="{StaticResource SA.Text.Micro}"/>
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Text="MEASURE" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.2}"/>
+                    <Button Command="{Binding RunStatisticsCommand}" Style="{StaticResource SA.Button.Toolbar}" HorizontalContentAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <ds:IconPresenter Data="{StaticResource SA.Icon.Statistics}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                            <TextBlock Text="Statistics" VerticalAlignment="Center"/>
+                            <TextBlock Text="Sq · Sa · skew" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
+                                       Style="{StaticResource SA.Text.Micro}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- ============ Body: Navigator · Stage · Inspector ============ -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="234" MinWidth="180"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="300" MinWidth="240"/>
+                <ColumnDefinition Width="304" MinWidth="260"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left area: (explorer | active view) over history -->
-            <Grid Grid.Column="0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="232" MinWidth="180"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Explorer -->
-                    <Border Grid.Column="0" Background="{DynamicResource SA.Brush.Background.Sidebar}"
-                            BorderBrush="{DynamicResource SA.Brush.Border.Default}"
-                            BorderThickness="{DynamicResource SA.Stroke.Hairline}">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="WORKSPACE" Margin="{DynamicResource SA.Gap.3}"
+            <!-- Navigator (recessed rail) + provenance strip -->
+            <Border Grid.Column="0" Background="{DynamicResource SA.Brush.Background.Sidebar}"
+                    BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Right}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="WORKSPACE" Margin="{DynamicResource SA.Pad.Section}"
+                               Style="{StaticResource SA.Text.SectionLabel}"/>
+                    <Border DockPanel.Dock="Bottom" Background="{DynamicResource SA.Brush.Background.Sidebar}"
+                            BorderBrush="{DynamicResource SA.Brush.Border.Subtle}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Top}">
+                        <DockPanel Margin="{DynamicResource SA.Gap.2}">
+                            <TextBlock DockPanel.Dock="Top" Text="PROVENANCE" Margin="{DynamicResource SA.Gap.2}"
                                        Style="{StaticResource SA.Text.SectionLabel}"/>
-                            <TextBlock DockPanel.Dock="Bottom" Text="No datasets yet" Margin="{DynamicResource SA.Gap.3}"
-                                       Style="{StaticResource SA.Text.Caption}"
-                                       Visibility="{Binding IsEmpty, Converter={StaticResource Bool2Vis}}"/>
-                            <TreeView x:Name="ExplorerTree" ItemsSource="{Binding ExplorerNodes}"
-                                      SelectedItemChanged="ExplorerTree_SelectedItemChanged"
-                                      Background="Transparent" BorderThickness="0">
-                                <TreeView.ItemContainerStyle>
-                                    <!-- keep lineage (derived children, attached measurements) visible -->
-                                    <Style TargetType="TreeViewItem" BasedOn="{StaticResource SA.TreeViewItem}">
-                                        <Setter Property="IsExpanded" Value="True"/>
-                                    </Style>
-                                </TreeView.ItemContainerStyle>
-                            </TreeView>
+                            <TextBlock DockPanel.Dock="Bottom" Text="Select a step to inspect it (read-only)."
+                                       Margin="{DynamicResource SA.Gap.2}" Style="{StaticResource SA.Text.Micro}"
+                                       Visibility="{Binding HasActive, Converter={StaticResource Bool2Vis}}"/>
+                            <ListBox x:Name="ProvenanceList" ItemsSource="{Binding HistoryRows}" MaxHeight="120"
+                                     Background="Transparent" BorderThickness="0"
+                                     SelectionChanged="ProvenanceList_SelectionChanged"/>
                         </DockPanel>
                     </Border>
+                    <TreeView x:Name="ExplorerTree" ItemsSource="{Binding ExplorerNodes}"
+                              SelectedItemChanged="ExplorerTree_SelectedItemChanged"
+                              Background="Transparent" BorderThickness="0" Padding="{DynamicResource SA.Gap.1}">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource SA.TreeViewItem}">
+                                <Setter Property="IsExpanded" Value="True"/>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+                </DockPanel>
+            </Border>
 
-                    <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Center" VerticalAlignment="Stretch"
-                                  Background="{DynamicResource SA.Brush.Border.Default}"/>
-
-                    <!-- Active view -->
-                    <Border Grid.Column="2" Background="{DynamicResource SA.Brush.Surface.Default}">
-                        <DockPanel>
-                            <!-- header: active title + subtitle + shared-range tag (when an image is active) -->
-                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="40"
-                                        Margin="{DynamicResource SA.Pad.Bar}"
-                                        Visibility="{Binding HasActiveImage, Converter={StaticResource Bool2Vis}}">
-                                <TextBlock Text="{Binding ActiveTitle}" VerticalAlignment="Center"
-                                           Style="{StaticResource SA.Text.BodyStrong}"/>
+            <!-- STAGE (primary, brightest, soft elevation) -->
+            <Border Grid.Column="1" Background="{DynamicResource SA.Brush.Surface.Default}" Panel.ZIndex="1">
+                <Border.Effect><DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="0" Opacity="0.10"/></Border.Effect>
+                <DockPanel>
+                    <!-- viewer toolbar (single mode) -->
+                    <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource SA.Brush.Border.Subtle}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Bottom}"
+                            Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}">
+                        <Grid Height="42" Margin="{DynamicResource SA.Pad.Bar}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                <TextBlock Text="{Binding ActiveTitle}" VerticalAlignment="Center" Style="{StaticResource SA.Text.BodyStrong}"/>
                                 <TextBlock Text="{Binding ActiveSubtitle}" VerticalAlignment="Center"
                                            Margin="{DynamicResource SA.Gap.Left2}" Style="{StaticResource SA.Text.Secondary}"/>
-                                <Border VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
-                                        Background="{DynamicResource SA.Brush.Surface.Hover}"
-                                        CornerRadius="{DynamicResource SA.Radius.Sm}" Padding="{DynamicResource SA.Gap.1}"
-                                        Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
-                                    <TextBlock Text="same X/Y · independent Z ranges" Style="{StaticResource SA.Text.Micro}"/>
-                                </Border>
                             </StackPanel>
-                            <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource SA.Brush.Border.Subtle}"
-                                    Visibility="{Binding HasActiveImage, Converter={StaticResource Bool2Vis}}"/>
-
-                            <Grid>
-                                <!-- single 2D image -->
-                                <ctl:AfmImageView x:Name="SingleImage"
-                                                  Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}"/>
-
-                                <!-- Before / After split -->
-                                <Grid Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="1"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <DockPanel Grid.Column="0">
-                                        <TextBlock DockPanel.Dock="Top" Text="BEFORE" Margin="{DynamicResource SA.Gap.2}"
-                                                   Style="{StaticResource SA.Text.SectionLabel}"/>
-                                        <ctl:AfmImageView x:Name="BeforeImageView"/>
-                                    </DockPanel>
-                                    <Border Grid.Column="1" Background="{DynamicResource SA.Brush.Border.Default}"/>
-                                    <DockPanel Grid.Column="2">
-                                        <TextBlock DockPanel.Dock="Top" Text="AFTER" Margin="{DynamicResource SA.Gap.2}"
-                                                   Style="{StaticResource SA.Text.SectionLabel}"/>
-                                        <ctl:AfmImageView x:Name="AfterImageView"/>
-                                    </DockPanel>
-                                </Grid>
-
-                            <!-- empty: first-run -->
-                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                                        Visibility="{Binding IsEmpty, Converter={StaticResource Bool2Vis}}">
-                                <ds:IconPresenter Data="{StaticResource SA.Icon.FolderOpen}" Width="40" Height="40"
-                                                  Foreground="{DynamicResource SA.Brush.Text.Tertiary}"
-                                                  HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Bottom2}"/>
-                                <TextBlock Text="No workspace open" HorizontalAlignment="Center"
-                                           Style="{StaticResource SA.Text.Subtitle}"/>
-                                <TextBlock Text="Open a scan, or start with the bundled sample."
-                                           HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Bottom2}"
-                                           Style="{StaticResource SA.Text.Secondary}"/>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <Button Command="{Binding ImportCommand}" Content="Import scan…"
-                                            Style="{StaticResource SA.Button.Primary}" Margin="{DynamicResource SA.Gap.Right2}"/>
-                                    <Button Command="{Binding OpenSampleCommand}" Content="Open sample"
-                                            Style="{StaticResource SA.Button.Secondary}"/>
-                                </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <Button Click="Fit_Click" Style="{StaticResource SA.Button.Toolbar}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ds:IconPresenter Data="{StaticResource SA.Icon.ZoomFit}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                                        <TextBlock Text="Fit" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding CycleColormapCommand}" Style="{StaticResource SA.Button.Toolbar}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ds:IconPresenter Data="{StaticResource SA.Icon.Colormap}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                                        <TextBlock Text="{Binding ColormapName}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Border Width="1" Height="18" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.2}"/>
+                                <Button Click="Export_Click" Style="{StaticResource SA.Button.Toolbar}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ds:IconPresenter Data="{StaticResource SA.Icon.Import}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                                        <TextBlock Text="Export" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
-
-                            <!-- status banner (errors) -->
-                            <Border VerticalAlignment="Bottom" Style="{StaticResource SA.Banner.Error}"
-                                    Margin="{DynamicResource SA.Gap.3}"
-                                    Visibility="{Binding HasStatus, Converter={StaticResource Bool2Vis}}">
-                                <StackPanel Orientation="Horizontal">
-                                    <ds:IconPresenter Data="{StaticResource SA.Icon.Error}" Margin="{DynamicResource SA.Gap.Right2}"
-                                                      Foreground="{DynamicResource SA.Brush.Banner.Error.Foreground}"/>
-                                    <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource SA.Brush.Banner.Error.Foreground}"
-                                               Style="{StaticResource SA.Text.Body}"/>
-                                </StackPanel>
-                            </Border>
-                            </Grid>
-                        </DockPanel>
+                        </Grid>
                     </Border>
-                </Grid>
+                    <!-- compare toolbar (comparison mode) -->
+                    <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource SA.Brush.Border.Subtle}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Bottom}"
+                            Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
+                        <Grid Height="42" Margin="{DynamicResource SA.Pad.Bar}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}" SelectedIndex="0">
+                                    <ListBoxItem>Split</ListBoxItem><ListBoxItem IsEnabled="False">Overlay</ListBoxItem>
+                                    <ListBoxItem IsEnabled="False">Difference</ListBoxItem>
+                                </ListBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ds:IconPresenter Data="{StaticResource SA.Icon.Cursor}" Foreground="{DynamicResource SA.Brush.Accent.OnSurface}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                                <TextBlock Text="Synced nav" VerticalAlignment="Center" Style="{StaticResource SA.Text.Caption}"/>
+                                <Border Width="1" Height="18" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.3}"/>
+                                <TextBlock VerticalAlignment="Center" Style="{StaticResource SA.Text.Caption}">
+                                    <Run Text="Same X/Y" FontWeight="SemiBold"/><Run Text=" · Independent Z ranges"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <Button Command="{Binding ExitCompareCommand}" Style="{StaticResource SA.Button.Secondary}">
+                                    <TextBlock Text="Exit compare"/>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
-                <!-- History (bottom, under explorer + active view) -->
-                <Border Grid.Row="1" Height="140" Background="{DynamicResource SA.Brush.Background.Sidebar}"
-                        BorderBrush="{DynamicResource SA.Brush.Border.Default}"
-                        BorderThickness="{DynamicResource SA.Stroke.Hairline}">
-                    <DockPanel Margin="{DynamicResource SA.Gap.3}">
-                        <TextBlock DockPanel.Dock="Top" Text="HISTORY · PROVENANCE"
-                                   Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.SectionLabel}"/>
-                        <ItemsControl ItemsSource="{Binding HistoryRows}"/>
-                    </DockPanel>
-                </Border>
-            </Grid>
-
-            <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Center" VerticalAlignment="Stretch"
-                          Background="{DynamicResource SA.Brush.Border.Default}"/>
-
-            <!-- Parameters (right, full height) -->
-            <Border Grid.Column="2" Background="{DynamicResource SA.Brush.Surface.Default}"
-                    BorderBrush="{DynamicResource SA.Brush.Border.Default}"
-                    BorderThickness="{DynamicResource SA.Stroke.Hairline}">
-                <DockPanel Margin="{DynamicResource SA.Gap.3}">
-                    <TextBlock DockPanel.Dock="Top" Text="PARAMETERS" Margin="{DynamicResource SA.Gap.Bottom2}"
-                               Style="{StaticResource SA.Text.SectionLabel}"/>
+                    <!-- content -->
                     <Grid>
-                        <!-- contextual Flatten panel (active dataset is an image). The outer Grid binds
-                             Visibility on the shell VM (HasActiveImage); the inner panel switches DataContext
-                             to the FlattenPanel VM so its fields bind — the two must not share one element. -->
-                        <Grid Visibility="{Binding HasActiveImage, Converter={StaticResource Bool2Vis}}">
-                        <StackPanel DataContext="{Binding FlattenPanel}">
+                        <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}"
+                                          Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}"/>
+                        <Grid x:Name="CompareContent" Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <DockPanel Grid.Column="0" Margin="{DynamicResource SA.Gap.2}">
+                                <TextBlock DockPanel.Dock="Top" Text="BEFORE" Margin="{DynamicResource SA.Gap.2}"
+                                           Foreground="{DynamicResource SA.Brush.Text.Tertiary}" Style="{StaticResource SA.Text.SectionLabel}"/>
+                                <ctl:AfmImageView x:Name="BeforeImageView"/>
+                            </DockPanel>
+                            <Border Grid.Column="1" Background="{DynamicResource SA.Brush.Border.Default}"/>
+                            <DockPanel Grid.Column="2" Margin="{DynamicResource SA.Gap.2}">
+                                <TextBlock DockPanel.Dock="Top" Text="AFTER" Margin="{DynamicResource SA.Gap.2}"
+                                           Foreground="{DynamicResource SA.Brush.Accent.OnSurface}" Style="{StaticResource SA.Text.SectionLabel}"/>
+                                <ctl:AfmImageView x:Name="AfterImageView"/>
+                            </DockPanel>
+                        </Grid>
+
+                        <!-- empty / first-run -->
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                    Visibility="{Binding IsEmpty, Converter={StaticResource Bool2Vis}}">
+                            <ds:IconPresenter Data="{StaticResource SA.Icon.FolderOpen}" Width="40" Height="40"
+                                              Foreground="{DynamicResource SA.Brush.Text.Tertiary}"
+                                              HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="No workspace open" HorizontalAlignment="Center" Style="{StaticResource SA.Text.Subtitle}"/>
+                            <TextBlock Text="Open a scan, or start with the bundled sample." HorizontalAlignment="Center"
+                                       Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Secondary}"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Command="{Binding ImportCommand}" Content="Import scan…" Style="{StaticResource SA.Button.Primary}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                                <Button Command="{Binding OpenSampleCommand}" Content="Open sample" Style="{StaticResource SA.Button.Secondary}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- status banner -->
+                        <Border VerticalAlignment="Bottom" Style="{StaticResource SA.Banner.Error}" Margin="{DynamicResource SA.Gap.3}"
+                                Visibility="{Binding HasStatus, Converter={StaticResource Bool2Vis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <ds:IconPresenter Data="{StaticResource SA.Icon.Error}" Margin="{DynamicResource SA.Gap.Right2}"
+                                                  Foreground="{DynamicResource SA.Brush.Banner.Error.Foreground}"/>
+                                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource SA.Brush.Banner.Error.Foreground}" Style="{StaticResource SA.Text.Body}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </DockPanel>
+            </Border>
+
+            <!-- INSPECTOR (recessed rail, role-switching) -->
+            <Border Grid.Column="2" Background="{DynamicResource SA.Brush.Background.Sidebar}"
+                    BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Left}">
+                <Grid>
+                    <!-- placeholder when no image -->
+                    <StackPanel Margin="{DynamicResource SA.Pad.Panel}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding HasActiveImage, Converter={StaticResource NotBool2Vis}}">
+                        <ds:IconPresenter Data="{StaticResource SA.Icon.Parameters}" Width="20" Height="20"
+                                          HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                        <TextBlock Text="Select an image" HorizontalAlignment="Center" Style="{StaticResource SA.Text.Secondary}"/>
+                    </StackPanel>
+
+                    <!-- Dataset properties -->
+                    <StackPanel Margin="{DynamicResource SA.Pad.Panel}"
+                                Visibility="{Binding RoleIsDataset, Converter={StaticResource Bool2Vis}}">
+                        <StackPanel Visibility="{Binding HasActiveImage, Converter={StaticResource Bool2Vis}}">
+                            <TextBlock Text="DATASET" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="{Binding ActiveTitle}" Style="{StaticResource SA.Text.Title}"/>
+                            <TextBlock Text="{Binding ActiveSubtitle}" Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Secondary}"/>
+                            <TextBlock Text="ACQUISITION" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                            <Grid Margin="{DynamicResource SA.Gap.Bottom1}">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Instrument" Style="{StaticResource SA.Text.Caption}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding ActiveMeta}" Style="{StaticResource SA.Text.Numeric}"/>
+                            </Grid>
+                            <Border Style="{StaticResource SA.Card}" Background="{DynamicResource SA.Brush.Surface.Sunken}"
+                                    Margin="{DynamicResource SA.Gap.Top2}">
+                                <TextBlock Text="Run an operation from Analyze ▾ — Process · Measure · View."
+                                           TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Operation config (Flatten) -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding RoleIsOperation, Converter={StaticResource Bool2Vis}}">
+                        <StackPanel DataContext="{Binding FlattenPanel}" Margin="{DynamicResource SA.Pad.Panel}">
+                            <TextBlock Text="OPERATION" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
                             <TextBlock Text="Flatten" Style="{StaticResource SA.Text.Title}"/>
                             <TextBlock Text="Subtract a per-line, averaged, or surface polynomial."
-                                       Margin="{DynamicResource SA.Gap.Bottom2}" TextWrapping="Wrap"
-                                       Style="{StaticResource SA.Text.Secondary}"/>
+                                       TextWrapping="Wrap" Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Secondary}"/>
 
-                            <TextBlock Text="Scope" Style="{StaticResource SA.Text.Caption}"/>
-                            <ComboBox ItemsSource="{Binding ScopeOptions}" SelectedItem="{Binding Scope}"
-                                      Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="Scope" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                            <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}"
+                                     ItemsSource="{Binding ScopeOptions}" SelectedItem="{Binding Scope, Mode=TwoWay}"
+                                     Margin="{DynamicResource SA.Gap.Bottom2}"/>
 
-                            <TextBlock Text="Order (0–8)" Style="{StaticResource SA.Text.Caption}"/>
-                            <ComboBox ItemsSource="{Binding OrderOptions}" SelectedItem="{Binding Order}"
-                                      Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="Order (0–8)" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                            <Border BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                                    CornerRadius="{DynamicResource SA.Radius.Sm}" HorizontalAlignment="Left" Margin="{DynamicResource SA.Gap.Bottom2}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Command="{Binding OrderDownCommand}" Style="{StaticResource SA.Button.Icon}">
+                                        <ds:IconPresenter Data="{StaticResource SA.Icon.ChevronDown}" Width="14" Height="14"/>
+                                    </Button>
+                                    <TextBlock Text="{Binding Order}" MinWidth="34" TextAlignment="Center" VerticalAlignment="Center"
+                                               Style="{StaticResource SA.Text.Numeric}"/>
+                                    <Button Command="{Binding OrderUpCommand}" Style="{StaticResource SA.Button.Icon}">
+                                        <ds:IconPresenter Data="{StaticResource SA.Icon.ChevronRight}" Width="14" Height="14"/>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
 
-                            <TextBlock Text="Orientation" Style="{StaticResource SA.Text.Caption}"/>
-                            <ComboBox ItemsSource="{Binding OrientationOptions}" SelectedItem="{Binding Orientation}"
-                                      IsEnabled="{Binding OrientationEnabled}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="Orientation" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                            <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}"
+                                     ItemsSource="{Binding OrientationOptions}" SelectedItem="{Binding Orientation, Mode=TwoWay}"
+                                     IsEnabled="{Binding OrientationEnabled}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
 
-                            <TextBlock Text="Basement" Style="{StaticResource SA.Text.Caption}"/>
-                            <ComboBox ItemsSource="{Binding BasementOptions}" SelectedItem="{Binding Basement}"
-                                      Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="Basement" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                            <ComboBox ItemsSource="{Binding BasementOptions}" SelectedItem="{Binding Basement}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
 
                             <Border Style="{StaticResource SA.Banner.Error}" Margin="{DynamicResource SA.Gap.Bottom2}"
                                     Visibility="{Binding HasError, Converter={StaticResource Bool2Vis}}">
@@ -339,23 +388,51 @@
                                 <TextBlock Text="{Binding Warnings}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
                             </Border>
 
-                            <Button Content="Apply" Command="{Binding ApplyCommand}" HorizontalAlignment="Left"
-                                    Style="{StaticResource SA.Button.Primary}"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource SA.Gap.Top2}">
+                                <Button Content="Apply" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
+                            </StackPanel>
                         </StackPanel>
-                        </Grid>
+                    </ScrollViewer>
 
-                        <!-- placeholder (no image active) -->
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                                    Visibility="{Binding HasActiveImage, Converter={StaticResource NotBool2Vis}}">
-                            <ds:IconPresenter Data="{StaticResource SA.Icon.Parameters}" Width="20" Height="20"
-                                              HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Bottom2}"/>
-                            <TextBlock Text="Select an image" HorizontalAlignment="Center"
-                                       Style="{StaticResource SA.Text.Secondary}"/>
-                            <TextBlock Text="Contextual parameters appear here." HorizontalAlignment="Center"
-                                       TextAlignment="Center" Style="{StaticResource SA.Text.Micro}"/>
+                    <!-- Measurement result -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding RoleIsResult, Converter={StaticResource Bool2Vis}}">
+                        <StackPanel DataContext="{Binding Statistics}" Margin="{DynamicResource SA.Pad.Panel}">
+                            <TextBlock Text="MEASUREMENT · ROUGHNESS" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <Border Style="{StaticResource SA.Card}" Background="{DynamicResource SA.Brush.Surface.Sunken}" Margin="{DynamicResource SA.Gap.Bottom2}">
+                                <TextBlock TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}">
+                                    <Run Text="Attached to "/><Run Text="{Binding SourceLabel, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" — active unchanged"/>
+                                </TextBlock>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding Readouts}"/>
+                            <ItemsControl ItemsSource="{Binding HistogramBars}" Height="52" Margin="{DynamicResource SA.Gap.Top2}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="7" Margin="{DynamicResource SA.Gap.BarX}" VerticalAlignment="Bottom"
+                                                Background="{DynamicResource SA.Brush.Accent.Primary}"
+                                                Height="{Binding Converter={StaticResource Ratio2H}, ConverterParameter=48}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="Height histogram · golden-verified (MV00)" Style="{StaticResource SA.Text.Micro}" Margin="{DynamicResource SA.Gap.Top2}"/>
                         </StackPanel>
-                    </Grid>
-                </DockPanel>
+                    </ScrollViewer>
+
+                    <!-- Provenance step inspector (read-only) -->
+                    <StackPanel Margin="{DynamicResource SA.Pad.Panel}"
+                                Visibility="{Binding RoleIsStep, Converter={StaticResource Bool2Vis}}">
+                        <TextBlock Text="RECORDED STEP" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                        <TextBlock Text="{Binding SelectedStep.Operation}" Style="{StaticResource SA.Text.Title}"/>
+                        <TextBlock Text="{Binding SelectedStep.Parameters}" Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Numeric}"/>
+                        <Border Style="{StaticResource SA.Card}" Background="{DynamicResource SA.Brush.Surface.Sunken}">
+                            <TextBlock Text="A recorded step is read-only. Selecting it does not change the active dataset."
+                                       TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
+                        </Border>
+                    </StackPanel>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

@@ -16,4 +16,11 @@ public interface IImageAnalysisUseCase
     /// Invalid parameters / a non-image source / a run failure come back as a typed <see cref="FlattenOutcome.Error"/>.
     /// </summary>
     Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Computes whole-image summary statistics for the image identified by <paramref name="sourceId"/>.
+    /// The measurement is attached to that image and does <b>not</b> change the active dataset; returns the
+    /// readouts + histogram for the Inspector result card (a typed error on failure).
+    /// </summary>
+    Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken cancellationToken = default);
 }

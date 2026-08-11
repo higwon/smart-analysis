@@ -30,7 +30,13 @@ public sealed class FlattenPanelViewModel : ObservableObject
         _useCase = useCase ?? throw new ArgumentNullException(nameof(useCase));
         _activeSource = activeSource ?? throw new ArgumentNullException(nameof(activeSource));
         ApplyCommand = new AsyncRelayCommand(ApplyAsync, () => !IsBusy, ex => ErrorMessage = ex.Message);
+        OrderUpCommand = new RelayCommand(() => Order = Math.Min(8, Order + 1));
+        OrderDownCommand = new RelayCommand(() => Order = Math.Max(0, Order - 1));
     }
+
+    /// <summary>Stepper commands for Order (clamped to the schema range 0–8).</summary>
+    public ICommand OrderUpCommand { get; }
+    public ICommand OrderDownCommand { get; }
 
     public IReadOnlyList<FlattenScope> ScopeOptions { get; } = Enum.GetValues<FlattenScope>();
     public IReadOnlyList<FlattenOrientation> OrientationOptions { get; } = Enum.GetValues<FlattenOrientation>();

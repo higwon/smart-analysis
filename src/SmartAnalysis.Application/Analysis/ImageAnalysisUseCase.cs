@@ -15,6 +15,14 @@ namespace SmartAnalysis.Application.Analysis;
 public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
 {
     private const string FlattenId = "image.flatten";
+    private const string StatisticsId = "image.statistics";
+
+    // Preferred readouts (operation scalar key → friendly label), in display order.
+    private static readonly (string Key, string Label)[] StatKeys =
+    [
+        ("rms", "Sq (RMS)"), ("meanAbsoluteDeviation", "Sa"), ("mean", "Mean"),
+        ("skewness", "Skewness"), ("kurtosis", "Kurtosis"),
+    ];
 
     private readonly Workspace _workspace;
     private readonly IOperationRegistry _registry;
@@ -99,6 +107,63 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         var warnings = result.Warnings.Select(w => w.Message).ToArray();
         return new FlattenOutcome(true, derived.Id, warnings, null);
     }
+
+    public async Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken cancellationToken = default)
+    {
+        if (!_workspace.TryGet(sourceId, out var dataset) || dataset is not ScanImageDataset image)
+        {
+            return StatisticsResult.Failed("The source is not an image dataset in the workspace.");
+        }
+
+        if (!_registry.TryGet(StatisticsId, out var operation))
+        {
+            return StatisticsResult.Failed($"Operation '{StatisticsId}' is not registered.");
+        }
+
+        var input = new OperationInput(image);
+        var validation = operation.Validate(input, ParameterSet.Empty);
+        if (!validation.IsValid)
+        {
+            return StatisticsResult.Failed(string.Join("; ", validation.Errors));
+        }
+
+        OperationResult result;
+        try
+        {
+            result = await operation.RunAsync(input, ParameterSet.Empty, progress: null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return StatisticsResult.Failed(ex.Message);
+        }
+
+        if (result.Artifact is not { } artifact)
+        {
+            return StatisticsResult.Failed("Statistics produced no result.");
+        }
+
+        var readouts = new List<StatisticsReadout>();
+        foreach (var (key, label) in StatKeys)
+        {
+            if (artifact.Scalars.TryGetValue(key, out var pv))
+            {
+                readouts.Add(new StatisticsReadout(label, pv.Value, pv.Unit.Symbol));
+            }
+        }
+
+        var histogram = artifact.Histogram is { } h ? h.Counts.Select(c => (int)Math.Min(c, int.MaxValue)).ToArray() : [];
+        // Measurement attaches to the source; the active dataset is deliberately unchanged (doc 22/26).
+        return new StatisticsResult(true, DatasetLabel(image), readouts, histogram, null);
+    }
+
+    private static string DatasetLabel(AfmDataset d)
+        => d.Provenance.IsRoot && d.Source.OriginalFilePath is { } p
+            ? System.IO.Path.GetFileNameWithoutExtension(p)
+            : d.Provenance.Steps.Count > 0 ? d.Provenance.Steps[^1].OperationId : "dataset";
 
     private static AnFlatten.FlattenScope MapScope(FlattenScope scope) => scope switch
     {
