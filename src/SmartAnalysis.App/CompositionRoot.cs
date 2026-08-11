@@ -1,4 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
+using SmartAnalysis.Application.Workspaces;
+using SmartAnalysis.UI.DesignSystem.Theming;
+using SmartAnalysis.UI.Services;
+using SmartAnalysis.UI.ViewModels;
+using SmartAnalysis.UI.Views;
 
 namespace SmartAnalysis.App;
 
@@ -25,6 +30,13 @@ public static class CompositionRoot
         // Analysis operations (explicit per-module registration, ADR-005) + the registry over them.
         services.AddImageAnalysis();    // Statistics + Flatten (+ IExecutionEnvironmentProvider)
         services.AddOperationRegistry();
+
+        // UI: one workspace session, the theme controller, and the shell (U01).
+        services.AddSingleton<Workspace>();
+        services.AddSingleton<ThemeManager>();
+        services.AddSingleton<IScanFilePicker, WpfScanFilePicker>();
+        services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<MainWindow>();
 
         return services;
     }

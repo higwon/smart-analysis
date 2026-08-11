@@ -1,7 +1,7 @@
 <Application x:Class="SmartAnalysis.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             ShutdownMode="OnExplicitShutdown">
+             ShutdownMode="OnMainWindowClose">
     <!--
         Composition root. The first-party design system (UIX03) is merged here so every window/control
         resolves SA.* tokens; ThemeManager (App.xaml.cs) swaps the Light/Dark palette at runtime.

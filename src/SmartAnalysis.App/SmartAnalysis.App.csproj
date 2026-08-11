@@ -15,6 +15,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- U01: a bundled sample scan offered on the empty-state (the same committed fixture, linked not copied). -->
+    <Content Include="..\..\tests\SmartAnalysis.Tests\Fixtures\Tiff\cheese-15x15.tiff"
+             Link="Samples\cheese-15x15.tiff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SmartAnalysis.UI\SmartAnalysis.UI.csproj" />
     <ProjectReference Include="..\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
     <ProjectReference Include="..\SmartAnalysis.Infrastructure\SmartAnalysis.Infrastructure.csproj" />

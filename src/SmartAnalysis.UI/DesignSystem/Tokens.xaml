@@ -45,6 +45,18 @@
     <Thickness x:Key="SA.Pad.Panel">16</Thickness>
     <Thickness x:Key="SA.Pad.Chip">10,0,10,0</Thickness>
     <Thickness x:Key="SA.Pad.Banner">12,8,12,8</Thickness>
+    <Thickness x:Key="SA.Pad.Bar">12,0,12,0</Thickness>
+    <!-- Uniform gap Thicknesses for view layout (screens use tokens, not literal Margin/Padding). -->
+    <Thickness x:Key="SA.Gap.1">4</Thickness>
+    <Thickness x:Key="SA.Gap.2">8</Thickness>
+    <Thickness x:Key="SA.Gap.3">12</Thickness>
+    <Thickness x:Key="SA.Gap.4">16</Thickness>
+    <!-- Directional gaps used by stacked rows / inline groups. -->
+    <Thickness x:Key="SA.Gap.Right2">0,0,8,0</Thickness>
+    <Thickness x:Key="SA.Gap.Left2">8,0,0,0</Thickness>
+    <Thickness x:Key="SA.Gap.Bottom1">0,0,0,4</Thickness>
+    <Thickness x:Key="SA.Gap.Bottom2">0,0,0,8</Thickness>
+    <Thickness x:Key="SA.Gap.Top2">0,8,0,0</Thickness>
 
     <!-- ===== Sizing ===== -->
     <sys:Double x:Key="SA.Size.Control.Sm">24</sys:Double>

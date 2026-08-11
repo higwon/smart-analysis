@@ -115,7 +115,7 @@ Prio · MVP · Status**.
 ## UI (U)
 | ID | Task | Depends | Legacy | Reuse/rewrite | Prio | MVP | Status |
 |---|---|---|---|---|---|---|---|
-| U01 | Shell (AvalonDock functionality; first-party styled) + workspace explorer | F02, W01, UX01, **UIX03 (visual design approved, ADR-008)** | DevExpress shell | Rewrite | P0 | ✅ | planned |
+| U01 | Shell (five-region; first-party styled) + workspace explorer | F02, W01, UX01, **UIX03 (visual design approved, ADR-008)** | DevExpress shell | Rewrite | P0 | ✅ | review (MainWindow + ShellViewModel over the real Workspace; SA.*/SA.Icon.* only; Import/sample via IScanFileReader; theme toggle; L/D render verified. **Fixed-Grid layout — AvalonDock docking deferred to a follow-up + its ADR**; lightweight in-house MVVM) |
 | U02 | Image analysis page + flatten panel (before/after) | U01, V02, A01 | ImageAnalysis + ImageProcess | Rewrite | P0 | ✅ | planned |
 | U03 | Operation parameter panel framework | U01, F04 | process dialogs | Rewrite (registry-driven) | P1 | – | planned |
 | U04 | **Profile analysis UI** (split from old curve/spectrum umbrella → U06, U07) | U01, V03, A10 | Profile pages | Rewrite | P2 | – | planned |
