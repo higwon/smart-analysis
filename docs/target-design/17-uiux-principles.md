@@ -75,7 +75,8 @@ representation, journeys, before/after & comparison entry, parameter-panel behav
 states, AI intervention points, shell regions, dialog criteria, the MVP screen flow, and low-fidelity
 wireframes. See [`../migration/specs/TASK-UX01-core-workflow-ia.md`](../migration/specs/TASK-UX01-core-workflow-ia.md).
 Without UX01 first, an implementer would re-create the legacy tree/docking/dialog forest in a new
-library instead of the redesigned UX.
+library instead of the redesigned UX. **The produced IA lives in
+[`22-information-architecture.md`](22-information-architecture.md)** (pending user approval before U01).
 
 ## Note on this phase
 No UI is built now. These principles + UX01 feed the architecture, feature inventory, and roadmap so

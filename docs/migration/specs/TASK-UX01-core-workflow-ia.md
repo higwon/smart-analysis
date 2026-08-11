@@ -71,6 +71,27 @@ n/a (design).
 ## Docs to update on completion
 doc 17 (or a new UX doc), doc 30 (align keep/merge/remove), INDEX status, backlog status.
 
+## Implementation status (this PR)
+The IA is authored in [`../../target-design/22-information-architecture.md`](../../target-design/22-information-architecture.md)
+(design doc, no code), covering every "Output" bullet: personas; core journeys; the single Active Context
+model (what it is / changes it / binds to it — the fix for the legacy three-way active item); on-screen
+representation of Dataset / Derived / Analysis Run / Measurement / Workspace; lineage navigation from
+provenance; before/after + comparison entry; parameter-panel behaviour (contextual, schema-driven, live
+preview); operation states (progress/cancel/typed error); auto-vs-manual + AI intervention points; the five
+shell regions; modal-dialog criteria; the MVP screen-transition flow; low-fi text wireframes; keep/merge/
+remove vs legacy; and the capabilities the commercial controls actually provided. A **low-fidelity review
+artifact** (shell regions + active-context model + MVP flow + wireframes) accompanies it for approval.
+**Awaiting user approval before U01** (the required gate); UIX02 owns the concrete visual design.
+
+**Grounded in the built model (review-hardened):** the `ActiveId` is **always a dataset in the
+`Workspace`** (never an `AnalysisArtifact`) — matching W01, where `Workspace` holds `AfmDataset`s and
+`ActiveContext` targets member ids. A **`Measurement` is an attached result** (`AnalysisArtifact.SourceId`),
+shown with its source dataset, not an independent active target (a generalized item id is a future
+concern). **Comparison mutation is deterministic (no mode flag):** a transform sets
+`Comparison = [sourceId]`; only an explicit *Compare* sets a user-chosen set; "compare with source" =
+`[active.Provenance.ParentId]`. Automated **re-run/replay** onto another dataset is a documented future
+action (deferred with P01), not an MVP journey.
+
 ## Unverified / open
 - Final shell layout depends partly on the docking library (Candidate: AvalonDock) — keep the IA
   library-agnostic; the docking choice is a V00/U01-adjacent ADR.
