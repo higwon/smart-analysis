@@ -16,6 +16,14 @@ namespace SmartAnalysis.UI.Controls;
 /// (<see cref="ImagePixelMapper"/>), with mouse-wheel zoom (around the cursor), drag pan, double-click Fit,
 /// and a colormap legend. Nearest-neighbor scaling keeps AFM pixels crisp. The data colormap is
 /// theme-independent (ADR-008); only the chrome uses <c>SA.*</c> tokens. No ROI (V06).
+/// <para>
+/// <b>Lifetime (ADR-011 / V01 contract):</b> <see cref="Render"/> consumes/copies the borrowed
+/// <see cref="ImageRenderInput.Z"/> during the call and <b>retains nothing borrowed</b> — the control
+/// keeps only its own owned <c>WriteableBitmap</c> and legend brush. It deliberately exposes <b>no
+/// bindable <c>ImageRenderInput</c> property</b>: a DP would hold the input (and thus the borrowed <c>Z</c>
+/// view) for the control's lifetime, violating the contract. Callers (U02 orchestration) build a fresh
+/// input at render time and call <see cref="Render"/>; nothing keeps it afterwards.
+/// </para>
 /// </summary>
 public partial class AfmImageView : UserControl, IImageView
 {
@@ -30,29 +38,27 @@ public partial class AfmImageView : UserControl, IImageView
 
     public AfmImageView() => InitializeComponent();
 
-    /// <summary>The image to display. Setting it (re)renders and fits to the viewport.</summary>
-    public static readonly DependencyProperty SourceProperty = DependencyProperty.Register(
-        nameof(Source), typeof(ImageRenderInput), typeof(AfmImageView),
-        new PropertyMetadata(null, (d, e) => ((AfmImageView)d).ApplyInput(e.NewValue as ImageRenderInput)));
-
-    public ImageRenderInput? Source
+    /// <summary>
+    /// V01 port entry point: render <paramref name="input"/> now. The borrowed pixels are consumed into an
+    /// owned bitmap during this call; the input is <b>not</b> retained (ADR-011). Call again to re-render.
+    /// </summary>
+    public void Render(ImageRenderInput input)
     {
-        get => (ImageRenderInput?)GetValue(SourceProperty);
-        set => SetValue(SourceProperty, value);
+        ArgumentNullException.ThrowIfNull(input);
+        RenderCore(input);
     }
 
-    /// <summary>V01 port entry point — equivalent to setting <see cref="Source"/>.</summary>
-    public void Render(ImageRenderInput input) => Source = input;
-
-    private void ApplyInput(ImageRenderInput? input)
+    /// <summary>Clears the view (e.g. when there is no active image). Releases the owned bitmap.</summary>
+    public void Clear()
     {
-        if (input is null)
-        {
-            Img.Source = null;
-            LegendBar.Background = null;
-            MaxLabel.Text = MinLabel.Text = UnitLabel.Text = string.Empty;
-            return;
-        }
+        Img.Source = null;
+        LegendBar.Background = null;
+        MaxLabel.Text = MinLabel.Text = UnitLabel.Text = string.Empty;
+        _bmpW = _bmpH = 0;
+    }
+
+    private void RenderCore(ImageRenderInput input)
+    {
 
         // Map the borrowed Z during this call (ADR-011) and pack into a Bgra32 bitmap.
         var rgb = ImagePixelMapper.Map(input);
