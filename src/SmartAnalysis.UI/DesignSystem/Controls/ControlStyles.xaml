@@ -460,24 +460,108 @@
     <!-- ===================== Base-setter styles (default template, tokenized) — extensible ===================== -->
     <!-- These give the remaining stock controls consistent color/typography/metrics now; full templates
          are added incrementally as screens need them (doc 21 §7 "extensible"). No hard-coded values. -->
-    <Style TargetType="{x:Type ComboBox}">
-        <Setter Property="Height" Value="{DynamicResource SA.Size.Control.Md}"/>
-        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Field}"/>
-        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
-        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
-        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
-        <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Default}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Default}"/>
-        <Setter Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline}"/>
-        <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-    <Style TargetType="{x:Type ComboBoxItem}">
+    <!-- ComboBox — fully re-templated (a setter-only style leaves the default WPF chrome, whose toggle
+         button paints system-grey regardless of theme: unreadable text on the wrong ground, esp. in Dark).
+         The closed box + chevron, the drop-down, and the items all use SA brushes so both themes read right. -->
+    <Style x:Key="SA.ComboBoxItem" TargetType="{x:Type ComboBoxItem}">
         <Setter Property="MinHeight" Value="{DynamicResource SA.Size.Row.Comfortable}"/>
         <Setter Property="Padding" Value="{DynamicResource SA.Pad.Field}"/>
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
         <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
         <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                    <Border x:Name="bd" Background="Transparent" Padding="{TemplateBinding Padding}"
+                            CornerRadius="{DynamicResource SA.Radius.Sm}" SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Selected}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Accent.OnSurface}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Disabled}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
+    <Style TargetType="{x:Type ComboBoxItem}" BasedOn="{StaticResource SA.ComboBoxItem}"/>
+
+    <!-- The closed box (a ToggleButton that opens the drop-down): border + chevron, no content (the
+         ComboBox template overlays the selected item over column 0). -->
+    <ControlTemplate x:Key="SA.ComboBox.ToggleTemplate" TargetType="{x:Type ToggleButton}">
+        <Border x:Name="bd" Background="{DynamicResource SA.Brush.Surface.Default}"
+                BorderBrush="{DynamicResource SA.Brush.Border.Default}"
+                BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                CornerRadius="{DynamicResource SA.Radius.Sm}" SnapsToDevicePixels="True">
+            <ds:IconPresenter HorizontalAlignment="Right" VerticalAlignment="Center" Width="14" Height="14"
+                              Margin="{DynamicResource SA.Gap.Right2}"
+                              Data="{DynamicResource SA.Icon.ChevronDown}"
+                              Foreground="{DynamicResource SA.Brush.Text.Secondary}"/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Strong}"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Focus}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style x:Key="SA.ComboBox" TargetType="{x:Type ComboBox}">
+        <Setter Property="Height" Value="{DynamicResource SA.Size.Control.Md}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Field}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ComboBox}">
+                    <Grid>
+                        <ToggleButton x:Name="ToggleButton" Focusable="False" ClickMode="Press"
+                                      OverridesDefaultStyle="True"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                      Template="{StaticResource SA.ComboBox.ToggleTemplate}"/>
+                        <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          Margin="9,0,30,0" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                          SnapsToDevicePixels="True"/>
+                        <Popup x:Name="PART_Popup" Placement="Bottom" Focusable="False"
+                               IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" PopupAnimation="Slide">
+                            <Border MinWidth="{Binding ActualWidth, ElementName=ToggleButton}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}" Margin="0,2,0,0"
+                                    Background="{DynamicResource SA.Brush.Surface.Raised}"
+                                    BorderBrush="{DynamicResource SA.Brush.Border.Default}"
+                                    BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                                    CornerRadius="{DynamicResource SA.Radius.Sm}">
+                                <ScrollViewer>
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Disabled}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="{x:Type ComboBox}" BasedOn="{StaticResource SA.ComboBox}"/>
     <Style TargetType="{x:Type RadioButton}">
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
         <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
@@ -523,4 +607,97 @@
         <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource SA.Brush.Border.Subtle}"/>
         <Setter Property="RowHeight" Value="{DynamicResource SA.Size.Row.Comfortable}"/>
     </Style>
+
+    <!-- ===================================================================================
+         ScrollBar — thin, chrome-less, themed. A rounded thumb over a transparent track, no
+         arrow buttons (modern overlay style). Thumb tone brightens on hover/drag. Applied as the
+         implicit default so every ScrollViewer (Navigator tree, Inspector, provenance list, multi-
+         line text) themes with the palette instead of the grey Windows default (notably in Dark).
+         Reuses existing neutral brushes — no new palette keys.
+         =================================================================================== -->
+    <!-- The scroll-axis minimum drag length is set per-orientation on the Thumb INSTANCE in the ScrollBar
+         template (MinHeight for vertical, MinWidth for horizontal) — never both here, or the thumb's
+         cross-axis minimum would exceed the 10px track and overflow/clip. -->
+    <Style x:Key="SA.ScrollBar.Thumb" TargetType="{x:Type Thumb}">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Border x:Name="Bar" Margin="2"
+                            Background="{DynamicResource SA.Brush.Border.Strong}"
+                            CornerRadius="{DynamicResource SA.Radius.Pill}"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bar" Property="Background" Value="{DynamicResource SA.Brush.Text.Tertiary}"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Bar" Property="Background" Value="{DynamicResource SA.Brush.Text.Secondary}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Track page-region buttons: invisible, non-focusable (thumb-only interaction + page-click). -->
+    <Style x:Key="SA.ScrollBar.PageButton" TargetType="{x:Type RepeatButton}">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                    <Border Background="{TemplateBinding Background}"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SA.ScrollBar" TargetType="{x:Type ScrollBar}">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width" Value="10"/>
+        <Setter Property="MinWidth" Value="10"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ScrollBar}">
+                    <!-- Vertical is the default; the Horizontal trigger below flips direction, moves the
+                         minimum drag length to the X axis, and switches to the left/right page commands. -->
+                    <Grid Background="{TemplateBinding Background}">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton x:Name="DecreaseButton" Style="{StaticResource SA.ScrollBar.PageButton}" Command="{x:Static ScrollBar.PageUpCommand}"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb x:Name="Thumb" Style="{StaticResource SA.ScrollBar.Thumb}" MinHeight="24"/>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton x:Name="IncreaseButton" Style="{StaticResource SA.ScrollBar.PageButton}" Command="{x:Static ScrollBar.PageDownCommand}"/>
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Orientation" Value="Horizontal">
+                            <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+                            <Setter TargetName="Thumb" Property="MinHeight" Value="0"/>
+                            <Setter TargetName="Thumb" Property="MinWidth" Value="24"/>
+                            <Setter TargetName="DecreaseButton" Property="Command" Value="{x:Static ScrollBar.PageLeftCommand}"/>
+                            <Setter TargetName="IncreaseButton" Property="Command" Value="{x:Static ScrollBar.PageRightCommand}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="Height" Value="10"/>
+                <Setter Property="MinHeight" Value="10"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource SA.ScrollBar}"/>
 </ResourceDictionary>

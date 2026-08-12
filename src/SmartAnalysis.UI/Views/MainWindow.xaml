@@ -219,12 +219,15 @@
                     <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource SA.Brush.Border.Subtle}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Bottom}"
                             Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}">
                         <Grid Height="42" Margin="{DynamicResource SA.Pad.Bar}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
-                                <TextBlock Text="{Binding ActiveTitle}" VerticalAlignment="Center" Style="{StaticResource SA.Text.BodyStrong}"/>
-                                <TextBlock Text="{Binding ActiveSubtitle}" VerticalAlignment="Center"
-                                           Margin="{DynamicResource SA.Gap.Left2}" Style="{StaticResource SA.Text.Secondary}"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" ClipToBounds="True">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                    <TextBlock Text="{Binding ActiveTitle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Style="{StaticResource SA.Text.BodyStrong}"/>
+                                    <TextBlock Text="{Binding ActiveSubtitle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                               Margin="{DynamicResource SA.Gap.Left2}" Style="{StaticResource SA.Text.Secondary}"/>
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
                                 <Button Click="Fit_Click" Style="{StaticResource SA.Button.Toolbar}">
                                     <StackPanel Orientation="Horizontal">
                                         <ds:IconPresenter Data="{StaticResource SA.Icon.ZoomFit}" Margin="{DynamicResource SA.Gap.Right2}"/>
@@ -251,25 +254,28 @@
                     <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource SA.Brush.Border.Subtle}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Bottom}"
                             Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
                         <Grid Height="42" Margin="{DynamicResource SA.Pad.Bar}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
-                                <ListBox Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}" SelectedIndex="0">
-                                    <ListBoxItem>Split</ListBoxItem><ListBoxItem IsEnabled="False">Overlay</ListBoxItem>
-                                    <ListBoxItem IsEnabled="False">Difference</ListBoxItem>
-                                </ListBox>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <ds:IconPresenter Data="{StaticResource SA.Icon.Cursor}" Foreground="{DynamicResource SA.Brush.Accent.OnSurface}" Margin="{DynamicResource SA.Gap.Right2}"/>
-                                <TextBlock Text="Synced nav" VerticalAlignment="Center" Style="{StaticResource SA.Text.Caption}"/>
-                                <Border Width="1" Height="18" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.3}"/>
-                                <TextBlock VerticalAlignment="Center" Style="{StaticResource SA.Text.Caption}">
-                                    <Run Text="Same X/Y" FontWeight="SemiBold"/><Run Text=" · Independent Z ranges"/>
-                                </TextBlock>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                <Button Command="{Binding ExitCompareCommand}" Style="{StaticResource SA.Button.Secondary}">
-                                    <TextBlock Text="Exit compare"/>
-                                </Button>
-                            </StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ListBox Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SA.Segmented}" ItemContainerStyle="{StaticResource SA.Segmented.Item}" SelectedIndex="0">
+                                <ListBoxItem>Split</ListBoxItem><ListBoxItem IsEnabled="False">Overlay</ListBoxItem>
+                                <ListBoxItem IsEnabled="False">Difference</ListBoxItem>
+                            </ListBox>
+                            <!-- Informational, lowest priority: clipped to its column so it never overlaps the
+                                 mode switch / exit button as the window narrows. -->
+                            <Border Grid.Column="1" ClipToBounds="True" Margin="{DynamicResource SA.Gap.2}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <ds:IconPresenter Data="{StaticResource SA.Icon.Cursor}" Foreground="{DynamicResource SA.Brush.Accent.OnSurface}" Margin="{DynamicResource SA.Gap.Right2}"/>
+                                    <TextBlock Text="Synced nav" VerticalAlignment="Center" Style="{StaticResource SA.Text.Caption}"/>
+                                    <Border Width="1" Height="18" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.3}"/>
+                                    <TextBlock VerticalAlignment="Center" Style="{StaticResource SA.Text.Caption}">
+                                        <Run Text="Same X/Y" FontWeight="SemiBold"/><Run Text=" · Independent Z ranges"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                            <Button Grid.Column="2" VerticalAlignment="Center" Command="{Binding ExitCompareCommand}" Style="{StaticResource SA.Button.Secondary}">
+                                <TextBlock Text="Exit compare"/>
+                            </Button>
                         </Grid>
                     </Border>
 
