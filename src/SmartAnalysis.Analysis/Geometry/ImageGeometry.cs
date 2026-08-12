@@ -26,10 +26,9 @@ public enum GeometryKind
 /// (<see cref="SwapsAxes"/>), which the operation mirrors by swapping the X/Y scan axes.
 /// </summary>
 /// <remarks>
-/// These are orientation transforms on the raster grid: the pixel extents (axis <c>Origin</c>/<c>Step</c>/
-/// <c>Count</c>) travel with the reorientation, but absolute-coordinate bookkeeping under a mirror (reversing
-/// an axis <c>Direction</c> so a flipped pixel keeps its original physical coordinate) is deliberately out of
-/// scope — a display-orientation follow-up, not part of this MVP.
+/// This core only reorders the raster (it is domain-free — no axes). The matching physical-axis transform
+/// (reversing an axis <c>Direction</c> so a moved pixel keeps its original coordinate) lives in the operation
+/// that wraps this, <c>ImageGeometryOperation</c>, alongside the width/height swap reported here.
 /// </remarks>
 public static class ImageGeometry
 {

@@ -9,10 +9,13 @@ namespace SmartAnalysis.Analysis.Operations.Image;
 
 /// <summary>
 /// Image geometry (A07) on the F04 contract: horizontal/vertical flips and 90/180° rotations. Produces a
-/// <b>derived</b> <see cref="ScanImageDataset"/> reoriented raster; the quarter-turn kinds swap width and
-/// height, so the X/Y scan axes are swapped to match (the half-turn and flips keep the axes). Carries a plain
-/// schema (a single <c>kind</c> enum), so U08's generic form drives it with no shell code. Deterministic;
-/// discovered only via explicit DI (ADR-005). Full-image (no ROI; D02 deferred).
+/// <b>derived</b> <see cref="ScanImageDataset"/> reoriented raster whose scan axes are transformed to stay
+/// consistent with the pixel mapping: each output axis carries the extent (Origin/Step/Count/Unit) of the
+/// source axis it comes from and has its <see cref="AxisDirection"/> reversed exactly when the mapping runs
+/// that axis backwards — so <c>derived.Axis.RawToReal(destIndex)</c> equals the physical coordinate of the
+/// source pixel it was moved from. Carries a plain schema (a single <c>kind</c> enum), so U08's generic form
+/// drives it with no shell code. Deterministic; discovered only via explicit DI (ADR-005). Full-image (no ROI;
+/// D02 deferred).
 /// </summary>
 public sealed class ImageGeometryOperation : IAnalysisOperation
 {
@@ -83,11 +86,18 @@ public sealed class ImageGeometryOperation : IAnalysisOperation
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        // A quarter turn swaps the raster axes, so the derived X axis is the source Y axis (and vice versa);
-        // flips and the half turn keep the orientation, so the axes are unchanged. Axes are immutable records,
-        // reused as-is (their Origin/Step/Count/Unit describe the same physical extent).
-        Axis newX = ImageGeometry.SwapsAxes(kind) ? image.Y : image.X;
-        Axis newY = ImageGeometry.SwapsAxes(kind) ? image.X : image.Y;
+        // Transform the axes to match the pixel mapping. Each output axis takes the extent of the source axis
+        // it is built from; its Direction is reversed exactly when that mapping walks the source axis backwards
+        // (so the physical coordinate travels with each pixel). Verified by RawToReal equivalence in the tests.
+        var (newX, newY) = kind switch
+        {
+            GeometryKind.FlipHorizontal => (Reversed(image.X), image.Y),   // dest x → src (width-1-x)
+            GeometryKind.FlipVertical => (image.X, Reversed(image.Y)),      // dest y → src (height-1-y)
+            GeometryKind.Rotate180 => (Reversed(image.X), Reversed(image.Y)),
+            GeometryKind.Rotate90Cw => (Reversed(image.Y), image.X),        // dest x → src Y (height-1-x); dest y → src X (y)
+            GeometryKind.Rotate90Ccw => (image.Y, Reversed(image.X)),       // dest x → src Y (x); dest y → src X (width-1-y)
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown geometry kind."),
+        };
 
         var warnings = new List<OperationWarning>();
         var artifactId = DatasetId.New();
@@ -128,4 +138,14 @@ public sealed class ImageGeometryOperation : IAnalysisOperation
             throw;
         }
     }
+
+    // Same physical extent, walked the other way: reversing Direction makes RawToReal count from the far end,
+    // which is what a mirror (or a reversed rotation axis) does to the sample order.
+    private static Axis Reversed(Axis axis) => new(
+        axis.Name,
+        axis.Unit,
+        axis.Origin,
+        axis.Step,
+        axis.Count,
+        axis.Direction == AxisDirection.Forward ? AxisDirection.Reverse : AxisDirection.Forward);
 }

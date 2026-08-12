@@ -37,34 +37,58 @@ public sealed class ImageGeometryOperationTests
     });
 
     [Fact]
-    public async Task A_flip_keeps_the_shape_and_axes_with_provenance()
+    public async Task A_horizontal_flip_reverses_the_X_axis_and_keeps_Y_so_coordinates_track_pixels()
     {
         var image = await LoadImageAsync();
+        int w = image.X.Count;
 
         var result = await NewOperation().RunAsync(new OperationInput(image), Params(GeometryKind.FlipHorizontal), null, CancellationToken.None);
 
         var derived = Assert.IsType<ScanImageDataset>(result.DerivedDataset);
-        Assert.Equal(image.X.Count, derived.X.Count);
+        Assert.Equal(w, derived.X.Count);
         Assert.Equal(image.Y.Count, derived.Y.Count);
-        Assert.Same(image.X, derived.X); // orientation kept → same axes
-        Assert.Same(image.Y, derived.Y);
+
+        // FlipHorizontal moves dest column x to source column (w-1-x): the derived X coordinate at x must equal
+        // the source X coordinate at (w-1-x). Y is untouched, so its coordinates must be unchanged.
+        foreach (int x in new[] { 0, 1, w - 1 })
+        {
+            Assert.Equal(image.X.RawToReal(w - 1 - x), derived.X.RawToReal(x), 9);
+        }
+
+        foreach (int y in new[] { 0, image.Y.Count - 1 })
+        {
+            Assert.Equal(image.Y.RawToReal(y), derived.Y.RawToReal(y), 9);
+        }
+
         Assert.False(derived.Provenance.IsRoot);
         Assert.Equal("image.geometry", derived.Provenance.Steps[^1].OperationId);
     }
 
     [Fact]
-    public async Task A_quarter_turn_swaps_the_scan_axes()
+    public async Task A_quarter_turn_swaps_the_axes_with_the_direction_that_matches_the_pixel_mapping()
     {
         var image = await LoadImageAsync();
+        int w = image.X.Count;
+        int h = image.Y.Count;
 
         var result = await NewOperation().RunAsync(new OperationInput(image), Params(GeometryKind.Rotate90Cw), null, CancellationToken.None);
 
         var derived = Assert.IsType<ScanImageDataset>(result.DerivedDataset);
-        // The derived X axis is the source Y axis (and vice versa) — a real swap, not just equal counts.
-        Assert.Same(image.Y, derived.X);
-        Assert.Same(image.X, derived.Y);
-        Assert.Equal(image.Y.Count, derived.X.Count);
-        Assert.Equal(image.X.Count, derived.Y.Count);
+        Assert.Equal(h, derived.X.Count); // shape swapped
+        Assert.Equal(w, derived.Y.Count);
+
+        // Rotate90Cw maps dest(ox,oy) ← src(x=oy, y=h-1-ox). So the derived X coordinate at ox must equal the
+        // source Y coordinate at (h-1-ox), and the derived Y coordinate at oy the source X coordinate at oy —
+        // this is what fixing the swapped axis's Direction guarantees (a plain reference-swap would be reversed).
+        foreach (int ox in new[] { 0, 1, h - 1 })
+        {
+            Assert.Equal(image.Y.RawToReal(h - 1 - ox), derived.X.RawToReal(ox), 9);
+        }
+
+        foreach (int oy in new[] { 0, 1, w - 1 })
+        {
+            Assert.Equal(image.X.RawToReal(oy), derived.Y.RawToReal(oy), 9);
+        }
     }
 
     [Fact]
