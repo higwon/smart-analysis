@@ -184,6 +184,25 @@ public sealed class DesignSystemStyleTests
         Assert.Matches($@"<ControlTemplate( x:Key=""[^""]*"")? TargetType=""\{{x:Type {control}\}}""", xaml);
     }
 
+    [Theory]
+    [InlineData("DataGrid.SelectAllCommand")]           // select-all corner button
+    [InlineData("PART_LeftHeaderGripper")]              // column resize handles
+    [InlineData("PART_RightHeaderGripper")]
+    [InlineData("SortArrow")]                           // sort-direction glyph element
+    [InlineData("Property=\"SortDirection\"")]          // …driven by the header's SortDirection
+    [InlineData("DataGridRowHeader")]                   // row headers (HeadersVisibility=Row/All)
+    [InlineData("Validation.HasError")]                 // cell validation visual
+    [InlineData("CellsPanelHorizontalOffset")]          // row-header/corner alignment
+    [InlineData("NonFrozenColumnsViewportHorizontalOffset")] // frozen-column-aware h-scrollbar
+    public void DataGrid_template_preserves_advanced_features(string marker)
+    {
+        // Owning the DataGrid template must NOT drop WPF's built-in DataGrid features. This locks the
+        // regression where the first template shipped without a sort glyph, select-all corner, row headers,
+        // resize grippers, validation visual, or frozen-column support.
+        var xaml = File.ReadAllText(Path.Combine(DesignSystemDir(), "Controls", "ControlStyles.xaml"));
+        Assert.Contains(marker, xaml);
+    }
+
     [Fact]
     public void Icon_geometries_are_present_and_non_empty()
     {

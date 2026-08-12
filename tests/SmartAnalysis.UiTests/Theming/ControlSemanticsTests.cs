@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using Xunit;
 
 namespace SmartAnalysis.UiTests.Theming;
@@ -93,5 +95,22 @@ public sealed class ControlSemanticsTests
 
         Assert.Equal(Visibility.Collapsed, uncheckedVis); // hidden when not checked
         Assert.Equal(Visibility.Visible, checkedVis);     // shown when checked
+    }
+
+    [Fact]
+    public void DataGrid_grippers_use_axis_appropriate_resize_cursors()
+    {
+        // The column-header gripper resizes horizontally (SizeWE); the row-header gripper resizes vertically
+        // (SizeNS). A single shared gripper style would give the row handle the wrong axis/cursor.
+        var (columnCursor, rowCursor) = WpfTestHost.Invoke(() =>
+        {
+            var res = System.Windows.Application.Current!.Resources;
+            Cursor CursorOf(string key) => (Cursor)((Style)res[key]).Setters
+                .OfType<Setter>().First(s => s.Property == FrameworkElement.CursorProperty).Value;
+            return (CursorOf("SA.DataGrid.ColumnGripper"), CursorOf("SA.DataGrid.RowGripper"));
+        });
+
+        Assert.Equal(Cursors.SizeWE, columnCursor);
+        Assert.Equal(Cursors.SizeNS, rowCursor);
     }
 }
