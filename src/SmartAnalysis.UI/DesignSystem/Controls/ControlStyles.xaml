@@ -352,7 +352,23 @@
     <Style TargetType="{x:Type TabItem}" BasedOn="{StaticResource SA.TabItem}"/>
     <Style TargetType="{x:Type TabControl}">
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Default}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Default}"/>
         <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type TabControl}">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Border Grid.Row="0" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Bottom}">
+                            <TabPanel IsItemsHost="True" Panel.ZIndex="1" KeyboardNavigation.TabIndex="1"/>
+                        </Border>
+                        <Border Grid.Row="1" Background="{TemplateBinding Background}">
+                            <ContentPresenter ContentSource="SelectedContent" Margin="{DynamicResource SA.Pad.Panel}"/>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ===================== ProgressBar (inline, determinate) ===================== -->
@@ -404,6 +420,13 @@
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Border.Subtle}"/>
         <Setter Property="Height" Value="1"/>
         <Setter Property="Margin" Value="0,4,0,4"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Separator}">
+                    <Border Height="{TemplateBinding Height}" Background="{TemplateBinding Background}" SnapsToDevicePixels="True"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ===================== Segmented control (single-select, horizontal ListBox) ===================== -->
@@ -562,31 +585,281 @@
         </Setter>
     </Style>
     <Style TargetType="{x:Type ComboBox}" BasedOn="{StaticResource SA.ComboBox}"/>
-    <Style TargetType="{x:Type RadioButton}">
+    <Style x:Key="SA.RadioButton" TargetType="{x:Type RadioButton}">
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
         <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
-        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Secondary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RadioButton}">
+                    <StackPanel Orientation="Horizontal" Background="Transparent" SnapsToDevicePixels="True">
+                        <Grid Width="16" Height="16" VerticalAlignment="Center">
+                            <Ellipse x:Name="outer" StrokeThickness="1.5"
+                                     Stroke="{DynamicResource SA.Brush.Border.Strong}"
+                                     Fill="{DynamicResource SA.Brush.Surface.Default}"/>
+                            <Ellipse x:Name="dot" Width="8" Height="8" Visibility="Collapsed"
+                                     Fill="{DynamicResource SA.Brush.Accent.Primary}"/>
+                        </Grid>
+                        <ContentPresenter Margin="{DynamicResource SA.Gap.Left2}" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="outer" Property="Stroke" Value="{DynamicResource SA.Brush.Accent.Primary}"/>
+                            <Setter TargetName="dot" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="outer" Property="Stroke" Value="{DynamicResource SA.Brush.Accent.Primary}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Disabled}"/>
+                            <Setter TargetName="outer" Property="Stroke" Value="{DynamicResource SA.Brush.Border.Default}"/>
+                            <Setter TargetName="dot" Property="Fill" Value="{DynamicResource SA.Brush.Text.Disabled}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
-    <Style TargetType="{x:Type Slider}">
+    <Style TargetType="{x:Type RadioButton}" BasedOn="{StaticResource SA.RadioButton}"/>
+    <Style x:Key="SA.Slider.Thumb" TargetType="{x:Type Thumb}">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="Width" Value="16"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Ellipse x:Name="e" Fill="{DynamicResource SA.Brush.Accent.Primary}"
+                             Stroke="{DynamicResource SA.Brush.Surface.Default}" StrokeThickness="2"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="e" Property="Fill" Value="{DynamicResource SA.Brush.Accent.PrimaryHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="e" Property="Fill" Value="{DynamicResource SA.Brush.Text.Disabled}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="SA.Slider.SideButton" TargetType="{x:Type RepeatButton}">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}"><Border Background="Transparent"/></ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="SA.Slider" TargetType="{x:Type Slider}">
         <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Accent.Primary}"/>
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Border.Default}"/>
+        <Setter Property="MinHeight" Value="20"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Slider}">
+                    <Grid VerticalAlignment="Center">
+                        <Border Height="4" VerticalAlignment="Center"
+                                Background="{TemplateBinding Background}" CornerRadius="{DynamicResource SA.Radius.Pill}"/>
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.DecreaseLarge}"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource SA.Slider.Thumb}"/>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.IncreaseLarge}"/>
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
-    <Style TargetType="{x:Type Expander}">
+    <Style TargetType="{x:Type Slider}" BasedOn="{StaticResource SA.Slider}"/>
+    <Style x:Key="SA.Expander" TargetType="{x:Type Expander}">
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
         <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
         <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Default}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Expander}">
+                    <DockPanel>
+                        <ToggleButton x:Name="Header" DockPanel.Dock="Top" Focusable="False"
+                                      OverridesDefaultStyle="True" Padding="{DynamicResource SA.Gap.2}"
+                                      Content="{TemplateBinding Header}"
+                                      IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                    <Border x:Name="hb" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                            CornerRadius="{DynamicResource SA.Radius.Sm}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ds:IconPresenter x:Name="chev" Width="14" Height="14" VerticalAlignment="Center"
+                                                              Margin="{DynamicResource SA.Gap.Right2}"
+                                                              Data="{DynamicResource SA.Icon.ChevronRight}"
+                                                              Foreground="{DynamicResource SA.Brush.Text.Secondary}"/>
+                                            <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="hb" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="chev" Property="RenderTransform">
+                                                <Setter.Value><RotateTransform Angle="90" CenterX="7" CenterY="7"/></Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <Border x:Name="Content" Background="{TemplateBinding Background}"
+                                Padding="{DynamicResource SA.Pad.Panel}" Visibility="Collapsed">
+                            <ContentPresenter/>
+                        </Border>
+                    </DockPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="Content" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
+    <Style TargetType="{x:Type Expander}" BasedOn="{StaticResource SA.Expander}"/>
     <Style TargetType="{x:Type Menu}">
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
         <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
         <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Background.Toolbar}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Menu}">
+                    <Border Background="{TemplateBinding Background}" Padding="{DynamicResource SA.Gap.1}">
+                        <ItemsPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
+    <!-- Leaf item in a drop-down: [icon][header][gesture]. -->
+    <ControlTemplate x:Key="SA.MenuItem.SubmenuItem" TargetType="{x:Type MenuItem}">
+        <Border x:Name="bd" Background="Transparent" Padding="{DynamicResource SA.Pad.Field}"
+                CornerRadius="{DynamicResource SA.Radius.Sm}" SnapsToDevicePixels="True">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" MinWidth="18"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Right2}"/>
+                <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                <TextBlock Grid.Column="2" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center"
+                           Margin="{DynamicResource SA.Gap.Left2}" Foreground="{DynamicResource SA.Brush.Text.Tertiary}"/>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Disabled}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Drop-down item that opens a submenu: adds a right chevron + the child popup. -->
+    <ControlTemplate x:Key="SA.MenuItem.SubmenuHeader" TargetType="{x:Type MenuItem}">
+        <Border x:Name="bd" Background="Transparent" Padding="{DynamicResource SA.Pad.Field}"
+                CornerRadius="{DynamicResource SA.Radius.Sm}" SnapsToDevicePixels="True">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" MinWidth="18"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Right2}"/>
+                <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                <ds:IconPresenter Grid.Column="2" Width="14" Height="14" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
+                                  Data="{DynamicResource SA.Icon.ChevronRight}" Foreground="{DynamicResource SA.Brush.Text.Secondary}"/>
+                <Popup x:Name="PART_Popup" Placement="Right" IsOpen="{TemplateBinding IsSubmenuOpen}"
+                       AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                    <Border Background="{DynamicResource SA.Brush.Surface.Raised}"
+                            BorderBrush="{DynamicResource SA.Brush.Border.Default}"
+                            BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                            CornerRadius="{DynamicResource SA.Radius.Sm}" Padding="{DynamicResource SA.Gap.1}" Margin="2,0,0,0">
+                        <ItemsPresenter/>
+                    </Border>
+                </Popup>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Disabled}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Menu-bar leaf. -->
+    <ControlTemplate x:Key="SA.MenuItem.TopLevelItem" TargetType="{x:Type MenuItem}">
+        <Border x:Name="bd" Background="Transparent" Padding="{DynamicResource SA.Pad.Field}"
+                CornerRadius="{DynamicResource SA.Radius.Sm}" SnapsToDevicePixels="True">
+            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Menu-bar item that opens a drop-down. -->
+    <ControlTemplate x:Key="SA.MenuItem.TopLevelHeader" TargetType="{x:Type MenuItem}">
+        <Border x:Name="bd" Background="Transparent" Padding="{DynamicResource SA.Pad.Field}"
+                CornerRadius="{DynamicResource SA.Radius.Sm}" SnapsToDevicePixels="True">
+            <Grid>
+                <ContentPresenter ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsSubmenuOpen}"
+                       AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                    <Border Background="{DynamicResource SA.Brush.Surface.Raised}"
+                            BorderBrush="{DynamicResource SA.Brush.Border.Default}"
+                            BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                            CornerRadius="{DynamicResource SA.Radius.Sm}" Padding="{DynamicResource SA.Gap.1}" Margin="0,2,0,0">
+                        <ItemsPresenter/>
+                    </Border>
+                </Popup>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
     <Style TargetType="{x:Type MenuItem}">
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
         <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>
         <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+        <Setter Property="Template" Value="{StaticResource SA.MenuItem.SubmenuItem}"/>
+        <Style.Triggers>
+            <Trigger Property="Role" Value="TopLevelHeader">
+                <Setter Property="Template" Value="{StaticResource SA.MenuItem.TopLevelHeader}"/>
+            </Trigger>
+            <Trigger Property="Role" Value="TopLevelItem">
+                <Setter Property="Template" Value="{StaticResource SA.MenuItem.TopLevelItem}"/>
+            </Trigger>
+            <Trigger Property="Role" Value="SubmenuHeader">
+                <Setter Property="Template" Value="{StaticResource SA.MenuItem.SubmenuHeader}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
     <Style TargetType="{x:Type ContextMenu}">
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
@@ -595,6 +868,65 @@
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Raised}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Default}"/>
         <Setter Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ContextMenu}">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{DynamicResource SA.Radius.Md}" Padding="{DynamicResource SA.Gap.1}">
+                        <ItemsPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- DataGrid — the control template respects the SA setters; the chrome that the WPF default paints with
+         system colours (column headers, cell selection) is re-templated in the part styles below. -->
+    <Style TargetType="{x:Type DataGridColumnHeader}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Sunken}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Secondary}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Caption}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Field}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type DataGridColumnHeader}">
+                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"
+                            BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="0,0,1,1" SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="{x:Type DataGridCell}">
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+        <Setter Property="Padding" Value="{DynamicResource SA.Pad.Field}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type DataGridCell}">
+                    <Border x:Name="bd" Background="Transparent" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Selected}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Accent.OnSurface}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="{x:Type DataGridRow}">
+        <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Default}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Text.Primary}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
     <Style TargetType="{x:Type DataGrid}">
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
@@ -603,9 +935,42 @@
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Surface.Default}"/>
         <Setter Property="RowBackground" Value="{DynamicResource SA.Brush.Surface.Default}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource SA.Brush.Border.Default}"/>
+        <Setter Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline}"/>
         <Setter Property="GridLinesVisibility" Value="Horizontal"/>
         <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource SA.Brush.Border.Subtle}"/>
         <Setter Property="RowHeight" Value="{DynamicResource SA.Size.Row.Comfortable}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type DataGrid}">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{DynamicResource SA.Radius.Sm}"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="DG_ScrollViewer" Focusable="False" Padding="{TemplateBinding Padding}">
+                            <ScrollViewer.Template>
+                                <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                        <DataGridColumnHeadersPresenter x:Name="PART_ColumnHeadersPresenter" Grid.Row="0" Grid.Column="0"/>
+                                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Grid.Row="1" Grid.Column="0"
+                                                                CanContentScroll="{TemplateBinding CanContentScroll}"/>
+                                        <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Row="1" Grid.Column="1" Orientation="Vertical"
+                                                   Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                                                   Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                   Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                                        <ScrollBar x:Name="PART_HorizontalScrollBar" Grid.Row="2" Grid.Column="0" Orientation="Horizontal"
+                                                   Maximum="{TemplateBinding ScrollableWidth}" ViewportSize="{TemplateBinding ViewportWidth}"
+                                                   Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                   Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"/>
+                                    </Grid>
+                                </ControlTemplate>
+                            </ScrollViewer.Template>
+                            <ItemsPresenter/>
+                        </ScrollViewer>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ===================================================================================
