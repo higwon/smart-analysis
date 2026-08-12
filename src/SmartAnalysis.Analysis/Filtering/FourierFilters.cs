@@ -25,21 +25,26 @@ public enum FourierFilterKind
 /// </summary>
 /// <remarks>
 /// <para>
-/// Cutoffs are <b>normalized radial frequencies</b> in [0,1] where 1 == Nyquist (0.5 cycles/pixel). The mask
-/// is ideal (brick-wall): a bin passes or is zeroed, chosen for exact, testable pass/stop of a known tone.
-/// A smooth roll-off (Butterworth/Gaussian) to suppress ringing is a tracked follow-up.
+/// Cutoffs are <b>normalized radial frequencies</b> in [0,1] where 0 == DC and 1 == the <b>maximum radial
+/// frequency</b> of the 2D spectrum (the diagonal Nyquist corner, i.e. Nyquist on both axes at once — not the
+/// single-axis Nyquist). The mask is ideal (brick-wall): a bin passes or is zeroed, chosen for exact, testable
+/// pass/stop of a known tone. A smooth roll-off (Butterworth/Gaussian) to suppress ringing is a tracked follow-up.
 /// </para>
 /// <para>
 /// There is no FFT elsewhere in the codebase, so the transform is written here: an iterative radix-2
 /// Cooley–Tukey FFT applied separably (rows then columns). Radix-2 needs power-of-two lengths, so a
 /// non-power-of-two image (the 15×15 fixture) is <b>mean-padded</b> up to the next power of two per axis —
-/// padding with the image mean, not zero, so the padded border injects neither a step edge nor a DC spike —
-/// then cropped back to the original size. Normalizing each axis by its own Nyquist keeps the cutoff meaning
-/// (cycles/pixel) independent of the padding.
+/// padding with the image mean rather than zero avoids a zero-valued border and reduces padding bias (it does
+/// not remove the edge discontinuity; mirror/windowing would) — then cropped back to the original size.
+/// Normalizing the radial frequency by its maximum keeps the cutoff meaning independent of the padding.
 /// </para>
 /// </remarks>
 public static class FourierFilters
 {
+    // The maximum radial frequency of the 2D spectrum: (Nyquist_x, Nyquist_y) → √2 once each axis is scaled to
+    // 1 at its own Nyquist. Dividing the radius by this maps the full representable band onto [0,1].
+    private static readonly double MaxRadius = Math.Sqrt(2.0);
+
     /// <summary>The low cutoff is meaningful only for the kinds whose lower edge it defines.</summary>
     public static bool UsesLowCutoff(FourierFilterKind kind)
         => kind is FourierFilterKind.HighPass or FourierFilterKind.BandPass or FourierFilterKind.BandStop;
@@ -56,14 +61,17 @@ public static class FourierFilters
     public static double EffectiveLowCutoff(FourierFilterKind kind, double requested)
         => UsesLowCutoff(kind) ? requested : 0.0;
 
-    /// <summary>The high cutoff that actually affects the result: the request when it is used, else 1 (Nyquist).</summary>
+    /// <summary>
+    /// The high cutoff that actually affects the result: the request when it is used, else 1 (the maximum
+    /// radial frequency — a true no-op upper edge that keeps every representable bin).
+    /// </summary>
     public static double EffectiveHighCutoff(FourierFilterKind kind, double requested)
         => UsesHighCutoff(kind) ? requested : 1.0;
 
     /// <summary>
     /// Filters <paramref name="source"/> (row-major, <paramref name="width"/>×<paramref name="height"/>) in the
     /// frequency domain and returns a fresh array of the same shape. Cutoffs are normalized radial frequencies
-    /// (0 = DC, 1 = Nyquist).
+    /// (0 = DC, 1 = the maximum radial frequency of the spectrum).
     /// </summary>
     public static float[] Apply(
         ReadOnlySpan<float> source, int width, int height, FourierFilterKind kind, double lowCutoff, double highCutoff)
@@ -107,7 +115,8 @@ public static class FourierFilters
         Fft2D(grid, w2, h2, inverse: false);
 
         // Ideal radial mask: zero every bin outside the selected band. The signed frequency index folds the
-        // upper half to negatives, normalized by the per-axis Nyquist so the cutoff is padding-independent.
+        // upper half to negatives; each axis is scaled to 1 at its own Nyquist, then the radius is divided by
+        // MaxRadius (√2) so the full representable band maps onto [0,1] — matching the public cutoff contract.
         for (int v = 0; v < h2; v++)
         {
             double fv = v <= h2 / 2 ? v : v - h2;
@@ -116,7 +125,7 @@ public static class FourierFilters
             {
                 double fu = u <= w2 / 2 ? u : u - w2;
                 double nu = fu / (w2 / 2.0);
-                double r = Math.Sqrt((nu * nu) + (nv * nv));
+                double r = Math.Sqrt((nu * nu) + (nv * nv)) / MaxRadius;
                 if (!Passes(kind, r, lowCutoff, highCutoff))
                 {
                     grid[(v * w2) + u] = Complex.Zero;

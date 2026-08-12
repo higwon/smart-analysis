@@ -38,8 +38,8 @@ public sealed class FourierFilterOperation : IAnalysisOperation
             // Both cutoffs are always-meaningful normalized frequencies, so their [0,1] range lives on the
             // schema (validated automatically). Their ordering (low < high) is only meaningful for the band
             // kinds, so that cross-check is conditional and lives in Validate() below.
-            new ParameterDescriptor(LowCutoffParameter, typeof(double), defaultValue: DefaultLowCutoff, min: 0.0, max: 1.0, help: "Lower cutoff, 0=DC … 1=Nyquist (high/band kinds)."),
-            new ParameterDescriptor(HighCutoffParameter, typeof(double), defaultValue: DefaultHighCutoff, min: 0.0, max: 1.0, help: "Upper cutoff, 0=DC … 1=Nyquist (low/band kinds)."),
+            new ParameterDescriptor(LowCutoffParameter, typeof(double), defaultValue: DefaultLowCutoff, min: 0.0, max: 1.0, help: "Lower cutoff, 0=DC … 1=max radial frequency (high/band kinds)."),
+            new ParameterDescriptor(HighCutoffParameter, typeof(double), defaultValue: DefaultHighCutoff, min: 0.0, max: 1.0, help: "Upper cutoff, 0=DC … 1=max radial frequency (low/band kinds)."),
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,

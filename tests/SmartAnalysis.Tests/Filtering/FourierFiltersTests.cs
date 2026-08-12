@@ -54,11 +54,11 @@ public sealed class FourierFiltersTests
     [InlineData(15, 15)] // non-power-of-two: mean-padded to 16×16 then cropped back
     public void Passing_all_frequencies_reconstructs_the_input(int width, int height)
     {
-        // A low-pass whose cutoff exceeds the maximum radial frequency (~1.414) keeps every bin, so the
-        // forward+inverse round-trip must return the original image (validates the FFT itself through Apply).
+        // A low-pass at the maximum radial frequency (1.0, the top of the [0,1] contract) keeps every bin,
+        // so the forward+inverse round-trip must return the original image (validates the FFT itself via Apply).
         var source = Checkerboard(width, height, 2.0f);
 
-        var result = FourierFilters.Apply(source, width, height, FourierFilterKind.LowPass, 0.0, 2.0);
+        var result = FourierFilters.Apply(source, width, height, FourierFilterKind.LowPass, 0.0, 1.0);
 
         Assert.Equal(source.Length, result.Length);
         for (int i = 0; i < source.Length; i++)
