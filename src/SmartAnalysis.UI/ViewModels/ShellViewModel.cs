@@ -30,6 +30,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly MeasurementStore _measurements;
     private readonly IWorkspacePersistence _persistence;
     private readonly IWorkspacePathPicker _workspacePicker;
+    private readonly IUnsavedChangesPrompt _unsavedPrompt;
     private readonly AsyncRelayCommand _runStatistics;
     private readonly RelayCommand _save;
     private string? _workspacePath;   // where this workspace was last saved/opened (Save writes here silently)
@@ -58,7 +59,7 @@ public sealed class ShellViewModel : ObservableObject
     private Colormap _colormap = Colormap.AfmGold;
     private string _colormapName = "AFM Gold";
 
-    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, IOperationLauncher launcher, MeasurementStore measurements, IWorkspacePersistence persistence, IWorkspacePathPicker workspacePicker)
+    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, IOperationLauncher launcher, MeasurementStore measurements, IWorkspacePersistence persistence, IWorkspacePathPicker workspacePicker, IUnsavedChangesPrompt unsavedPrompt)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
@@ -69,6 +70,7 @@ public sealed class ShellViewModel : ObservableObject
         _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
         _workspacePicker = workspacePicker ?? throw new ArgumentNullException(nameof(workspacePicker));
+        _unsavedPrompt = unsavedPrompt ?? throw new ArgumentNullException(nameof(unsavedPrompt));
 
         FlattenPanel = new FlattenPanelViewModel(imageAnalysis, () => _workspace.Active.ActiveId);
 
@@ -89,9 +91,10 @@ public sealed class ShellViewModel : ObservableObject
         // refreshes existing nodes' state — so selection + expansion in the TreeView are preserved.
         _workspace.DatasetsChanged += (_, _) => RebuildTopology();
         _workspace.ActiveContextChanged += (_, _) => RefreshActiveState();
-        // Any dataset change (import, a derived op) marks the workspace unsaved — except during an in-place
-        // Open (suppressed) and on the empty startup workspace.
-        _workspace.DatasetsChanged += (_, _) => { if (!_suppressDirty && _workspace.Count > 0) HasUnsavedChanges = true; };
+        // Any dataset change (import, a derived op, or a removal) marks the workspace unsaved — except during
+        // an in-place Open (suppressed). Startup raises no DatasetsChanged, so no Count guard is needed (and a
+        // change that empties the workspace must still count as dirty).
+        _workspace.DatasetsChanged += (_, _) => { if (!_suppressDirty) HasUnsavedChanges = true; };
         // A new/removed measurement re-surfaces the attached nodes without disturbing the active context
         // or the current Inspector role (so the just-shown result card survives its own attach).
         _measurements.MeasurementsChanged += (_, _) => RebuildNodes();
@@ -378,14 +381,16 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(HasStatus));
     }
 
-    // Saves the workspace as a directory-package. Silently re-saves to the known folder after the first
-    // save/open; prompts for a folder otherwise.
-    private void SaveWorkspace()
+    private void SaveWorkspace() => TrySave();
+
+    // Saves the workspace as a directory-package; returns whether it was actually saved. Silently re-saves to
+    // the known folder after the first save/open; prompts for a folder otherwise (a cancelled picker → false).
+    private bool TrySave()
     {
         var path = _workspacePath ?? _workspacePicker.PickSaveFolder();
         if (string.IsNullOrEmpty(path))
         {
-            return;
+            return false; // user cancelled the folder picker
         }
 
         var outcome = _persistence.Save(path);
@@ -402,21 +407,45 @@ public sealed class ShellViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasStatus));
+        return outcome.Success;
     }
 
-    // Opens a saved workspace, replacing the current session in place (ReplaceWith fires the workspace events
-    // that rebuild the tree + active state). The dirty flag is suppressed for that in-place swap.
+    // Opens a saved workspace, replacing the current session in place. Protects unsaved work first: if the
+    // workspace is dirty, ask Save / Don't Save / Cancel — Cancel or a failed/cancelled Save aborts the open,
+    // so an in-progress workspace is never silently discarded. The dirty flag is suppressed for the in-place
+    // swap and always restored (a subscriber throwing must not leave dirty tracking off).
     private void OpenWorkspace()
     {
+        if (HasUnsavedChanges)
+        {
+            switch (_unsavedPrompt.Ask(WorkspaceName))
+            {
+                case UnsavedChangesChoice.Cancel:
+                    return;
+                case UnsavedChangesChoice.Save when !TrySave():
+                    return; // save was cancelled or failed — don't discard the current work
+                case UnsavedChangesChoice.Save:
+                case UnsavedChangesChoice.DontSave:
+                    break;
+            }
+        }
+
         var path = _workspacePicker.PickOpenFolder();
         if (string.IsNullOrEmpty(path))
         {
             return;
         }
 
+        PersistenceOutcome outcome;
         _suppressDirty = true;
-        var outcome = _persistence.Open(path);
-        _suppressDirty = false;
+        try
+        {
+            outcome = _persistence.Open(path);
+        }
+        finally
+        {
+            _suppressDirty = false;
+        }
 
         if (outcome.Success)
         {

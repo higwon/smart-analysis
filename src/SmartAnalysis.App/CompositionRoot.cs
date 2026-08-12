@@ -45,6 +45,7 @@ public static class CompositionRoot
         services.AddSingleton<ThemeManager>();
         services.AddSingleton<IScanFilePicker, WpfScanFilePicker>();
         services.AddSingleton<IWorkspacePathPicker, WpfWorkspacePathPicker>();
+        services.AddSingleton<IUnsavedChangesPrompt, WpfUnsavedChangesPrompt>();
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<MainWindow>();
 
