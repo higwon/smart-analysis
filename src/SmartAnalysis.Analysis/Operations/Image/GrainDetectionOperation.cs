@@ -124,6 +124,8 @@ public sealed class GrainDetectionOperation : IAnalysisOperation
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Coverage over the finite (valid) sample area: GrainDetector.TotalPixels already excludes non-finite
+        // pixels, matching the "non-finite excluded" contract flagged above.
         double coverage = grains.TotalPixels > 0 ? (double)grains.CoveredPixels / grains.TotalPixels : 0.0;
         var scalars = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)
         {

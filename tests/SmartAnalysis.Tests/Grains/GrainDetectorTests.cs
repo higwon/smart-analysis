@@ -88,14 +88,16 @@ public sealed class GrainDetectorTests
     }
 
     [Fact]
-    public void Non_finite_pixels_are_never_counted_as_grain()
+    public void Non_finite_pixels_are_excluded_from_grains_and_the_coverage_denominator()
     {
         const int w = 2, h = 2;
         var z = new float[] { float.NaN, float.PositiveInfinity, 0f, 1f };
 
         var result = GrainDetector.Detect(z, w, h, 0.5, 1);
 
-        Assert.Equal(1, result.Count);        // only the finite 1f
+        Assert.Equal(1, result.Count);        // only the finite 1f is grain
         Assert.Equal(1, result.CoveredPixels);
+        Assert.Equal(2, result.TotalPixels);  // denominator = the two finite pixels (0f, 1f), NOT all four
+        Assert.Equal(0.5, (double)result.CoveredPixels / result.TotalPixels, 9); // coverage over real data only
     }
 }

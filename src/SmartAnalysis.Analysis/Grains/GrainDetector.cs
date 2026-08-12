@@ -3,7 +3,10 @@ namespace SmartAnalysis.Analysis.Grains;
 /// <summary>The summary of a grain/particle detection pass over a scan image.</summary>
 /// <param name="Count">Number of grains kept (8-connected regions above the threshold, ≥ the minimum area).</param>
 /// <param name="CoveredPixels">Total pixels belonging to the kept grains.</param>
-/// <param name="TotalPixels">Pixels in the image (the coverage denominator).</param>
+/// <param name="TotalPixels">
+/// The <b>finite</b> (valid-sample) pixel count — the coverage denominator. Non-finite (NaN/Infinity) pixels
+/// are excluded here just as they are excluded from grains, so coverage is measured over real data only.
+/// </param>
 /// <param name="MeanAreaPixels">Mean grain area in pixels (0 when no grain is found).</param>
 /// <param name="MeanHeight">Mean Z over the kept grain pixels, in the image's Z unit (0 when none).</param>
 public readonly record struct GrainAnalysis(
@@ -40,10 +43,17 @@ public static class GrainDetector
 
         int total = width * height;
         var above = new bool[total];
+        int finitePixels = 0;
         for (int i = 0; i < total; i++)
         {
             double value = z[i];
-            above[i] = double.IsFinite(value) && value >= threshold;
+            if (!double.IsFinite(value))
+            {
+                continue; // excluded from both the grains and the coverage denominator
+            }
+
+            finitePixels++;
+            above[i] = value >= threshold;
         }
 
         var visited = new bool[total];
@@ -101,6 +111,6 @@ public static class GrainDetector
 
         double meanArea = count > 0 ? (double)coveredPixels / count : 0.0;
         double meanHeight = coveredPixels > 0 ? heightSum / coveredPixels : 0.0;
-        return new GrainAnalysis(count, (int)coveredPixels, total, meanArea, meanHeight);
+        return new GrainAnalysis(count, (int)coveredPixels, finitePixels, meanArea, meanHeight);
     }
 }
