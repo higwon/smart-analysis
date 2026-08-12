@@ -73,6 +73,31 @@ public sealed class SpatialFiltersTests
         Assert.All(result, v => Assert.Equal(0f, v, 4));
     }
 
+    [Theory]
+    [InlineData(FilterKind.Mean, 5, 5)]        // smoothing keeps the requested size
+    [InlineData(FilterKind.Gaussian, 7, 7)]
+    [InlineData(FilterKind.Sobel, 9, 3)]       // fixed kernels canonicalize to 3
+    [InlineData(FilterKind.Sharpen, 5, 3)]
+    [InlineData(FilterKind.Laplacian, 4, 3)]
+    public void EffectiveSize_canonicalizes_fixed_kernels(FilterKind kind, int requested, int effective)
+        => Assert.Equal(effective, SpatialFilters.EffectiveSize(kind, requested));
+
+    [Fact]
+    public void Fixed_kernel_result_is_independent_of_the_requested_size()
+    {
+        var src = new float[] { 1, 4, 2, 8, 5, 7, 3, 6, 9 };
+
+        var a = SpatialFilters.Apply(src, 3, 3, FilterKind.Sobel, 3);
+        var b = SpatialFilters.Apply(src, 3, 3, FilterKind.Sobel, 9);
+
+        Assert.Equal(a, b); // same result → provenance must not differ (canonical size)
+    }
+
+    [Fact]
+    public void Apply_throws_on_an_unknown_filter_kind()
+        => Assert.Throws<System.ArgumentOutOfRangeException>(
+            () => SpatialFilters.Apply(new float[4], 2, 2, (FilterKind)999, 3));
+
     [Fact]
     public void Is_deterministic()
     {

@@ -55,11 +55,13 @@ public sealed class SpatialFilterOperation : IAnalysisOperation
             return ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(ScanImageDataset)} as its primary input.");
         }
 
-        // The schema can bound the range but not parity; a kernel size must be odd for a centred window.
+        // Size only matters for the smoothing kinds, where a centred window needs an odd size. The fixed
+        // edge/sharpen kernels ignore size entirely, so an even value there is irrelevant — not an error.
+        var kind = parameters.TryGet<FilterKind>(KindParameter, out var k) ? k : FilterKind.Mean;
         int size = parameters.TryGet<int>(SizeParameter, out var s) ? s : DefaultSize;
-        return size % 2 == 1
+        return !SpatialFilters.UsesKernelSize(kind) || size % 2 == 1
             ? ValidationResult.Success
-            : ValidationResult.Fail($"'{SizeParameter}' must be odd (3, 5, 7, 9).");
+            : ValidationResult.Fail($"'{SizeParameter}' must be odd (3, 5, 7, 9) for {kind}.");
     }
 
     public Task<OperationResult> RunAsync(
@@ -79,7 +81,10 @@ public sealed class SpatialFilterOperation : IAnalysisOperation
 
         var image = (ScanImageDataset)input.Primary;
         var kind = parameters.TryGet<FilterKind>(KindParameter, out var k) ? k : FilterKind.Mean;
-        int size = parameters.TryGet<int>(SizeParameter, out var s) ? s : DefaultSize;
+        int requestedSize = parameters.TryGet<int>(SizeParameter, out var s) ? s : DefaultSize;
+        // The size that actually affects the result (3 for the fixed edge/sharpen kernels). Recorded in
+        // provenance so an ignored size can't make two identical runs look like different history.
+        int size = SpatialFilters.EffectiveSize(kind, requestedSize);
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Filtering."));

@@ -62,6 +62,22 @@ public sealed class SpatialFilterOperationTests
     }
 
     [Fact]
+    public async Task Fixed_kernel_kind_ignores_size_for_validation_and_records_the_canonical_size()
+    {
+        var image = await LoadImageAsync();
+        var op = NewOperation();
+
+        // An even/irrelevant size must NOT block a fixed 3×3 kernel (size is ignored there)…
+        Assert.True(op.Validate(new OperationInput(image), Params(FilterKind.Sobel, 4)).IsValid);
+
+        // …and provenance records the canonical effective size (3), not the requested value, so two runs
+        // with the same result never look like different history.
+        var result = await op.RunAsync(new OperationInput(image), Params(FilterKind.Sobel, 9), null, CancellationToken.None);
+        var derived = Assert.IsType<ScanImageDataset>(result.DerivedDataset);
+        Assert.Equal(3, (int)derived.Provenance.Steps[^1].Parameters[SpatialFilterOperation.SizeParameter].Value);
+    }
+
+    [Fact]
     public async Task Rejects_an_out_of_range_size_via_schema()
     {
         var image = await LoadImageAsync();

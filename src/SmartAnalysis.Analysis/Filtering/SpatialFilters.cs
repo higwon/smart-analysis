@@ -37,6 +37,17 @@ public static class SpatialFilters
     private static readonly double[] SobelGx = { -1, 0, 1, -2, 0, 2, -1, 0, 1 };
     private static readonly double[] SobelGy = { -1, -2, -1, 0, 0, 0, 1, 2, 1 };
 
+    /// <summary>True for the smoothing kinds whose result depends on the kernel <c>size</c>. The edge/sharpen
+    /// kinds are fixed 3×3 and ignore size — callers should canonicalize their effective size to 3.</summary>
+    public static bool UsesKernelSize(FilterKind kind)
+        => kind is FilterKind.Mean or FilterKind.Median or FilterKind.Gaussian;
+
+    /// <summary>The size that actually affects the result: the requested size for smoothing kinds, else 3
+    /// (the fixed edge/sharpen kernel). Use this for validation and provenance so an ignored size can't make
+    /// two identical runs look different.</summary>
+    public static int EffectiveSize(FilterKind kind, int requestedSize)
+        => UsesKernelSize(kind) ? requestedSize : 3;
+
     public static float[] Apply(ReadOnlySpan<float> source, int width, int height, FilterKind kind, int size)
     {
         if (width <= 0 || height <= 0)
@@ -57,7 +68,7 @@ public static class SpatialFilters
             FilterKind.Laplacian => Convolve(source, width, height, Laplacian3, 3),
             FilterKind.Sobel => SobelMagnitude(source, width, height),
             FilterKind.Median => Median(source, width, height, size),
-            _ => source.ToArray(),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown filter kind."),
         };
     }
 
