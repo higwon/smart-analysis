@@ -27,6 +27,8 @@ public sealed class ArchitectureGuardTests
         ["SmartAnalysis.App"] = ["SmartAnalysis.UI", "SmartAnalysis.Application", "SmartAnalysis.Infrastructure"],
         // References the projects under test (Domain, Analysis, Application, Infrastructure, Visualization).
         ["SmartAnalysis.Tests"] = ["SmartAnalysis.Domain", "SmartAnalysis.Analysis", "SmartAnalysis.Application", "SmartAnalysis.Infrastructure", "SmartAnalysis.Visualization"],
+        // WPF-dependent tests (net8.0-windows): references only the UI assembly it tests (e.g. ThemeManager).
+        ["SmartAnalysis.UiTests"] = ["SmartAnalysis.UI"],
     };
 
     // Edges that must never exist (product project -> product project). ADR-009/010.
@@ -72,14 +74,14 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
-    public void Solution_has_exactly_the_eight_expected_projects()
+    public void Solution_has_exactly_the_nine_expected_projects()
     {
         var graph = LoadGraph();
         var actual = graph.Keys.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         var expected = Expected.Keys.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assert.True(
             actual.SequenceEqual(expected, StringComparer.Ordinal),
-            $"Expected exactly these 8 projects:\n  {string.Join("\n  ", expected)}\nbut found:\n  {string.Join("\n  ", actual)}");
+            $"Expected exactly these {expected.Length} projects:\n  {string.Join("\n  ", expected)}\nbut found:\n  {string.Join("\n  ", actual)}");
     }
 
     [Fact]

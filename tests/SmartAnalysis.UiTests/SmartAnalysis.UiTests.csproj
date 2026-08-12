@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Role: WPF-dependent tests. The main test project targets net8.0 and so cannot reference the
+       net8.0-windows UI assembly (ThemeManager, view-models). This project targets net8.0-windows with
+       UseWPF so it can construct a WPF Application + design-system resources and verify the live theme
+       palette swap. STA is arranged per-test by a small helper (no extra test-framework dependency). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SmartAnalysis.UI\SmartAnalysis.UI.csproj" />
+  </ItemGroup>
+
+</Project>
