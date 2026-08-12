@@ -33,7 +33,10 @@ public sealed class SpatialFilterOperation : IAnalysisOperation
         parameters: new ParameterSchema(
         [
             new ParameterDescriptor(KindParameter, typeof(FilterKind), defaultValue: FilterKind.Mean, help: "Filter family."),
-            new ParameterDescriptor(SizeParameter, typeof(int), defaultValue: DefaultSize, min: 3, max: 9, help: "Kernel size (odd; used by mean/median/gaussian)."),
+            // No schema range on size: it is only meaningful (and constrained) for the smoothing kinds. The
+            // fixed edge/sharpen kernels ignore it entirely, so the range/parity check is conditional and
+            // lives in Validate() below, not on the descriptor.
+            new ParameterDescriptor(SizeParameter, typeof(int), defaultValue: DefaultSize, help: "Kernel size 3/5/7/9 (mean/median/gaussian; ignored by the fixed edge kernels)."),
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
@@ -55,13 +58,25 @@ public sealed class SpatialFilterOperation : IAnalysisOperation
             return ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(ScanImageDataset)} as its primary input.");
         }
 
-        // Size only matters for the smoothing kinds, where a centred window needs an odd size. The fixed
-        // edge/sharpen kernels ignore size entirely, so an even value there is irrelevant — not an error.
+        // Size constrains ONLY the smoothing kinds (a centred window needs an odd size in range). The fixed
+        // edge/sharpen kernels ignore size entirely — any value (4, 11, -100) yields the same 3×3 result —
+        // so it is never an error for them. This conditional constraint lives here, not on the schema.
         var kind = parameters.TryGet<FilterKind>(KindParameter, out var k) ? k : FilterKind.Mean;
         int size = parameters.TryGet<int>(SizeParameter, out var s) ? s : DefaultSize;
-        return !SpatialFilters.UsesKernelSize(kind) || size % 2 == 1
-            ? ValidationResult.Success
-            : ValidationResult.Fail($"'{SizeParameter}' must be odd (3, 5, 7, 9) for {kind}.");
+        if (SpatialFilters.UsesKernelSize(kind))
+        {
+            if (size is < 3 or > 9)
+            {
+                return ValidationResult.Fail($"'{SizeParameter}' must be between 3 and 9 for {kind}.");
+            }
+
+            if (size % 2 == 0)
+            {
+                return ValidationResult.Fail($"'{SizeParameter}' must be odd (3, 5, 7, 9) for {kind}.");
+            }
+        }
+
+        return ValidationResult.Success;
     }
 
     public Task<OperationResult> RunAsync(

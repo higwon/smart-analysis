@@ -61,28 +61,34 @@ public sealed class SpatialFilterOperationTests
         Assert.False(validation.IsValid);
     }
 
-    [Fact]
-    public async Task Fixed_kernel_kind_ignores_size_for_validation_and_records_the_canonical_size()
+    [Theory]
+    [InlineData(4)]    // even — irrelevant for a fixed kernel
+    [InlineData(11)]   // out of the smoothing range — still irrelevant for a fixed kernel
+    [InlineData(-100)] // any value at all
+    public async Task Fixed_kernel_kind_accepts_any_size_and_records_the_canonical_size(int requestedSize)
     {
         var image = await LoadImageAsync();
         var op = NewOperation();
 
-        // An even/irrelevant size must NOT block a fixed 3×3 kernel (size is ignored there)…
-        Assert.True(op.Validate(new OperationInput(image), Params(FilterKind.Sobel, 4)).IsValid);
+        // Size is meaningless for a fixed 3×3 kernel, so NO value blocks it (not range, not parity)…
+        Assert.True(op.Validate(new OperationInput(image), Params(FilterKind.Sobel, requestedSize)).IsValid);
 
-        // …and provenance records the canonical effective size (3), not the requested value, so two runs
-        // with the same result never look like different history.
-        var result = await op.RunAsync(new OperationInput(image), Params(FilterKind.Sobel, 9), null, CancellationToken.None);
+        // …and provenance always records the canonical effective size (3), so two runs with the same result
+        // never look like different history.
+        var result = await op.RunAsync(new OperationInput(image), Params(FilterKind.Sobel, requestedSize), null, CancellationToken.None);
         var derived = Assert.IsType<ScanImageDataset>(result.DerivedDataset);
         Assert.Equal(3, (int)derived.Provenance.Steps[^1].Parameters[SpatialFilterOperation.SizeParameter].Value);
     }
 
-    [Fact]
-    public async Task Rejects_an_out_of_range_size_via_schema()
+    [Theory]
+    [InlineData(11)]   // above range
+    [InlineData(2)]    // below range
+    [InlineData(4)]    // even
+    public async Task Rejects_an_invalid_size_for_a_smoothing_kind(int size)
     {
         var image = await LoadImageAsync();
 
-        var validation = NewOperation().Validate(new OperationInput(image), Params(FilterKind.Mean, 11));
+        var validation = NewOperation().Validate(new OperationInput(image), Params(FilterKind.Mean, size));
 
         Assert.False(validation.IsValid);
     }
