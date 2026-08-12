@@ -20,6 +20,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<SpatialFilterOperation>();
         services.AddAnalysisOperation<FourierFilterOperation>();
         services.AddAnalysisOperation<ImageGeometryOperation>();
+        services.AddAnalysisOperation<GrainDetectionOperation>();
         return services;
     }
 }
