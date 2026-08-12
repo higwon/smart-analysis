@@ -963,11 +963,23 @@
     </Style>
     <!-- DataGrid — the control template respects the SA setters; the chrome that the WPF default paints with
          system colours (column headers, cell selection) is re-templated in the part styles below. -->
-    <!-- Header/row-header resize handle (kept so owning the header template doesn't drop column resize). -->
-    <Style x:Key="SA.DataGrid.Gripper" TargetType="{x:Type Thumb}">
+    <!-- Resize handles: column grippers are a vertical edge (SizeWE); row grippers are a horizontal edge
+         that stretches across the row-header width (SizeNS). Same invisible hit-target template. -->
+    <Style x:Key="SA.DataGrid.ColumnGripper" TargetType="{x:Type Thumb}">
         <Setter Property="Width" Value="8"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Cursor" Value="SizeWE"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}"><Border Background="{TemplateBinding Background}"/></ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="SA.DataGrid.RowGripper" TargetType="{x:Type Thumb}">
+        <Setter Property="Height" Value="8"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Cursor" Value="SizeNS"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Thumb}"><Border Background="{TemplateBinding Background}"/></ControlTemplate>
@@ -997,8 +1009,8 @@
                                       Fill="{DynamicResource SA.Brush.Text.Secondary}" Data="M 0,0 L 8,0 L 4,6 Z"/>
                             </Grid>
                         </Border>
-                        <Thumb x:Name="PART_LeftHeaderGripper" HorizontalAlignment="Left" Style="{StaticResource SA.DataGrid.Gripper}"/>
-                        <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right" Style="{StaticResource SA.DataGrid.Gripper}"/>
+                        <Thumb x:Name="PART_LeftHeaderGripper" HorizontalAlignment="Left" Style="{StaticResource SA.DataGrid.ColumnGripper}"/>
+                        <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right" Style="{StaticResource SA.DataGrid.ColumnGripper}"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="SortDirection" Value="Ascending">
@@ -1027,10 +1039,8 @@
                                 BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="0,0,1,1">
                             <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
-                        <Thumb x:Name="PART_TopHeaderGripper" VerticalAlignment="Top" Height="8"
-                               Style="{StaticResource SA.DataGrid.Gripper}"/>
-                        <Thumb x:Name="PART_BottomHeaderGripper" VerticalAlignment="Bottom" Height="8"
-                               Style="{StaticResource SA.DataGrid.Gripper}"/>
+                        <Thumb x:Name="PART_TopHeaderGripper" VerticalAlignment="Top" Style="{StaticResource SA.DataGrid.RowGripper}"/>
+                        <Thumb x:Name="PART_BottomHeaderGripper" VerticalAlignment="Bottom" Style="{StaticResource SA.DataGrid.RowGripper}"/>
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
