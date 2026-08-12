@@ -1,0 +1,9 @@
+<UserControl x:Class="SmartAnalysis.UI.Controls.AfmCurveView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sp="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
+             Background="{DynamicResource SA.Brush.Chart.Background}">
+    <Grid>
+        <sp:WpfPlot x:Name="Plot"/>
+    </Grid>
+</UserControl>

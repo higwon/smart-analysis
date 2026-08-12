@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- V03: XY curve view chart backend (ADR-018: ScottPlot 5, Approved; the V00 spike proved it behind
+         V01's ICurveView). ScottPlot.WPF brings the interactive WpfPlot control + ScottPlot core. -->
+    <PackageReference Include="ScottPlot.WPF" Version="5.0.55" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SmartAnalysis.Application\SmartAnalysis.Application.csproj" />
     <ProjectReference Include="..\SmartAnalysis.Visualization\SmartAnalysis.Visualization.csproj" />
   </ItemGroup>
