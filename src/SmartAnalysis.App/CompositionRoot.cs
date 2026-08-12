@@ -28,6 +28,7 @@ public static class CompositionRoot
         // Infrastructure adapters bound to Application ports (Infrastructure -> Application, ADR-010).
         services.AddWorkspaceStore();   // IWorkspaceStore  -> DirectoryWorkspaceStore (+ IUnitRegistry)
         services.AddPsiaTiffReader();   // IScanFileReader  -> PsiaTiffReader
+        services.AddPsiaTiffWriter();   // IScanFileWriter  -> PsiaTiffWriter
 
         // Analysis operations (explicit per-module registration, ADR-005) + the registry over them.
         services.AddImageAnalysis();    // Statistics + Flatten (+ IExecutionEnvironmentProvider)

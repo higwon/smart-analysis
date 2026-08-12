@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
@@ -158,11 +159,14 @@ public sealed class PsiaTiffReader : IScanFileReader
         var metadata = BuildMetadata(header, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
+        // Identity + provenance come from the ImageDescription side-car when we wrote the file (FF02); a real
+        // PSIA file (or any foreign description) has none, so it keeps the legacy fresh-id + Root behaviour.
+        var (id, provenance) = ReadDomainSidecar(ifd, fieldReader);
+
         var buffer = ScanBuffer<float>.TakeOwnership(values, header.Width, header.Height);
         try
         {
-            var dataset = new ScanImageDataset(
-                DatasetId.New(), source, xAxis, yAxis, channel, buffer, metadata, ProvenanceRecord.Root);
+            var dataset = new ScanImageDataset(id, source, xAxis, yAxis, channel, buffer, metadata, provenance);
             return FileReadResult.Success(dataset);
         }
         catch
@@ -170,6 +174,27 @@ public sealed class PsiaTiffReader : IScanFileReader
             buffer.Dispose(); // ctor failed → we still own the buffer (ADR-011/012)
             throw;
         }
+    }
+
+    // Standard TIFF ASCII tag; FF02 stores the identity + provenance JSON side-car here.
+    private const ushort TagImageDescription = 0x010E;
+
+    private (DatasetId Id, ProvenanceRecord Provenance) ReadDomainSidecar(
+        TiffImageFileDirectory ifd, TiffFieldReader fieldReader)
+    {
+        var entry = ifd.FindEntry((TiffTag)TagImageDescription);
+        if (entry.Tag != TiffTag.None && entry.ValueCount > 0)
+        {
+            byte[] bytes = ReadByteField(fieldReader, entry);
+            int nul = System.Array.IndexOf(bytes, (byte)0);
+            string json = Encoding.UTF8.GetString(bytes, 0, nul >= 0 ? nul : bytes.Length);
+            if (TiffDomainSidecar.TryParse(json, _units, out var id, out var provenance))
+            {
+                return (id, provenance);
+            }
+        }
+
+        return (DatasetId.New(), ProvenanceRecord.Root);
     }
 
     private ChannelDescriptor BuildChannel(PsiaImageHeader header)
