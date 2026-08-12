@@ -357,15 +357,56 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type TabControl}">
+                    <!-- Two rows + two columns so the tab strip can move to any TabStripPlacement; the
+                         TabPanel itself arranges the headers per placement. Default is Top. -->
                     <Grid>
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                        <Border Grid.Row="0" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Bottom}">
-                            <TabPanel IsItemsHost="True" Panel.ZIndex="1" KeyboardNavigation.TabIndex="1"/>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="ColumnDefinition0" Width="*"/>
+                            <ColumnDefinition x:Name="ColumnDefinition1" Width="0"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition x:Name="RowDefinition0" Height="Auto"/>
+                            <RowDefinition x:Name="RowDefinition1" Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border x:Name="HeaderBorder" Grid.Row="0" Grid.Column="0" Panel.ZIndex="1"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Bottom}">
+                            <TabPanel IsItemsHost="True" KeyboardNavigation.TabIndex="1"/>
                         </Border>
-                        <Border Grid.Row="1" Background="{TemplateBinding Background}">
+                        <Border x:Name="ContentBorder" Grid.Row="1" Grid.Column="0" Background="{TemplateBinding Background}">
                             <ContentPresenter ContentSource="SelectedContent" Margin="{DynamicResource SA.Pad.Panel}"/>
                         </Border>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="TabStripPlacement" Value="Bottom">
+                            <Setter TargetName="HeaderBorder" Property="Grid.Row" Value="1"/>
+                            <Setter TargetName="ContentBorder" Property="Grid.Row" Value="0"/>
+                            <Setter TargetName="RowDefinition0" Property="Height" Value="*"/>
+                            <Setter TargetName="RowDefinition1" Property="Height" Value="Auto"/>
+                            <Setter TargetName="HeaderBorder" Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline.Top}"/>
+                        </Trigger>
+                        <Trigger Property="TabStripPlacement" Value="Left">
+                            <Setter TargetName="HeaderBorder" Property="Grid.RowSpan" Value="2"/>
+                            <Setter TargetName="ContentBorder" Property="Grid.Row" Value="0"/>
+                            <Setter TargetName="ContentBorder" Property="Grid.RowSpan" Value="2"/>
+                            <Setter TargetName="ContentBorder" Property="Grid.Column" Value="1"/>
+                            <Setter TargetName="ColumnDefinition0" Property="Width" Value="Auto"/>
+                            <Setter TargetName="ColumnDefinition1" Property="Width" Value="*"/>
+                            <Setter TargetName="RowDefinition0" Property="Height" Value="*"/>
+                            <Setter TargetName="RowDefinition1" Property="Height" Value="0"/>
+                            <Setter TargetName="HeaderBorder" Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline.Right}"/>
+                        </Trigger>
+                        <Trigger Property="TabStripPlacement" Value="Right">
+                            <Setter TargetName="HeaderBorder" Property="Grid.RowSpan" Value="2"/>
+                            <Setter TargetName="HeaderBorder" Property="Grid.Column" Value="1"/>
+                            <Setter TargetName="ContentBorder" Property="Grid.Row" Value="0"/>
+                            <Setter TargetName="ContentBorder" Property="Grid.RowSpan" Value="2"/>
+                            <Setter TargetName="ColumnDefinition0" Property="Width" Value="*"/>
+                            <Setter TargetName="ColumnDefinition1" Property="Width" Value="Auto"/>
+                            <Setter TargetName="RowDefinition0" Property="Height" Value="*"/>
+                            <Setter TargetName="RowDefinition1" Property="Height" Value="0"/>
+                            <Setter TargetName="HeaderBorder" Property="BorderThickness" Value="{DynamicResource SA.Stroke.Hairline.Left}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -654,32 +695,53 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <ControlTemplate x:Key="SA.Slider.Horizontal" TargetType="{x:Type Slider}">
+        <Grid VerticalAlignment="Center">
+            <Border Height="4" VerticalAlignment="Center"
+                    Background="{TemplateBinding Background}" CornerRadius="{DynamicResource SA.Radius.Pill}"/>
+            <Track x:Name="PART_Track" Orientation="Horizontal">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.DecreaseLarge}"/>
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource SA.Slider.Thumb}"/>
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.IncreaseLarge}"/>
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+    <ControlTemplate x:Key="SA.Slider.Vertical" TargetType="{x:Type Slider}">
+        <Grid HorizontalAlignment="Center">
+            <Border Width="4" HorizontalAlignment="Center"
+                    Background="{TemplateBinding Background}" CornerRadius="{DynamicResource SA.Radius.Pill}"/>
+            <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.DecreaseLarge}"/>
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource SA.Slider.Thumb}"/>
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.IncreaseLarge}"/>
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+    </ControlTemplate>
     <Style x:Key="SA.Slider" TargetType="{x:Type Slider}">
         <Setter Property="Foreground" Value="{DynamicResource SA.Brush.Accent.Primary}"/>
         <Setter Property="Background" Value="{DynamicResource SA.Brush.Border.Default}"/>
         <Setter Property="MinHeight" Value="20"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type Slider}">
-                    <Grid VerticalAlignment="Center">
-                        <Border Height="4" VerticalAlignment="Center"
-                                Background="{TemplateBinding Background}" CornerRadius="{DynamicResource SA.Radius.Pill}"/>
-                        <Track x:Name="PART_Track">
-                            <Track.DecreaseRepeatButton>
-                                <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.DecreaseLarge}"/>
-                            </Track.DecreaseRepeatButton>
-                            <Track.Thumb>
-                                <Thumb Style="{StaticResource SA.Slider.Thumb}"/>
-                            </Track.Thumb>
-                            <Track.IncreaseRepeatButton>
-                                <RepeatButton Style="{StaticResource SA.Slider.SideButton}" Command="{x:Static Slider.IncreaseLarge}"/>
-                            </Track.IncreaseRepeatButton>
-                        </Track>
-                    </Grid>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
+        <Setter Property="Template" Value="{StaticResource SA.Slider.Horizontal}"/>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Template" Value="{StaticResource SA.Slider.Vertical}"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="MinWidth" Value="20"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
     <Style TargetType="{x:Type Slider}" BasedOn="{StaticResource SA.Slider}"/>
     <Style x:Key="SA.Expander" TargetType="{x:Type Expander}">
@@ -729,6 +791,16 @@
                         <Trigger Property="IsExpanded" Value="True">
                             <Setter TargetName="Content" Property="Visibility" Value="Visible"/>
                         </Trigger>
+                        <!-- ExpandDirection: dock the header so content grows the correct way (default Down). -->
+                        <Trigger Property="ExpandDirection" Value="Up">
+                            <Setter TargetName="Header" Property="DockPanel.Dock" Value="Bottom"/>
+                        </Trigger>
+                        <Trigger Property="ExpandDirection" Value="Right">
+                            <Setter TargetName="Header" Property="DockPanel.Dock" Value="Left"/>
+                        </Trigger>
+                        <Trigger Property="ExpandDirection" Value="Left">
+                            <Setter TargetName="Header" Property="DockPanel.Dock" Value="Right"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -758,13 +830,22 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" MinWidth="18"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Right2}"/>
+                <Grid Grid.Column="0" Margin="{DynamicResource SA.Gap.Right2}">
+                    <ContentPresenter x:Name="Icon" ContentSource="Icon" VerticalAlignment="Center"/>
+                    <ds:IconPresenter x:Name="Check" Width="14" Height="14" VerticalAlignment="Center" Visibility="Collapsed"
+                                      Data="{DynamicResource SA.Icon.Check}" Foreground="{DynamicResource SA.Brush.Accent.OnSurface}"/>
+                </Grid>
                 <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True"/>
                 <TextBlock Grid.Column="2" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center"
                            Margin="{DynamicResource SA.Gap.Left2}" Foreground="{DynamicResource SA.Brush.Text.Tertiary}"/>
             </Grid>
         </Border>
         <ControlTemplate.Triggers>
+            <!-- Checkable item: show a non-colour checkmark when checked (preserves WPF check semantics). -->
+            <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="Icon" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
             <Trigger Property="IsHighlighted" Value="True">
                 <Setter TargetName="bd" Property="Background" Value="{DynamicResource SA.Brush.Surface.Hover}"/>
             </Trigger>

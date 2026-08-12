@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using SmartAnalysis.UI.DesignSystem.Theming;
@@ -60,14 +59,9 @@ public sealed class ThemeManagerTests
         //     palette nested inside DesignSystem.xaml updates lookups but does NOT invalidate live
         //     DynamicResource consumers (the theme button would flip EffectiveTheme without the window
         //     repainting), and it must not accumulate a new palette on every toggle.
-        var r = RunOnSta(() =>
+        var r = WpfTestHost.Invoke(() =>
         {
-            var app = new System.Windows.Application();
-            app.Resources.MergedDictionaries.Add(new ResourceDictionary
-            {
-                Source = new Uri("pack://application:,,,/SmartAnalysis.UI;component/DesignSystem/DesignSystem.xaml"),
-            });
-
+            var app = System.Windows.Application.Current!; // shared host Application (design system merged)
             var manager = new ThemeManager(TempStore());
             manager.Initialize(app);
 
@@ -87,32 +81,5 @@ public sealed class ThemeManagerTests
         Assert.True(r.lightAtTop, "Light palette must be a TOP-LEVEL merged dictionary.");
         Assert.True(r.darkAtTop, "Dark palette must be a TOP-LEVEL merged dictionary after toggling.");
         Assert.Equal(1, r.paletteCount); // replaced in place, not accumulated
-    }
-
-    // Runs a function on a fresh STA thread (WPF Application requires STA); rethrows any failure.
-    private static T RunOnSta<T>(Func<T> func)
-    {
-        T result = default!;
-        Exception? error = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                result = func();
-            }
-            catch (Exception ex)
-            {
-                error = ex;
-            }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-        if (error is not null)
-        {
-            throw error;
-        }
-
-        return result;
     }
 }
