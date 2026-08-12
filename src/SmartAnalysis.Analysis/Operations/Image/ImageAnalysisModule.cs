@@ -17,6 +17,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<StatisticsOperation>();
         services.AddAnalysisOperation<FlattenOperation>();
         services.AddAnalysisOperation<RoughnessOperation>();
+        services.AddAnalysisOperation<SpatialFilterOperation>();
         return services;
     }
 }
