@@ -19,6 +19,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<RoughnessOperation>();
         services.AddAnalysisOperation<SpatialFilterOperation>();
         services.AddAnalysisOperation<FourierFilterOperation>();
+        services.AddAnalysisOperation<ImageGeometryOperation>();
         return services;
     }
 }
