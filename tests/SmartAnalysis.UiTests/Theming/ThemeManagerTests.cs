@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
@@ -51,9 +52,15 @@ public sealed class ThemeManagerTests
     }
 
     [Fact]
-    public void Apply_swaps_the_live_palette_brush()
+    public void Apply_swaps_the_live_palette_at_the_top_level()
     {
-        var (light, dark) = RunOnSta(() =>
+        // One WPF Application (a process singleton, so app-dependent assertions share this single test):
+        //  1. the same brush key resolves to a different colour per theme (DynamicResource consumers repaint);
+        //  2. the swap happens at the TOP LEVEL of Application.Resources.MergedDictionaries — replacing the
+        //     palette nested inside DesignSystem.xaml updates lookups but does NOT invalidate live
+        //     DynamicResource consumers (the theme button would flip EffectiveTheme without the window
+        //     repainting), and it must not accumulate a new palette on every toggle.
+        var r = RunOnSta(() =>
         {
             var app = new System.Windows.Application();
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
@@ -66,15 +73,20 @@ public sealed class ThemeManagerTests
 
             manager.Apply(AppTheme.Light, persist: false);
             var lightColor = ((SolidColorBrush)app.Resources["SA.Brush.Background.App"]).Color;
+            var lightAtTop = app.Resources.MergedDictionaries.Any(d => d.Source?.OriginalString.Contains("LightColors") == true);
 
             manager.Apply(AppTheme.Dark, persist: false);
             var darkColor = ((SolidColorBrush)app.Resources["SA.Brush.Background.App"]).Color;
+            var darkAtTop = app.Resources.MergedDictionaries.Any(d => d.Source?.OriginalString.Contains("DarkColors") == true);
+            var paletteCount = app.Resources.MergedDictionaries.Count(d => d.Source?.OriginalString.Contains("/Palettes/") == true);
 
-            return (lightColor, darkColor);
+            return (lightColor, darkColor, lightAtTop, darkAtTop, paletteCount);
         });
 
-        // The same brush key resolves to different colours per theme → DynamicResource consumers repaint.
-        Assert.NotEqual(light, dark);
+        Assert.NotEqual(r.lightColor, r.darkColor);
+        Assert.True(r.lightAtTop, "Light palette must be a TOP-LEVEL merged dictionary.");
+        Assert.True(r.darkAtTop, "Dark palette must be a TOP-LEVEL merged dictionary after toggling.");
+        Assert.Equal(1, r.paletteCount); // replaced in place, not accumulated
     }
 
     // Runs a function on a fresh STA thread (WPF Application requires STA); rethrows any failure.

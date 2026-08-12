@@ -101,33 +101,24 @@ public sealed class ThemeManager
             return;
         }
 
+        // Swap the palette at the TOP LEVEL of Application.Resources.MergedDictionaries — never the nested
+        // design-time palette inside DesignSystem.xaml. Replacing a deeply-nested merged dictionary updates
+        // the resource-tree lookup but does NOT reliably invalidate live DynamicResource consumers, so the
+        // theme would change without a shown window repainting. Adding a top-level override (then replacing
+        // it) is the mechanism WPF reliably propagates to every window; being merged last, it wins over the
+        // nested design-time palette. See ThemeManagerTests.Apply_swaps_palette_at_the_top_level.
         var uri = new Uri(effective == AppTheme.Dark ? DarkPaletteUri : LightPaletteUri);
-        if (!TryReplacePalette(_app.Resources, uri))
+        var top = _app.Resources.MergedDictionaries;
+        for (var i = 0; i < top.Count; i++)
         {
-            // No palette in the tree yet (design system not merged) — add one so brushes resolve.
-            _app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = uri });
-        }
-    }
-
-    private static bool TryReplacePalette(ResourceDictionary node, Uri paletteUri)
-    {
-        var merged = node.MergedDictionaries;
-        for (var i = 0; i < merged.Count; i++)
-        {
-            var child = merged[i];
-            if (IsPalette(child))
+            if (IsPalette(top[i]))
             {
-                merged[i] = new ResourceDictionary { Source = paletteUri };
-                return true;
-            }
-
-            if (TryReplacePalette(child, paletteUri))
-            {
-                return true;
+                top[i] = new ResourceDictionary { Source = uri };
+                return;
             }
         }
 
-        return false;
+        top.Add(new ResourceDictionary { Source = uri });
     }
 
     // A palette is the LightColors/DarkColors dictionary (lives under DesignSystem/Palettes/).
