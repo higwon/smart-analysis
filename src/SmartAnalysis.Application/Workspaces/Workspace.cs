@@ -290,6 +290,50 @@ public sealed class Workspace : IDisposable
         return RemoveResult.Succeeded(toRemove);
     }
 
+    /// <summary>
+    /// Replaces this workspace's contents with <paramref name="source"/>'s, <b>moving</b> ownership of the
+    /// datasets and the active context over: the current datasets are disposed, and <paramref name="source"/>
+    /// is left <b>empty</b> so disposing it afterwards is a no-op. Used by workspace Open — the store returns
+    /// a freshly-restored Workspace, and the session's singleton adopts it in place, keeping every subscriber
+    /// bound (no re-wiring of view-models). Lineage is derived from provenance, so it is restored for free.
+    /// </summary>
+    public void ReplaceWith(Workspace source)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(source);
+        if (ReferenceEquals(source, this))
+        {
+            return;
+        }
+
+        source.ThrowIfDisposed();
+
+        // Dispose the datasets this workspace owned, then move source's over (source is emptied so it will
+        // not dispose the datasets we just adopted).
+        foreach (var dataset in _byId.Values)
+        {
+            dataset.Dispose();
+        }
+
+        _byId.Clear();
+        _order.Clear();
+        foreach (var id in source._order)
+        {
+            _byId.Add(id, source._byId[id]);
+            _order.Add(id);
+        }
+
+        var newActive = source._active;
+        source._byId.Clear();
+        source._order.Clear();
+        source._active = ActiveContext.Empty;
+
+        var previous = _active;
+        _active = newActive;
+        DatasetsChanged?.Invoke(this, EventArgs.Empty);
+        ActiveContextChanged?.Invoke(this, new ActiveContextChangedEventArgs(previous, newActive));
+    }
+
     public void Dispose()
     {
         if (_disposed)

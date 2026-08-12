@@ -86,7 +86,16 @@
                              Margin="{DynamicResource SA.Gap.Left2}" VerticalAlignment="Center"
                              Visibility="{Binding HasUnsavedChanges, Converter={StaticResource Bool2Vis}}"/>
                     <Border Width="1" Height="20" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.3}"/>
-                    <Button Command="{Binding ImportCommand}" Style="{StaticResource SA.Button.Secondary}" Margin="{DynamicResource SA.Gap.Right2}">
+                    <Button Command="{Binding OpenWorkspaceCommand}" Style="{StaticResource SA.Button.Secondary}" Margin="{DynamicResource SA.Gap.Right2}"
+                            ToolTip="Open a saved workspace folder">
+                        <StackPanel Orientation="Horizontal">
+                            <ds:IconPresenter Data="{StaticResource SA.Icon.FolderOpen}" Margin="{DynamicResource SA.Gap.Right2}"
+                                              Foreground="{DynamicResource SA.Brush.Text.Primary}"/>
+                            <TextBlock Text="Open" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ImportCommand}" Style="{StaticResource SA.Button.Secondary}" Margin="{DynamicResource SA.Gap.Right2}"
+                            ToolTip="Import a scan into the workspace">
                         <StackPanel Orientation="Horizontal">
                             <ds:IconPresenter Data="{StaticResource SA.Icon.Import}" Margin="{DynamicResource SA.Gap.Right2}"
                                               Foreground="{DynamicResource SA.Brush.Text.Primary}"/>
@@ -94,10 +103,10 @@
                         </StackPanel>
                     </Button>
                     <Button Command="{Binding SaveCommand}" Style="{StaticResource SA.Button.Secondary}"
-                            ToolTip="Saving arrives with the persistence UI (P01).">
+                            ToolTip="Save the workspace to a folder">
                         <StackPanel Orientation="Horizontal">
                             <ds:IconPresenter Data="{StaticResource SA.Icon.Save}" Margin="{DynamicResource SA.Gap.Right2}"
-                                              Foreground="{DynamicResource SA.Brush.Text.Secondary}"/>
+                                              Foreground="{DynamicResource SA.Brush.Text.Primary}"/>
                             <TextBlock Text="Save" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>

@@ -89,6 +89,7 @@ Prio · MVP · Status**.
 |---|---|---|---|---|---|---|---|
 | W01 | Workspace model + active-context | F03, F05 | tray/navigator (fused, doc 02/05) | Rewrite | P0 | ✅ | review |
 | P01 | Workspace file save/reopen w/ lineage | W01, F05, FF01 | **none** (doc 06) | New | P0 | ✅ | review (directory-package v1, buffers inline; relink-by-reference + re-run deferred) |
+| P01-UI | Workspace Save/Open in the shell | P01, U01 | DevExpress dialogs | New | P0 | ✅ | review (`IWorkspacePersistence` use case over the `IWorkspaceStore` port + a WPF folder picker; **Open** button + activated **Save** in the command bar; Open adopts the restored workspace **in place** via new `Workspace.ReplaceWith` (moves datasets + active + lineage; keeps every view-model bound); silent re-save to the known folder; unsaved-dot tracking; typed open-failure surfaced; render-verified; 3 tests: ReplaceWith move/lineage, save→open round-trip, non-workspace failure) |
 | P02 | Spectrum library (SQLite) relocate | F03 | `LIB.File.SQLite` (B) | Reuse, fix layering | P2 | – | planned |
 | P03 | Schema versioning + migration | P01 | HDF5 strict validator (no migration) | New | P2 | – | planned |
 

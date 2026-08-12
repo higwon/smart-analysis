@@ -28,7 +28,12 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IImageAnalysisUseCase _imageAnalysis;
     private readonly IOperationLauncher _launcher;
     private readonly MeasurementStore _measurements;
+    private readonly IWorkspacePersistence _persistence;
+    private readonly IWorkspacePathPicker _workspacePicker;
     private readonly AsyncRelayCommand _runStatistics;
+    private readonly RelayCommand _save;
+    private string? _workspacePath;   // where this workspace was last saved/opened (Save writes here silently)
+    private bool _suppressDirty;      // guards the dirty flag during an in-place Open
 
     // The one piece of operation-specific knowledge left in the shell (doc 26 / U08): the semantic-editor
     // override registry. An id here bypasses the generic schema form for a hand-built editor / direct run;
@@ -53,7 +58,7 @@ public sealed class ShellViewModel : ObservableObject
     private Colormap _colormap = Colormap.AfmGold;
     private string _colormapName = "AFM Gold";
 
-    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, IOperationLauncher launcher, MeasurementStore measurements)
+    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, IOperationLauncher launcher, MeasurementStore measurements, IWorkspacePersistence persistence, IWorkspacePathPicker workspacePicker)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
@@ -62,13 +67,16 @@ public sealed class ShellViewModel : ObservableObject
         _imageAnalysis = imageAnalysis ?? throw new ArgumentNullException(nameof(imageAnalysis));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
+        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+        _workspacePicker = workspacePicker ?? throw new ArgumentNullException(nameof(workspacePicker));
 
         FlattenPanel = new FlattenPanelViewModel(imageAnalysis, () => _workspace.Active.ActiveId);
 
         ImportCommand = new AsyncRelayCommand(ImportAsync, onError: OnCommandError);
         OpenSampleCommand = new AsyncRelayCommand(OpenSampleAsync, () => SamplePath is not null, OnCommandError);
         ToggleThemeCommand = new RelayCommand(ToggleTheme);
-        SaveCommand = new RelayCommand(() => { }, () => false); // stub — persistence UI is a later task (P01)
+        _save = new RelayCommand(SaveWorkspace, () => HasWorkspace);
+        OpenWorkspaceCommand = new RelayCommand(OpenWorkspace);
         // Enabled by the launcher's own state — whether ANY operation is applicable to the active dataset —
         // not by the dataset being an image. So a future Profile/Spectrum operation registered in the
         // registry opens the launcher with no shell edits (the U08 goal); an empty launcher stays disabled.
@@ -81,6 +89,9 @@ public sealed class ShellViewModel : ObservableObject
         // refreshes existing nodes' state — so selection + expansion in the TreeView are preserved.
         _workspace.DatasetsChanged += (_, _) => RebuildTopology();
         _workspace.ActiveContextChanged += (_, _) => RefreshActiveState();
+        // Any dataset change (import, a derived op) marks the workspace unsaved — except during an in-place
+        // Open (suppressed) and on the empty startup workspace.
+        _workspace.DatasetsChanged += (_, _) => { if (!_suppressDirty && _workspace.Count > 0) HasUnsavedChanges = true; };
         // A new/removed measurement re-surfaces the attached nodes without disturbing the active context
         // or the current Inspector role (so the just-shown result card survives its own attach).
         _measurements.MeasurementsChanged += (_, _) => RebuildNodes();
@@ -100,7 +111,8 @@ public sealed class ShellViewModel : ObservableObject
     public ICommand ImportCommand { get; }
     public ICommand OpenSampleCommand { get; }
     public ICommand ToggleThemeCommand { get; }
-    public ICommand SaveCommand { get; }
+    public ICommand SaveCommand => _save;
+    public ICommand OpenWorkspaceCommand { get; }
 
     public string WorkspaceName
     {
@@ -366,6 +378,67 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(HasStatus));
     }
 
+    // Saves the workspace as a directory-package. Silently re-saves to the known folder after the first
+    // save/open; prompts for a folder otherwise.
+    private void SaveWorkspace()
+    {
+        var path = _workspacePath ?? _workspacePicker.PickSaveFolder();
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        var outcome = _persistence.Save(path);
+        if (outcome.Success)
+        {
+            _workspacePath = path;
+            WorkspaceName = FolderName(path);
+            HasUnsavedChanges = false;
+            StatusMessage = null;
+        }
+        else
+        {
+            StatusMessage = outcome.Error;
+        }
+
+        OnPropertyChanged(nameof(HasStatus));
+    }
+
+    // Opens a saved workspace, replacing the current session in place (ReplaceWith fires the workspace events
+    // that rebuild the tree + active state). The dirty flag is suppressed for that in-place swap.
+    private void OpenWorkspace()
+    {
+        var path = _workspacePicker.PickOpenFolder();
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        _suppressDirty = true;
+        var outcome = _persistence.Open(path);
+        _suppressDirty = false;
+
+        if (outcome.Success)
+        {
+            _workspacePath = path;
+            WorkspaceName = FolderName(path);
+            HasUnsavedChanges = false;
+            StatusMessage = null;
+        }
+        else
+        {
+            StatusMessage = outcome.Error;
+        }
+
+        OnPropertyChanged(nameof(HasStatus));
+    }
+
+    private static string FolderName(string path)
+    {
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return string.IsNullOrEmpty(name) ? "Workspace" : name;
+    }
+
     private void ToggleTheme()
     {
         var next = _theme.EffectiveTheme == AppTheme.Dark ? AppTheme.Light : AppTheme.Dark;
@@ -398,6 +471,7 @@ public sealed class ShellViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasWorkspace));
+        _save.RaiseCanExecuteChanged(); // Save is enabled once the workspace has content
     }
 
     // Active/comparison changed only: update existing nodes in place + the active header + history.
