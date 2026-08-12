@@ -157,6 +157,23 @@ public sealed class DesignSystemStyleTests
             "Screen/view XAML must use design tokens, not ad-hoc metrics/hex. Offenders:\n" + string.Join("\n", offenders));
     }
 
+    [Theory]
+    [InlineData("ComboBox")]
+    [InlineData("ComboBoxItem")]
+    [InlineData("TextBox")]
+    [InlineData("CheckBox")]
+    [InlineData("ListBox")]
+    [InlineData("ScrollBar")]
+    public void Interactive_control_ships_a_full_control_template(string control)
+    {
+        // A setter-only style leaves the DEFAULT WPF template in place, which paints its own system-coloured
+        // chrome (e.g. ComboBox's toggle button) and ignores the SA Background/Foreground — giving unreadable,
+        // off-theme controls (esp. in Dark). Every interactive control the shell renders must carry a full
+        // ControlTemplate. This guards the exact regression that shipped a setter-only ComboBox.
+        var xaml = File.ReadAllText(Path.Combine(DesignSystemDir(), "Controls", "ControlStyles.xaml"));
+        Assert.Contains($"<ControlTemplate TargetType=\"{{x:Type {control}}}\"", xaml);
+    }
+
     [Fact]
     public void Icon_geometries_are_present_and_non_empty()
     {
