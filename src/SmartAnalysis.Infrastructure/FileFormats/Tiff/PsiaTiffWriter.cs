@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using System.Text;
 using SmartAnalysis.Application.FileFormats;
+using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Units;
 
 namespace SmartAnalysis.Infrastructure.FileFormats.Tiff;
 
@@ -13,6 +15,10 @@ namespace SmartAnalysis.Infrastructure.FileFormats.Tiff;
 /// Pixels are written as float32 with <c>DataGain=1</c>/<c>ZOffset=0</c>, so the reader's
 /// <c>physical = raw·gain + offset</c> returns the same values (lossless within float precision). No TIFF
 /// library and no WPF (the PSIA layout is trivial to emit directly, keeping byte-for-byte reader compatibility).
+/// <para>
+/// X/Y scan geometry is <b>canonicalized to micrometres</b> — the fixed unit the PSIA header (and the reader)
+/// use — so the physical coordinates survive even for a non-µm axis (e.g. nm); a non-length axis is rejected.
+/// </para>
 /// </summary>
 public sealed class PsiaTiffWriter : IScanFileWriter
 {
@@ -39,10 +45,20 @@ public sealed class PsiaTiffWriter : IScanFileWriter
                 $"PSIA-TIFF writer supports {nameof(ScanImageDataset)} only; got {dataset.GetType().Name}."));
         }
 
+        // The PSIA header stores X/Y scan size and offset in micrometres (the reader always reads them as µm),
+        // so canonicalize the axes to µm here — otherwise a non-µm axis (e.g. nm) would be silently rescaled.
+        if (!TryToMicrometre(image.X, out double xOriginUm, out double xStepUm)
+            || !TryToMicrometre(image.Y, out double yOriginUm, out double yStepUm))
+        {
+            return Task.FromResult(FileWriteResult.Failure(
+                FileWriteErrorKind.Unsupported,
+                "PSIA-TIFF stores X/Y in micrometres; the dataset's scan axes are not length-dimensioned."));
+        }
+
         try
         {
             byte[] description = BuildDescription(image);
-            byte[] header = BuildHeader(image);
+            byte[] header = BuildHeader(image, xOriginUm, xStepUm, yOriginUm, yStepUm);
             byte[] pixels = PackFloatPixels(image.Data.Memory.Span);
             WriteFile(path, description, header, pixels);
             return Task.FromResult(FileWriteResult.Success(path));
@@ -70,7 +86,25 @@ public sealed class PsiaTiffWriter : IScanFileWriter
         return block;
     }
 
-    private static byte[] BuildHeader(ScanImageDataset image)
+    // Converts an axis to the PSIA header's micrometre coordinate system: the origin is an affine coordinate
+    // conversion (offset-aware), the step is a delta so only the scale ratio applies (no offset). Fails for a
+    // non-length axis (not convertible to µm).
+    private static bool TryToMicrometre(Axis axis, out double originUm, out double stepUm)
+    {
+        var conversion = new PhysicalValue(axis.Origin, axis.Unit).TryConvertTo(StandardUnits.Micrometre);
+        if (!conversion.Success)
+        {
+            originUm = 0.0;
+            stepUm = 0.0;
+            return false;
+        }
+
+        originUm = conversion.Value.Value;
+        stepUm = axis.Step * axis.Unit.ScaleToBase / StandardUnits.Micrometre.ScaleToBase;
+        return true;
+    }
+
+    private static byte[] BuildHeader(ScanImageDataset image, double xOriginUm, double xStepUm, double yOriginUm, double yStepUm)
     {
         int width = image.X.Count;
         int height = image.Y.Count;
@@ -94,10 +128,10 @@ public sealed class PsiaTiffWriter : IScanFileWriter
         w.Write(0);              // FastScanDir
         w.Write(0);              // SlowScanDirection
         w.Write(0);              // XYSwap
-        w.Write(image.X.Step * width);   // XScanSize = X.Step · Width
-        w.Write(image.Y.Step * height);  // YScanSize = Y.Step · Height
-        w.Write(image.X.Origin);         // XOffset
-        w.Write(image.Y.Origin);         // YOffset
+        w.Write(xStepUm * width);        // XScanSize = X.Step · Width, in µm
+        w.Write(yStepUm * height);       // YScanSize = Y.Step · Height, in µm
+        w.Write(xOriginUm);              // XOffset, in µm
+        w.Write(yOriginUm);              // YOffset, in µm
         w.Write(0.0);            // ScanRate
         w.Write(0.0);            // SetPoint
         WriteFixedString(w, string.Empty, 8); // SetPointUnit

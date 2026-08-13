@@ -120,6 +120,31 @@ public sealed class PsiaTiffWriterTests
     }
 
     [Fact]
+    public async Task Canonicalizes_non_micrometre_axes_to_the_PSIA_micrometre_coordinate_system()
+    {
+        // The PSIA header stores X/Y in µm, so a nm-axis dataset must be converted on write — else the reader
+        // (which always reads µm) would rescale the geometry by 1000×. Origin is an affine coordinate
+        // conversion; step is a delta (scale ratio only).
+        using var nmImage = new ScanImageDataset(
+            DatasetId.New(),
+            new DataSource("test", null),
+            new Axis("X", StandardUnits.Nanometre, origin: 100.0, step: 10.0, count: 4),
+            new Axis("Y", StandardUnits.Nanometre, origin: 2000.0, step: 20.0, count: 3),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(new float[12], 4, 3),
+            ScanMetadata.Unknown,
+            ProvenanceRecord.Root);
+
+        var (_, readBack) = await RoundTripAsync(nmImage);
+
+        Assert.Equal("um", readBack.X.Unit.Symbol);
+        Assert.Equal(0.1, readBack.X.Origin, 9);   // 100 nm  → 0.1 µm
+        Assert.Equal(0.01, readBack.X.Step, 9);    // 10 nm   → 0.01 µm
+        Assert.Equal(2.0, readBack.Y.Origin, 9);   // 2000 nm → 2.0 µm
+        Assert.Equal(0.02, readBack.Y.Step, 9);    // 20 nm   → 0.02 µm
+    }
+
+    [Fact]
     public async Task A_file_without_the_sidecar_reads_as_a_root_dataset()
     {
         // The committed fixture was not written by FF02, so it has no ImageDescription side-car — the reader
