@@ -18,7 +18,8 @@ public sealed record ImageRenderInput
         Colormap colormap,
         AxisView x,
         AxisView y,
-        string channelUnit)
+        string channelUnit,
+        ValueRange? dataRange = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(width);
         ArgumentOutOfRangeException.ThrowIfNegative(height);
@@ -31,6 +32,7 @@ public sealed record ImageRenderInput
         Width = width;
         Height = height;
         Range = range;
+        DataRange = dataRange ?? range;
         Colormap = colormap ?? throw new ArgumentNullException(nameof(colormap));
         X = x ?? throw new ArgumentNullException(nameof(x));
         Y = y ?? throw new ArgumentNullException(nameof(y));
@@ -50,7 +52,11 @@ public sealed record ImageRenderInput
 
     public int Height { get; }
 
+    /// <summary>The value window mapped across the colormap (may be a manual sub-range of <see cref="DataRange"/>).</summary>
     public ValueRange Range { get; }
+
+    /// <summary>The full finite data extent — the fixed axis for a palette bar; defaults to <see cref="Range"/>.</summary>
+    public ValueRange DataRange { get; }
 
     public Colormap Colormap { get; }
 

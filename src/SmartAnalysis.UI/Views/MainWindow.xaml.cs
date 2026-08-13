@@ -36,6 +36,8 @@ public partial class MainWindow : Window
         DataContext = viewModel;
 
         _viewModel.ImagesChanged += (_, _) => RenderImages();
+        // Dragging the single view's palette-bar handles sets a manual value range on the shell.
+        SingleImage.RangeChanged += (_, r) => _viewModel.SetManualRange(r.Min, r.Max);
         RenderImages();
     }
 

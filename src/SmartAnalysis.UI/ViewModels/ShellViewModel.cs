@@ -282,6 +282,22 @@ public sealed class ShellViewModel : ObservableObject
             ? null
             : new ValueRange(_rangeMin, _rangeMax);
 
+    /// <summary>
+    /// Applies a value window set by dragging the palette-bar handles: switch to manual and re-render once.
+    /// Updates the toolbar (Auto unchecks, the min/max fields follow) without firing a render per keystroke.
+    /// </summary>
+    public void SetManualRange(double min, double max)
+    {
+        _autoRange = false;
+        _rangeMin = min;
+        _rangeMax = max;
+        OnPropertyChanged(nameof(AutoRange));
+        OnPropertyChanged(nameof(ManualRangeEnabled));
+        OnPropertyChanged(nameof(RangeMin));
+        OnPropertyChanged(nameof(RangeMax));
+        ImagesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     // Reflects the active image's data min/max in the shown range (used while auto, and when switching to auto).
     private void SeedRangeFromActive()
     {

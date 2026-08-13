@@ -68,6 +68,22 @@ public sealed class ShellPaletteTests
     }
 
     [Fact]
+    public void Dragging_the_palette_bar_sets_a_manual_range_and_re_renders_once()
+    {
+        var vm = NewShell();
+        int renders = 0;
+        vm.ImagesChanged += (_, _) => renders++;
+
+        vm.SetManualRange(-3.0, 7.0); // as raised by a palette-bar handle drag commit
+
+        Assert.False(vm.AutoRange);
+        Assert.Equal(-3.0, vm.RangeMin, 9);
+        Assert.Equal(7.0, vm.RangeMax, 9);
+        Assert.Equal(new ValueRange(-3.0, 7.0), vm.EffectiveRange);
+        Assert.Equal(1, renders); // a single re-render on commit, not per drag step
+    }
+
+    [Fact]
     public void An_invalid_manual_range_falls_back_to_auto()
     {
         var vm = NewShell();

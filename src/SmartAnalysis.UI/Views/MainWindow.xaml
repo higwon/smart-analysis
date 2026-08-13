@@ -300,7 +300,7 @@
 
                     <!-- content -->
                     <Grid>
-                        <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}"
+                        <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}" IsRangeEditable="True"
                                           Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}"/>
                         <Grid x:Name="CompareContent" Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
