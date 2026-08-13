@@ -39,7 +39,8 @@ public partial class AfmImageView : UserControl, IImageView
     private const double HandleSize = 9.0;
 
     private double _fitScale = ImageViewportMath.MinScale; // the zoomed-out limit; refreshed by Fit()/SizeChanged
-    private (int Left, int Top, int Width, int Height)? _regionPreview; // e.g. the live Crop rectangle
+    private (int Left, int Top, int Width, int Height)? _regionPreview;   // the requested region (raw form values)
+    private (int Left, int Top, int Width, int Height)? _effectiveRegion; // clamped to the image — what is shown AND dragged
     private readonly (RegionHandle Handle, Rectangle Rect)[] _regionHandles;
     private RegionHandle _regionHandle = RegionHandle.None; // the handle being dragged, if any
     private (int Left, int Top, int Width, int Height) _regionStart;
@@ -57,6 +58,9 @@ public partial class AfmImageView : UserControl, IImageView
 
     /// <summary>Raised while the user drags the region overlay: the new (left, top, width, height) in pixels.</summary>
     public event EventHandler<(int Left, int Top, int Width, int Height)>? RegionChanged;
+
+    /// <summary>The region shown/dragged: the requested rectangle clamped to the image (null when hidden).</summary>
+    public (int Left, int Top, int Width, int Height)? EffectiveRegion => _effectiveRegion;
 
     /// <summary>Whether the region overlay can be dragged/resized (shows the handles). Single view only.</summary>
     public bool IsRegionEditable
@@ -91,22 +95,20 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        // Clamp to the image (the crop clamps too), so the preview shows the region that will actually be cut.
-        int left = Math.Clamp(r.Left, 0, _bmpW);
-        int top = Math.Clamp(r.Top, 0, _bmpH);
-        int right = Math.Clamp(r.Left + r.Width, 0, _bmpW);
-        int bottom = Math.Clamp(r.Top + r.Height, 0, _bmpH);
-        if (right <= left || bottom <= top)
+        // Clamp to the image (the crop clamps too): the same box is shown, dragged, and cut.
+        var (left, top, width, height) = RegionEditMath.ClampToImage(r.Left, r.Top, r.Width, r.Height, _bmpW, _bmpH);
+        if (width <= 0 || height <= 0)
         {
             HideOverlay();
             return;
         }
 
+        _effectiveRegion = (left, top, width, height);
         double s = ImgScale.ScaleX;
         double x = (left * s) + ImgTranslate.X;
         double y = (top * s) + ImgTranslate.Y;
-        double w = (right - left) * s;
-        double h = (bottom - top) * s;
+        double w = width * s;
+        double h = height * s;
         Canvas.SetLeft(RegionOverlay, x);
         Canvas.SetTop(RegionOverlay, y);
         RegionOverlay.Width = w;
@@ -117,6 +119,7 @@ public partial class AfmImageView : UserControl, IImageView
 
     private void HideOverlay()
     {
+        _effectiveRegion = null;
         RegionOverlay.Visibility = Visibility.Collapsed;
         if (_regionHandles is not null)
         {
@@ -333,7 +336,9 @@ public partial class AfmImageView : UserControl, IImageView
 
     private void BeginRegionDrag(RegionHandle handle, MouseButtonEventArgs e)
     {
-        if (!_regionEditable || _regionPreview is not { } region)
+        // Drag from the EFFECTIVE (clamped, on-screen) region, not the raw request — so the box the user sees
+        // is exactly the box that moves/resizes (an over-large form width must not drag from its raw value).
+        if (!_regionEditable || _effectiveRegion is not { } region)
         {
             return;
         }

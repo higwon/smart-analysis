@@ -25,6 +25,20 @@ public enum RegionHandle
 /// </summary>
 public static class RegionEditMath
 {
+    /// <summary>
+    /// The region actually cut / shown: the requested rectangle clamped to the image. Both the overlay and the
+    /// drag start from this, so the displayed ROI, the drag source, and the effective crop are the same box.
+    /// </summary>
+    public static (int Left, int Top, int Width, int Height) ClampToImage(
+        int left, int top, int width, int height, int imageWidth, int imageHeight)
+    {
+        int l = Math.Clamp(left, 0, imageWidth);
+        int t = Math.Clamp(top, 0, imageHeight);
+        int r = Math.Clamp(left + width, 0, imageWidth);
+        int b = Math.Clamp(top + height, 0, imageHeight);
+        return (l, t, Math.Max(0, r - l), Math.Max(0, b - t));
+    }
+
     /// <summary>Maps a viewport (screen) point to image-pixel space via the image's scale/translate.</summary>
     public static (double X, double Y) ScreenToPixel(double screenX, double screenY, double scale, double translateX, double translateY)
         => scale <= 0.0 ? (0.0, 0.0) : ((screenX - translateX) / scale, (screenY - translateY) / scale);

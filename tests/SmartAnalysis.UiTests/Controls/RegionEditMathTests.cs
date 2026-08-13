@@ -36,6 +36,23 @@ public sealed class RegionEditMathTests
     }
 
     [Fact]
+    public void Clamp_to_image_gives_the_effective_region()
+    {
+        // An over-large request is clamped to what actually fits: (10,0,999,15) on 15×15 → 5px wide.
+        Assert.Equal((10, 0, 5, 15), RegionEditMath.ClampToImage(10, 0, 999, 15, 15, 15));
+    }
+
+    [Fact]
+    public void Body_drag_starts_from_the_effective_region_not_the_raw_request()
+    {
+        // The box the user sees (effective) is exactly the box that moves — not the raw form width of 999.
+        var eff = RegionEditMath.ClampToImage(10, 0, 999, 15, 15, 15);
+        var moved = RegionEditMath.Drag(RegionHandle.Body, eff.Left, eff.Top, eff.Width, eff.Height, dx: -2, dy: 0, imageWidth: 15, imageHeight: 15);
+
+        Assert.Equal((8, 0, 5, 15), moved);
+    }
+
+    [Fact]
     public void Dragging_the_body_moves_it_and_preserves_the_size()
     {
         var (l, t, w, h) = RegionEditMath.Drag(RegionHandle.Body, 10, 10, 20, 20, dx: 5, dy: -3, imageWidth: 100, imageHeight: 100);

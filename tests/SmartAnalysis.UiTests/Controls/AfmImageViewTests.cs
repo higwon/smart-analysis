@@ -69,6 +69,28 @@ public sealed class AfmImageViewTests
     }
 
     [Fact]
+    public void The_effective_region_is_the_request_clamped_to_the_image()
+    {
+        // The displayed AND dragged region is the request clamped to the image — an over-large form width must
+        // not leave the drag starting from its raw value (displayed 5px box vs. dragging from width 999).
+        var effective = WpfTestHost.Invoke(() =>
+        {
+            var view = new AfmImageView { IsRegionEditable = true };
+            var host = new Border { Width = 320, Height = 240, Child = view };
+            host.Measure(new Size(320, 240));
+            host.Arrange(new Rect(0, 0, 320, 240));
+            host.UpdateLayout();
+
+            view.Render(SolidInput(15, 15));
+            view.SetRegionPreview(10, 0, 999, 15); // over-large width
+            host.UpdateLayout();
+            return view.EffectiveRegion;
+        });
+
+        Assert.Equal((10, 0, 5, 15), effective);
+    }
+
+    [Fact]
     public void A_scan_larger_than_the_viewport_is_arranged_at_its_natural_pixel_size()
     {
         // Regression: a bitmap whose natural size exceeds the viewport used to be arranged (and realized) at the
