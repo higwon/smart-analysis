@@ -68,6 +68,26 @@ public sealed class ImageViewportMathTests
     }
 
     [Fact]
+    public void Refit_on_resize_stays_at_fit_when_the_viewport_shrinks()
+    {
+        // The blocker: at fit (scale == old fit 2.0), shrinking the viewport (new fit 1.0) must re-fit — not
+        // leave the image at 2.0 (a surprise 2× zoom). Deciding against the NEW fit floor (2.0 <= 1.0 = false)
+        // would wrongly keep the zoom; deciding against the OLD fit (were-we-at-fit) re-fits.
+        Assert.True(ImageViewportMath.ShouldRefitOnResize(currentScale: 2.0, oldFitScale: 2.0, newFitScale: 1.0));
+        Assert.True(ImageViewportMath.ShouldRefitOnResize(currentScale: 2.0, oldFitScale: 2.0, newFitScale: 3.0)); // grow: also refit
+    }
+
+    [Fact]
+    public void Refit_on_resize_keeps_the_zoom_when_zoomed_in()
+    {
+        // Zoomed in (scale 2.0 above the old fit 1.0): a resize keeps the zoom…
+        Assert.False(ImageViewportMath.ShouldRefitOnResize(currentScale: 2.0, oldFitScale: 1.0, newFitScale: 0.7));
+
+        // …unless the new fit floor rose above the current scale, in which case snap back up to fit.
+        Assert.True(ImageViewportMath.ShouldRefitOnResize(currentScale: 0.5, oldFitScale: 0.4, newFitScale: 0.7));
+    }
+
+    [Fact]
     public void Clamp_centers_an_axis_that_still_fits_the_viewport()
     {
         // Image 60 wide at the given scale is smaller than the 200 viewport → centered regardless of the drag.

@@ -73,6 +73,15 @@ public static class ImageViewportMath
     /// <summary>Whether the image is zoomed in past fit (and therefore pannable). At fit this is false.</summary>
     public static bool CanPan(double scale, double fitScale) => scale > fitScale * 1.0001;
 
+    /// <summary>
+    /// On a viewport resize, whether to re-fit (vs. keep the current zoom and just re-clamp the pan). Uses the
+    /// <b>old</b> fit scale to decide if we were at fit: if so, stay at fit after the resize (re-centre for the
+    /// new size); otherwise keep the zoom, but still re-fit if the new fit floor has risen above the current
+    /// scale. Deciding against the new fit scale instead would drop out of fit when the viewport shrinks.
+    /// </summary>
+    public static bool ShouldRefitOnResize(double currentScale, double oldFitScale, double newFitScale)
+        => !CanPan(currentScale, oldFitScale) || currentScale < newFitScale;
+
     private static double ClampAxis(double translate, double imageSize, double viewportSize)
     {
         if (imageSize <= viewportSize)

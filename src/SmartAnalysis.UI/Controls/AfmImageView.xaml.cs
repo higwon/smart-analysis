@@ -143,16 +143,19 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        // Recompute the fit floor for the new size. Re-fit when we were at (or below) fit; otherwise keep the
-        // zoom but re-clamp so the resize can't reveal a gap at the edges.
-        if (_needsFit || ImgScale.ScaleX <= ImageViewportMath.FitScale(Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH))
+        // Decide against the OLD fit scale (were we at fit?) BEFORE refreshing it — comparing the current
+        // scale to the NEW fit floor would drop out of fit when the viewport shrinks.
+        double newFit = ImageViewportMath.FitScale(Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH);
+        bool refit = _needsFit || ImageViewportMath.ShouldRefitOnResize(ImgScale.ScaleX, _fitScale, newFit);
+        _fitScale = newFit;
+
+        if (refit)
         {
-            Fit();
+            Fit(); // stays at fit (re-centred for the new size); also recomputes _fitScale
         }
         else
         {
-            _fitScale = ImageViewportMath.FitScale(Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH);
-            ApplyTranslateClamp();
+            ApplyTranslateClamp(); // keep the zoom, just re-clamp the pan so no edge enters the viewport
         }
     }
 
@@ -162,6 +165,8 @@ public partial class AfmImageView : UserControl, IImageView
         {
             return;
         }
+
+        e.Handled = true; // the wheel is our zoom — don't also scroll a parent ScrollViewer
 
         var p = e.GetPosition(Viewport);
         var (scale, x, y) = ImageViewportMath.ZoomAtCursor(
