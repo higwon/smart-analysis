@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using SmartAnalysis.Visualization.Colormaps;
 using SmartAnalysis.Visualization.Rendering;
 
@@ -14,13 +13,12 @@ namespace SmartAnalysis.UI.Controls;
 /// The interactive palette bar / legend: a vertical colormap gradient whose axis is the fixed data extent,
 /// with draggable <b>min</b> and <b>max</b> handles that set the value window mapped across the colormap
 /// (the legacy palette-bar interaction). Below the min handle the colormap clamps to its first entry, above
-/// the max handle to its last. Drag geometry lives in the pure, tested <see cref="PaletteBarMath"/>. When
-/// <see cref="Editable"/> is false it is a plain read-only legend (e.g. the Before/After panes).
+/// the max handle to its last. Drag geometry lives in the pure, tested <see cref="PaletteBarMath"/>; the drag
+/// itself is handled at the <c>Track</c> level (which captures the mouse) so a grabbed handle never loses the
+/// drag. When <see cref="Editable"/> is false it is a plain read-only legend (e.g. the Before/After panes).
 /// </summary>
 public partial class PaletteBar : UserControl
 {
-    private const double HandleHalf = 7.0; // half the 14px triangle height (to centre it on its value)
-
     private Colormap? _colormap;
     private ValueRange _data;
     private double _min;
@@ -46,6 +44,8 @@ public partial class PaletteBar : UserControl
             var v = value ? Visibility.Visible : Visibility.Collapsed;
             MinHandle.Visibility = v;
             MaxHandle.Visibility = v;
+            MinTick.Visibility = v;
+            MaxTick.Visibility = v;
         }
     }
 
@@ -70,6 +70,26 @@ public partial class PaletteBar : UserControl
         MaxLabel.Text = MinLabel.Text = UnitLabel.Text = string.Empty;
     }
 
+    /// <summary>
+    /// Applies a drag of the given handle (1 = min, 2 = max) to a pixel-Y, updating the window and repainting
+    /// the bar/handles live. Returns the new window. Split out from the mouse handler so it is unit-testable.
+    /// </summary>
+    public (double Min, double Max) DragTo(int which, double y)
+    {
+        if (_colormap is null || Track.ActualHeight <= 0)
+        {
+            return (_min, _max);
+        }
+
+        (_min, _max) = which == 1
+            ? PaletteBarMath.DragMin(y, Track.ActualHeight, _data, _max)
+            : PaletteBarMath.DragMax(y, Track.ActualHeight, _data, _min);
+        Bar.Background = BuildGradient(_colormap, _data, _min, _max); // live feedback
+        PositionMarker(MinHandle, MinTick, _min);
+        PositionMarker(MaxHandle, MaxTick, _max);
+        return (_min, _max);
+    }
+
     private void Track_SizeChanged(object sender, SizeChangedEventArgs e) => Repaint();
 
     private void Repaint()
@@ -81,14 +101,15 @@ public partial class PaletteBar : UserControl
 
         Bar.Height = Track.ActualHeight;
         Bar.Background = BuildGradient(_colormap, _data, _min, _max);
-        PositionHandle(MinHandle, _min);
-        PositionHandle(MaxHandle, _max);
+        PositionMarker(MinHandle, MinTick, _min);
+        PositionMarker(MaxHandle, MaxTick, _max);
     }
 
-    private void PositionHandle(UIElement handle, double value)
+    private void PositionMarker(UIElement handle, UIElement tick, double value)
     {
         double y = PaletteBarMath.YFor(value, Track.ActualHeight, _data);
-        Canvas.SetTop(handle, y - HandleHalf);
+        Canvas.SetTop(handle, y);      // the handle path is symmetric about y=0
+        Canvas.SetTop(tick, y - 1.0);  // 2px tick line, centred on the value
     }
 
     // The colormap ramp mapped across [min,max] within the [dataMin,dataMax] axis: clamped solid below/above.
@@ -125,11 +146,11 @@ public partial class PaletteBar : UserControl
         return brush;
     }
 
-    private void MinHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => BeginDrag(1);
+    private void MinHandle_Down(object sender, MouseButtonEventArgs e) => BeginDrag(1, e);
 
-    private void MaxHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => BeginDrag(2);
+    private void MaxHandle_Down(object sender, MouseButtonEventArgs e) => BeginDrag(2, e);
 
-    private void BeginDrag(int which)
+    private void BeginDrag(int which, MouseButtonEventArgs e)
     {
         if (!_editable)
         {
@@ -137,35 +158,28 @@ public partial class PaletteBar : UserControl
         }
 
         _dragging = which;
-        Track.CaptureMouse();
+        Track.CaptureMouse(); // Track owns the drag; MouseMove/Up below run regardless of what's under the cursor
+        e.Handled = true;
     }
 
-    private void Handle_MouseMove(object sender, MouseEventArgs e)
+    private void Track_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_dragging != 0)
+        {
+            DragTo(_dragging, e.GetPosition(Track).Y);
+        }
+    }
+
+    private void Track_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (_dragging == 0)
         {
             return;
         }
 
-        double y = e.GetPosition(Track).Y;
-        var (min, max) = _dragging == 1
-            ? PaletteBarMath.DragMin(y, Track.ActualHeight, _data, _max)
-            : PaletteBarMath.DragMax(y, Track.ActualHeight, _data, _min);
-        _min = min;
-        _max = max;
-        Bar.Background = BuildGradient(_colormap!, _data, _min, _max); // live feedback on the bar
-        PositionHandle(MinHandle, _min);
-        PositionHandle(MaxHandle, _max);
-    }
-
-    private void Handle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_dragging != 0)
-        {
-            _dragging = 0;
-            Track.ReleaseMouseCapture();
-            RangeChanged?.Invoke(this, (_min, _max)); // commit → re-render the image once
-        }
+        _dragging = 0;
+        Track.ReleaseMouseCapture();
+        RangeChanged?.Invoke(this, (_min, _max)); // commit → re-render the image once
     }
 
     private static Color ToColor(Rgb c) => Color.FromRgb(c.R, c.G, c.B);
