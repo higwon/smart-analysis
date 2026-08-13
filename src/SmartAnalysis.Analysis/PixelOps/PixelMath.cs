@@ -47,44 +47,26 @@ public static class PixelMath
             throw new ArgumentException("source length must equal width*height.", nameof(source));
         }
 
+        // Invert flips about the mid of the FINITE data; the mirror is only needed for that op.
+        double mirror = op == PixelOp.Invert ? MinPlusMax(source) : 0.0;
         var result = new float[source.Length];
-        switch (op)
+        for (int i = 0; i < source.Length; i++)
         {
-            case PixelOp.Invert:
-                double mirror = MinPlusMax(source);
-                for (int i = 0; i < source.Length; i++)
-                {
-                    result[i] = (float)(mirror - source[i]); // non-finite stays non-finite
-                }
+            float value = source[i];
+            if (!float.IsFinite(value))
+            {
+                result[i] = value; // NaN/±∞ pass through unchanged (sign and all)
+                continue;
+            }
 
-                break;
-
-            case PixelOp.AbsoluteValue:
-                for (int i = 0; i < source.Length; i++)
-                {
-                    result[i] = MathF.Abs(source[i]);
-                }
-
-                break;
-
-            case PixelOp.Offset:
-                for (int i = 0; i < source.Length; i++)
-                {
-                    result[i] = (float)(source[i] + amount);
-                }
-
-                break;
-
-            case PixelOp.Scale:
-                for (int i = 0; i < source.Length; i++)
-                {
-                    result[i] = (float)(source[i] * amount);
-                }
-
-                break;
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown pixel op.");
+            result[i] = op switch
+            {
+                PixelOp.Invert => (float)(mirror - value),
+                PixelOp.AbsoluteValue => MathF.Abs(value),
+                PixelOp.Offset => (float)(value + amount),
+                PixelOp.Scale => (float)(value * amount),
+                _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown pixel op."),
+            };
         }
 
         return result;

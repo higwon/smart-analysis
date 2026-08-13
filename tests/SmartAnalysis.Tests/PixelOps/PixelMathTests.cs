@@ -36,14 +36,21 @@ public sealed class PixelMathTests
         Assert.Equal(new float[] { 2, 4, 6 }, PixelMath.Apply([1, 2, 3], 3, 1, PixelOp.Scale, 2.0));
     }
 
-    [Fact]
-    public void Non_finite_pixels_pass_through_for_a_fixed_transform()
+    [Theory]
+    [InlineData(PixelOp.Invert, 0.0)]
+    [InlineData(PixelOp.AbsoluteValue, 0.0)]
+    [InlineData(PixelOp.Offset, 5.0)]
+    [InlineData(PixelOp.Scale, -2.0)]
+    public void Non_finite_pixels_pass_through_unchanged_for_every_op(PixelOp op, double amount)
     {
-        var result = PixelMath.Apply([float.NaN, 1, 2], 3, 1, PixelOp.AbsoluteValue, 0);
+        // NaN/±∞ must survive with their exact sign/value — never turned into a finite (or flipped) number by
+        // the arithmetic (e.g. Scale(-2) on +∞, or Invert on −∞).
+        var result = PixelMath.Apply([float.NaN, float.PositiveInfinity, float.NegativeInfinity, 2f], 4, 1, op, amount);
 
         Assert.True(float.IsNaN(result[0]));
-        Assert.Equal(1, result[1]);
-        Assert.Equal(2, result[2]);
+        Assert.True(float.IsPositiveInfinity(result[1]));
+        Assert.True(float.IsNegativeInfinity(result[2]));
+        Assert.True(float.IsFinite(result[3])); // the finite pixel is still transformed
     }
 
     [Theory]

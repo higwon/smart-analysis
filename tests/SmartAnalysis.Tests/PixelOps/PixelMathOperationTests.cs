@@ -76,6 +76,22 @@ public sealed class PixelMathOperationTests
     }
 
     [Fact]
+    public async Task Offset_records_the_amount_in_the_channel_unit_and_Scale_dimensionless()
+    {
+        var image = await LoadImageAsync();
+
+        // Offset adds a value in the channel unit (the cheese fixture is µm), so the recorded amount carries it…
+        var offset = await NewOperation().RunAsync(new OperationInput(image), Params(PixelOp.Offset, 5.0), null, CancellationToken.None);
+        var offsetStep = Assert.IsType<ScanImageDataset>(offset.DerivedDataset).Provenance.Steps[^1];
+        Assert.Equal(image.Channel.Unit, offsetStep.Parameters[PixelMathOperation.AmountParameter].Unit);
+
+        // …while Scale multiplies by a dimensionless factor.
+        var scale = await NewOperation().RunAsync(new OperationInput(image), Params(PixelOp.Scale, 2.0), null, CancellationToken.None);
+        var scaleStep = Assert.IsType<ScanImageDataset>(scale.DerivedDataset).Provenance.Steps[^1];
+        Assert.Equal(StandardUnits.One, scaleStep.Parameters[PixelMathOperation.AmountParameter].Unit);
+    }
+
+    [Fact]
     public async Task Rejects_a_non_finite_amount()
     {
         var image = await LoadImageAsync();

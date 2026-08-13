@@ -99,10 +99,12 @@ public sealed class PixelMathOperation : IAnalysisOperation
             operationVersion: Descriptor.Version,
             order: 0,
             environment: _environment.Capture(),
+            // Offset adds a value in the channel unit (e.g. nm); Scale multiplies by a dimensionless factor. So
+            // the recorded amount carries the channel unit for Offset and is dimensionless otherwise.
             parameters: new Dictionary<string, PhysicalValue>
             {
                 [KindParameter] = new((int)op, StandardUnits.One),
-                [AmountParameter] = new(amount, StandardUnits.One),
+                [AmountParameter] = new(amount, op == PixelOp.Offset ? image.Channel.Unit : StandardUnits.One),
             },
             warnings: warnings,
             parentResultId: artifactId);
