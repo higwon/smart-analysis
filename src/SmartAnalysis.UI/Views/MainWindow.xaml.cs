@@ -41,7 +41,9 @@ public partial class MainWindow : Window
         _viewModel.ImagesChanged += (_, _) => RenderImages();
         // Dragging the single view's palette-bar handles sets a manual value range on the shell.
         SingleImage.RangeChanged += (_, r) => _viewModel.SetManualRange(r.Min, r.Max);
-        // When the Crop operation form is open, preview its region live on the image.
+        // When the Crop operation form is open, preview its region live on the image — and let the user drag it.
+        SingleImage.IsRegionEditable = true;
+        SingleImage.RegionChanged += (_, r) => WriteCropFields(r);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         RenderImages();
     }
@@ -95,6 +97,24 @@ public partial class MainWindow : Window
     {
         int Field(string name) => AsInt(_cropFields.FirstOrDefault(f => f.Name == name)?.Value);
         SingleImage.SetRegionPreview(Field("left"), Field("top"), Field("width"), Field("height"));
+    }
+
+    // A drag/resize of the region overlay writes the new extents back into the Crop form fields.
+    private void WriteCropFields((int Left, int Top, int Width, int Height) r)
+    {
+        SetCropField("left", r.Left);
+        SetCropField("top", r.Top);
+        SetCropField("width", r.Width);
+        SetCropField("height", r.Height);
+    }
+
+    private void SetCropField(string name, int value)
+    {
+        var field = _cropFields.FirstOrDefault(f => f.Name == name);
+        if (field is not null)
+        {
+            field.Value = value;
+        }
     }
 
     // The form holds the raw UI primitive (int default, or the TextBox's string once edited).
