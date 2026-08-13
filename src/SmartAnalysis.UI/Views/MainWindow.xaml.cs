@@ -41,43 +41,46 @@ public partial class MainWindow : Window
         _viewModel.ImagesChanged += (_, _) => RenderImages();
         // Dragging the single view's palette-bar handles sets a manual value range on the shell.
         SingleImage.RangeChanged += (_, r) => _viewModel.SetManualRange(r.Min, r.Max);
-        // When the Crop operation form is open, preview its region live on the image — and let the user drag it.
+        // When a region operation form is open (Crop, Region Statistics, …), preview its region live on the
+        // image — and let the user drag it.
         SingleImage.IsRegionEditable = true;
-        SingleImage.RegionChanged += (_, r) => WriteCropFields(r);
+        SingleImage.RegionChanged += (_, r) => WriteRegionFields(r);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         RenderImages();
     }
 
-    // ---- Crop region preview: mirror the Crop form's left/top/width/height as an overlay on the image ----
-    private const string CropOperationId = "image.crop";
-    private readonly List<ParameterFieldViewModel> _cropFields = new();
+    // ---- Region preview: mirror any form's left/top/width/height as a draggable overlay on the image ----
+    private static readonly string[] RegionFieldNames = ["left", "top", "width", "height"];
+    private readonly List<ParameterFieldViewModel> _regionFields = new();
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ShellViewModel.OperationEditor))
         {
-            WireCropPreview();
+            WireRegionPreview();
         }
     }
 
-    private void WireCropPreview()
+    // Any operation form with left/top/width/height fields (Crop, Region Statistics, …) drives — and is driven
+    // by — the draggable region overlay on the image.
+    private void WireRegionPreview()
     {
-        foreach (var field in _cropFields)
+        foreach (var field in _regionFields)
         {
-            field.PropertyChanged -= CropField_PropertyChanged;
+            field.PropertyChanged -= RegionField_PropertyChanged;
         }
 
-        _cropFields.Clear();
+        _regionFields.Clear();
 
-        if (_viewModel.OperationEditor is ParameterFormViewModel form && form.Id == CropOperationId)
+        if (_viewModel.OperationEditor is ParameterFormViewModel form && HasRegionFields(form))
         {
             foreach (var field in form.Fields)
             {
-                _cropFields.Add(field);
-                field.PropertyChanged += CropField_PropertyChanged;
+                _regionFields.Add(field);
+                field.PropertyChanged += RegionField_PropertyChanged;
             }
 
-            UpdateCropPreview();
+            UpdateRegionPreview();
         }
         else
         {
@@ -85,32 +88,35 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CropField_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private static bool HasRegionFields(ParameterFormViewModel form)
+        => RegionFieldNames.All(name => form.Fields.Any(f => f.Name == name));
+
+    private void RegionField_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ParameterFieldViewModel.Value))
         {
-            UpdateCropPreview();
+            UpdateRegionPreview();
         }
     }
 
-    private void UpdateCropPreview()
+    private void UpdateRegionPreview()
     {
-        int Field(string name) => AsInt(_cropFields.FirstOrDefault(f => f.Name == name)?.Value);
+        int Field(string name) => AsInt(_regionFields.FirstOrDefault(f => f.Name == name)?.Value);
         SingleImage.SetRegionPreview(Field("left"), Field("top"), Field("width"), Field("height"));
     }
 
-    // A drag/resize of the region overlay writes the new extents back into the Crop form fields.
-    private void WriteCropFields((int Left, int Top, int Width, int Height) r)
+    // A drag/resize of the region overlay writes the new extents back into the form fields.
+    private void WriteRegionFields((int Left, int Top, int Width, int Height) r)
     {
-        SetCropField("left", r.Left);
-        SetCropField("top", r.Top);
-        SetCropField("width", r.Width);
-        SetCropField("height", r.Height);
+        SetRegionField("left", r.Left);
+        SetRegionField("top", r.Top);
+        SetRegionField("width", r.Width);
+        SetRegionField("height", r.Height);
     }
 
-    private void SetCropField(string name, int value)
+    private void SetRegionField(string name, int value)
     {
-        var field = _cropFields.FirstOrDefault(f => f.Name == name);
+        var field = _regionFields.FirstOrDefault(f => f.Name == name);
         if (field is not null)
         {
             field.Value = value;
