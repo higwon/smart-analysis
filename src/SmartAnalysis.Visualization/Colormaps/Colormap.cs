@@ -52,6 +52,19 @@ public sealed class Colormap
         (0.5, new Rgb(191, 128, 0)),
         (1.0, new Rgb(255, 245, 220)));
 
+    /// <summary>Builds a LUT from a per-index generator (index 0..<see cref="Size"/>-1) — for procedural palettes.</summary>
+    public static Colormap FromGenerator(Func<int, Rgb> generator)
+    {
+        ArgumentNullException.ThrowIfNull(generator);
+        var entries = new Rgb[Size];
+        for (int i = 0; i < Size; i++)
+        {
+            entries[i] = generator(i);
+        }
+
+        return new Colormap(entries);
+    }
+
     // Builds a LUT by linearly interpolating between sorted (position, color) stops.
     private static Colormap Build(params (double Pos, Rgb Color)[] stops)
     {

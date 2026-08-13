@@ -97,7 +97,8 @@ public partial class MainWindow : Window
         }
         else if (_viewModel.ActiveImage is { } image)
         {
-            SingleImage.Render(RenderInputFactory.ForImage(image, colormap));
+            // The palette range (auto = data min/max, or a manual min/max set on the toolbar).
+            SingleImage.Render(RenderInputFactory.ForImage(image, colormap, _viewModel.EffectiveRange));
             BeforeImageView.Clear();
             AfterImageView.Clear();
         }

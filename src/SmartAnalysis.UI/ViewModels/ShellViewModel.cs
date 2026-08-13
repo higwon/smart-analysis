@@ -10,6 +10,7 @@ using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.Mvvm;
 using SmartAnalysis.UI.Services;
 using SmartAnalysis.Visualization.Colormaps;
+using SmartAnalysis.Visualization.Rendering;
 
 namespace SmartAnalysis.UI.ViewModels;
 
@@ -56,8 +57,11 @@ public sealed class ShellViewModel : ObservableObject
     private object? _operationEditor;
     private StatisticsResultViewModel? _statistics;
     private HistoryRowViewModel? _selectedStep;
-    private Colormap _colormap = Colormap.AfmGold;
-    private string _colormapName = "AFM Gold";
+    private Colormap _colormap = ColormapCatalog.Default.Map;
+    private string _colormapName = ColormapCatalog.Default.Name;
+    private bool _autoRange = true;
+    private double _rangeMin;
+    private double _rangeMax = 1.0;
 
     public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, IOperationLauncher launcher, MeasurementStore measurements, IWorkspacePersistence persistence, IWorkspacePathPicker workspacePicker, IUnsavedChangesPrompt unsavedPrompt)
     {
@@ -84,7 +88,6 @@ public sealed class ShellViewModel : ObservableObject
         // registry opens the launcher with no shell edits (the U08 goal); an empty launcher stays disabled.
         ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => LauncherItems.Count > 0);
         _runStatistics = new AsyncRelayCommand(RunStatisticsAsync, () => HasActiveImage, OnCommandError);
-        CycleColormapCommand = new RelayCommand(CycleColormap);
         ExitCompareCommand = new RelayCommand(() => _workspace.SetComparison([]), () => IsBeforeAfter);
 
         // Topology changes (datasets added/removed) rebuild the tree; an active/comparison change only
@@ -155,7 +158,6 @@ public sealed class ShellViewModel : ObservableObject
     public FlattenPanelViewModel FlattenPanel { get; }
 
     public ICommand ToggleLauncherCommand { get; }
-    public ICommand CycleColormapCommand { get; }
     public ICommand ExitCompareCommand { get; }
 
     /// <summary>The registry-driven launcher entries applicable to the active dataset (grouped in the view).</summary>
@@ -199,9 +201,98 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>The selected provenance step (Step role); null otherwise.</summary>
     public HistoryRowViewModel? SelectedStep { get => _selectedStep; private set => SetProperty(ref _selectedStep, value); }
 
-    /// <summary>The active AFM data colormap (theme-independent). Name is shown on the viewer toolbar.</summary>
+    /// <summary>The active AFM data colormap (theme-independent), resolved from <see cref="ColormapName"/>.</summary>
     public Colormap Colormap => _colormap;
-    public string ColormapName { get => _colormapName; private set => SetProperty(ref _colormapName, value); }
+
+    /// <summary>The predefined colormap names for the palette picker.</summary>
+    public IReadOnlyList<string> AvailableColormaps => ColormapCatalog.Names;
+
+    /// <summary>The selected colormap by name; setting it re-resolves the colormap and re-renders.</summary>
+    public string ColormapName
+    {
+        get => _colormapName;
+        set
+        {
+            if (!string.IsNullOrEmpty(value) && SetProperty(ref _colormapName, value))
+            {
+                _colormap = ColormapCatalog.ByName(value);
+                ImagesChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Palette range mode. <c>true</c> = auto (each image's own data min/max); <c>false</c> = the manual
+    /// <see cref="RangeMin"/>/<see cref="RangeMax"/>. Switching to auto reseeds the shown range from the
+    /// active image so the numbers stay meaningful.
+    /// </summary>
+    public bool AutoRange
+    {
+        get => _autoRange;
+        set
+        {
+            if (SetProperty(ref _autoRange, value))
+            {
+                if (value)
+                {
+                    SeedRangeFromActive();
+                }
+
+                OnPropertyChanged(nameof(ManualRangeEnabled));
+                ImagesChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    /// <summary>Whether the manual min/max inputs are editable (i.e. not in auto mode).</summary>
+    public bool ManualRangeEnabled => !_autoRange;
+
+    /// <summary>Manual palette minimum (in the channel unit); only used when <see cref="AutoRange"/> is off.</summary>
+    public double RangeMin
+    {
+        get => _rangeMin;
+        set
+        {
+            if (SetProperty(ref _rangeMin, value) && !_autoRange)
+            {
+                ImagesChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    /// <summary>Manual palette maximum (in the channel unit); only used when <see cref="AutoRange"/> is off.</summary>
+    public double RangeMax
+    {
+        get => _rangeMax;
+        set
+        {
+            if (SetProperty(ref _rangeMax, value) && !_autoRange)
+            {
+                ImagesChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The range the view should render with: <c>null</c> = auto (the factory uses each image's data min/max);
+    /// otherwise the manual range. A degenerate/invalid manual range falls back to auto rather than throwing.
+    /// </summary>
+    public ValueRange? EffectiveRange
+        => _autoRange || !double.IsFinite(_rangeMin) || !double.IsFinite(_rangeMax) || _rangeMax <= _rangeMin
+            ? null
+            : new ValueRange(_rangeMin, _rangeMax);
+
+    // Reflects the active image's data min/max in the shown range (used while auto, and when switching to auto).
+    private void SeedRangeFromActive()
+    {
+        var range = _activeImage is { } image
+            ? ValueRange.FromData(image.Data.Memory.Span)
+            : new ValueRange(0.0, 1.0);
+        _rangeMin = range.Min;
+        _rangeMax = range.Max;
+        OnPropertyChanged(nameof(RangeMin));
+        OnPropertyChanged(nameof(RangeMax));
+    }
 
     /// <summary>Selecting a provenance step shows it read-only in the Inspector — the active dataset never changes.</summary>
     public void SelectStep(HistoryRowViewModel? step)
@@ -278,16 +369,18 @@ public sealed class ShellViewModel : ObservableObject
         }
     }
 
-    private void CycleColormap()
-    {
-        var toGold = !ReferenceEquals(_colormap, Colormap.AfmGold);
-        _colormap = toGold ? Colormap.AfmGold : Colormap.Grayscale;
-        ColormapName = toGold ? "AFM Gold" : "Grayscale";
-        ImagesChanged?.Invoke(this, EventArgs.Empty); // re-render with the new colormap
-    }
-
     /// <summary>The active dataset when it is a 2D scan image (drives the viewer); null otherwise.</summary>
-    public ScanImageDataset? ActiveImage { get => _activeImage; private set => SetProperty(ref _activeImage, value); }
+    public ScanImageDataset? ActiveImage
+    {
+        get => _activeImage;
+        private set
+        {
+            if (SetProperty(ref _activeImage, value) && _autoRange)
+            {
+                SeedRangeFromActive(); // keep the shown auto range in step with the active image
+            }
+        }
+    }
 
     /// <summary>The comparison "before" image (the source) when in Before/After; null otherwise.</summary>
     public ScanImageDataset? BeforeImage { get => _beforeImage; private set => SetProperty(ref _beforeImage, value); }
