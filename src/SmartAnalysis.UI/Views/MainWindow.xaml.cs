@@ -36,6 +36,8 @@ public partial class MainWindow : Window
         DataContext = viewModel;
 
         _viewModel.ImagesChanged += (_, _) => RenderImages();
+        // Dragging the single view's palette-bar handles sets a manual value range on the shell.
+        SingleImage.RangeChanged += (_, r) => _viewModel.SetManualRange(r.Min, r.Max);
         RenderImages();
     }
 
@@ -97,7 +99,8 @@ public partial class MainWindow : Window
         }
         else if (_viewModel.ActiveImage is { } image)
         {
-            SingleImage.Render(RenderInputFactory.ForImage(image, colormap));
+            // The palette range (auto = data min/max, or a manual min/max set on the toolbar).
+            SingleImage.Render(RenderInputFactory.ForImage(image, colormap, _viewModel.EffectiveRange));
             BeforeImageView.Clear();
             AfterImageView.Clear();
         }

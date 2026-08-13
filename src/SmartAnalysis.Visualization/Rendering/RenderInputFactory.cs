@@ -17,7 +17,8 @@ public static class RenderInputFactory
         ArgumentNullException.ThrowIfNull(colormap);
 
         var z = image.Data.Memory;
-        var effectiveRange = range ?? ValueRange.FromData(z.Span);
+        var dataRange = ValueRange.FromData(z.Span);       // the full extent → the palette bar's fixed axis
+        var effectiveRange = range ?? dataRange;           // the display window (manual sub-range, or the full extent)
         return new ImageRenderInput(
             z,
             image.X.Count,
@@ -26,7 +27,8 @@ public static class RenderInputFactory
             colormap,
             AxisView.FromAxis(image.X),
             AxisView.FromAxis(image.Y),
-            image.Channel.Unit.Symbol);
+            image.Channel.Unit.Symbol,
+            dataRange);
     }
 
     /// <summary>Builds a single-series curve render input from a line profile (x = axis positions, y = values).</summary>

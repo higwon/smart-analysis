@@ -37,7 +37,21 @@ public partial class AfmImageView : UserControl, IImageView
     private Point _lastPos;
     private double _fitScale = ImageViewportMath.MinScale; // the zoomed-out limit; refreshed by Fit()/SizeChanged
 
-    public AfmImageView() => InitializeComponent();
+    public AfmImageView()
+    {
+        InitializeComponent();
+        Palette.RangeChanged += (_, r) => RangeChanged?.Invoke(this, r);
+    }
+
+    /// <summary>Raised while the user drags a palette-bar handle: the new (min, max) value window.</summary>
+    public event EventHandler<(double Min, double Max)>? RangeChanged;
+
+    /// <summary>Whether the palette bar's min/max handles are draggable (single view) or read-only (compare panes).</summary>
+    public bool IsRangeEditable
+    {
+        get => Palette.Editable;
+        set => Palette.Editable = value;
+    }
 
     /// <summary>
     /// V01 port entry point: render <paramref name="input"/> now. The borrowed pixels are consumed into an
@@ -53,8 +67,7 @@ public partial class AfmImageView : UserControl, IImageView
     public void Clear()
     {
         Img.Source = null;
-        LegendBar.Background = null;
-        MaxLabel.Text = MinLabel.Text = UnitLabel.Text = string.Empty;
+        Palette.Clear();
         _bmpW = _bmpH = 0;
     }
 
@@ -80,7 +93,7 @@ public partial class AfmImageView : UserControl, IImageView
         _bmpW = w;
         _bmpH = h;
 
-        BuildLegend(input.Colormap, input.Range, input.ChannelUnit);
+        Palette.Update(input.Colormap, input.DataRange, input.Range, input.ChannelUnit);
 
         if (Viewport.ActualWidth > 0 && Viewport.ActualHeight > 0)
         {
@@ -91,26 +104,6 @@ public partial class AfmImageView : UserControl, IImageView
             _needsFit = true;
         }
     }
-
-    private void BuildLegend(Colormap colormap, ValueRange range, string unit)
-    {
-        var brush = new LinearGradientBrush { StartPoint = new Point(0.5, 0), EndPoint = new Point(0.5, 1) };
-        const int stops = 32;
-        for (int i = 0; i <= stops; i++)
-        {
-            double offset = (double)i / stops;
-            var c = colormap.SampleNormalized(1.0 - offset); // top = max, bottom = min
-            brush.GradientStops.Add(new GradientStop(Color.FromRgb(c.R, c.G, c.B), offset));
-        }
-
-        LegendBar.Background = brush;
-        MaxLabel.Text = Format(range.Max);
-        MinLabel.Text = Format(range.Min);
-        UnitLabel.Text = unit;
-    }
-
-    private static string Format(double value)
-        => double.IsFinite(value) ? value.ToString("G4", CultureInfo.InvariantCulture) : "—";
 
     /// <summary>Fits the image to the viewport and centers it (also the double-click / toolbar Fit action).</summary>
     public void Fit()

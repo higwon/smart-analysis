@@ -243,12 +243,22 @@
                                         <TextBlock Text="Fit" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Command="{Binding CycleColormapCommand}" Style="{StaticResource SA.Button.Toolbar}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ds:IconPresenter Data="{StaticResource SA.Icon.Colormap}" Margin="{DynamicResource SA.Gap.Right2}"/>
-                                        <TextBlock Text="{Binding ColormapName}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
+                                <!-- Palette: colormap picker + Auto/Manual value range (legacy-parity). Kept compact
+                                     so it doesn't crowd out Export at the min window width. -->
+                                <ComboBox Style="{StaticResource SA.ComboBox}" Width="94" VerticalAlignment="Center"
+                                          Margin="{DynamicResource SA.Gap.Left2}" ToolTip="Colormap"
+                                          ItemsSource="{Binding AvailableColormaps}" SelectedItem="{Binding ColormapName}"/>
+                                <CheckBox Style="{StaticResource SA.CheckBox}" Content="Auto" VerticalAlignment="Center"
+                                          Margin="{DynamicResource SA.Gap.Left2}" IsChecked="{Binding AutoRange}"
+                                          ToolTip="Auto range (each image's data min/max) vs. a manual range"/>
+                                <TextBox Style="{StaticResource SA.TextBox}" Width="50" VerticalAlignment="Center"
+                                         Margin="{DynamicResource SA.Gap.Left2}" ToolTip="Palette minimum"
+                                         IsEnabled="{Binding ManualRangeEnabled}"
+                                         Text="{Binding RangeMin, StringFormat=G4}"/>
+                                <TextBox Style="{StaticResource SA.TextBox}" Width="50" VerticalAlignment="Center"
+                                         Margin="{DynamicResource SA.Gap.Left1}" ToolTip="Palette maximum"
+                                         IsEnabled="{Binding ManualRangeEnabled}"
+                                         Text="{Binding RangeMax, StringFormat=G4}"/>
                                 <Border Width="1" Height="18" Background="{DynamicResource SA.Brush.Border.Default}" Margin="{DynamicResource SA.Gap.2}"/>
                                 <Button Click="Export_Click" Style="{StaticResource SA.Button.Toolbar}">
                                     <StackPanel Orientation="Horizontal">
@@ -290,7 +300,7 @@
 
                     <!-- content -->
                     <Grid>
-                        <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}"
+                        <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}" IsRangeEditable="True"
                                           Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}"/>
                         <Grid x:Name="CompareContent" Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

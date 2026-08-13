@@ -1,0 +1,53 @@
+<UserControl x:Class="SmartAnalysis.UI.Controls.PaletteBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Width="76">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top = data maximum -->
+        <TextBlock x:Name="MaxLabel" Grid.Row="0" Style="{StaticResource SA.Text.Numeric}"
+                   HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+
+        <!-- Gradient bar + draggable min/max handles (axis = full data range). Drag is handled at the Track
+             level (it captures the mouse) so a handle never loses the drag once grabbed. -->
+        <Canvas x:Name="Track" Grid.Row="1" ClipToBounds="False" MinHeight="120"
+                SizeChanged="Track_SizeChanged" MouseMove="Track_MouseMove" MouseLeftButtonUp="Track_MouseUp">
+            <Border x:Name="Bar" Canvas.Left="40" Canvas.Top="0" Width="16"
+                    BorderBrush="{DynamicResource SA.Brush.Border.Default}"
+                    BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                    CornerRadius="{DynamicResource SA.Radius.Sm}"/>
+
+            <!-- Thin accent level lines across the bar at each handle's value. -->
+            <Rectangle x:Name="MinTick" Canvas.Left="40" Width="16" Height="2" RadiusX="1" RadiusY="1"
+                       Fill="{DynamicResource SA.Brush.Accent.Primary}" Visibility="Collapsed" IsHitTestVisible="False"/>
+            <Rectangle x:Name="MaxTick" Canvas.Left="40" Width="16" Height="2" RadiusX="1" RadiusY="1"
+                       Fill="{DynamicResource SA.Brush.Accent.Primary}" Visibility="Collapsed" IsHitTestVisible="False"/>
+
+            <!-- Handles: rounded accent chevrons pointing at the bar; centred on their value (points are
+                 symmetric about y=0). -->
+            <Path x:Name="MinHandle" Canvas.Left="24" Cursor="SizeNS" Visibility="Collapsed"
+                  Fill="{DynamicResource SA.Brush.Accent.Primary}" Stroke="White"
+                  StrokeThickness="1.5" StrokeLineJoin="Round" Data="M0,-7 L0,7 L15,0 Z"
+                  MouseLeftButtonDown="MinHandle_Down">
+                <Path.Effect><DropShadowEffect BlurRadius="4" ShadowDepth="0.5" Opacity="0.4"/></Path.Effect>
+            </Path>
+            <Path x:Name="MaxHandle" Canvas.Left="24" Cursor="SizeNS" Visibility="Collapsed"
+                  Fill="{DynamicResource SA.Brush.Accent.Primary}" Stroke="White"
+                  StrokeThickness="1.5" StrokeLineJoin="Round" Data="M0,-7 L0,7 L15,0 Z"
+                  MouseLeftButtonDown="MaxHandle_Down">
+                <Path.Effect><DropShadowEffect BlurRadius="4" ShadowDepth="0.5" Opacity="0.4"/></Path.Effect>
+            </Path>
+        </Canvas>
+
+        <!-- Bottom = data minimum -->
+        <TextBlock x:Name="MinLabel" Grid.Row="2" Style="{StaticResource SA.Text.Numeric}"
+                   HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Top2}"/>
+        <TextBlock x:Name="UnitLabel" Grid.Row="3" Style="{StaticResource SA.Text.Micro}"
+                   HorizontalAlignment="Center"/>
+    </Grid>
+</UserControl>
