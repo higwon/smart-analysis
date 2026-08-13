@@ -15,15 +15,22 @@
                 MouseLeftButtonUp="Viewport_MouseLeftButtonUp"
                 MouseMove="Viewport_MouseMove"
                 SizeChanged="Viewport_SizeChanged">
-            <Image x:Name="Img" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top"
-                   RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0,0">
-                <Image.RenderTransform>
-                    <TransformGroup>
-                        <ScaleTransform x:Name="ImgScale"/>
-                        <TranslateTransform x:Name="ImgTranslate"/>
-                    </TransformGroup>
-                </Image.RenderTransform>
-            </Image>
+            <!-- The Image sits on a Canvas so it is measured with an unconstrained size and thus arranged at
+                 the bitmap's NATURAL pixel size. Directly inside the Border its arrange size was clamped to the
+                 viewport, so a large scan (e.g. 4096²) was realized at viewport resolution and the zoom
+                 RenderTransform then shrank that further — the image appeared tiny. On a Canvas the transform
+                 scales the full-resolution content correctly. -->
+            <Canvas>
+                <Image x:Name="Img" Stretch="None"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0,0">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="ImgScale"/>
+                            <TranslateTransform x:Name="ImgTranslate"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
         </Border>
 
         <!-- Colormap legend (palette) -->
