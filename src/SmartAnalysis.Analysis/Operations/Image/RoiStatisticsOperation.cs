@@ -95,6 +95,12 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Selecting region."));
 
+        // The measured region is the request clamped to the grid (left/top are in-bounds per Validate); provenance
+        // records this effective extent so two requests that select the same pixels share one history (the A04/crop
+        // lesson). Not the same as the mask's own clamp — this is what we write to history.
+        int effectiveWidth = Math.Min(roiWidth, width - left);
+        int effectiveHeight = Math.Min(roiHeight, height - top);
+
         // The D02 ROI mask (clamped to the grid by ToMask): gather the finite pixels inside the region.
         var mask = new RectangleRoi(left, top, roiWidth, roiHeight).ToMask(width, height);
         var pixels = image.Data.Memory.Span;
@@ -123,13 +129,14 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
         progress?.Report(new OperationProgress(0.5, "Computing statistics."));
 
         var stats = SummaryStatistics.Compute(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(values));
+        if (hasNonFinite)
+        {
+            warnings.Add(new OperationWarning("roi.non-finite", "The region contains non-finite pixels; they are excluded from the statistics."));
+        }
+
         if (values.Count == 0)
         {
             warnings.Add(new OperationWarning("roi.empty", "The region contains no finite pixels; statistics are undefined."));
-        }
-        else if (hasNonFinite)
-        {
-            warnings.Add(new OperationWarning("roi.non-finite", "The region contains non-finite pixels; they are excluded from the statistics."));
         }
 
         var zUnit = image.Channel.Unit;
@@ -157,8 +164,8 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
             {
                 [LeftParameter] = new(left, StandardUnits.One),
                 [TopParameter] = new(top, StandardUnits.One),
-                [WidthParameter] = new(roiWidth, StandardUnits.One),
-                [HeightParameter] = new(roiHeight, StandardUnits.One),
+                [WidthParameter] = new(effectiveWidth, StandardUnits.One),
+                [HeightParameter] = new(effectiveHeight, StandardUnits.One),
             },
             warnings: warnings,
             parentResultId: artifactId);

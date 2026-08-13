@@ -80,7 +80,7 @@ public sealed class RoiStatisticsOperationTests
     }
 
     [Fact]
-    public async Task Region_is_clamped_to_the_grid()
+    public async Task Region_is_clamped_to_the_grid_and_provenance_records_the_effective_extent()
     {
         using var image = RampImage();
 
@@ -90,6 +90,12 @@ public sealed class RoiStatisticsOperationTests
         Assert.Equal(16.0, full.Scalars["PixelCount"].Value, 12);
         Assert.Equal(0.0, full.Scalars["Min"].Value, 12);
         Assert.Equal(15.0, full.Scalars["Max"].Value, 12);
+
+        // Provenance is canonicalized to the effective (clamped) extent, so (0,0,100,100) and (0,0,4,4)
+        // — which measure the same pixels — share one history (the A04/crop lesson).
+        var step = full.Provenance.Steps[^1];
+        Assert.Equal(4.0, step.Parameters[RoiStatisticsOperation.WidthParameter].Value, 12);
+        Assert.Equal(4.0, step.Parameters[RoiStatisticsOperation.HeightParameter].Value, 12);
     }
 
     [Fact]
@@ -113,6 +119,29 @@ public sealed class RoiStatisticsOperationTests
         Assert.Equal(3.0, artifact.Scalars["PixelCount"].Value, 12); // the NaN dropped out
         Assert.Equal(3.0, artifact.Scalars["Mean"].Value, 12);       // (1+3+5)/3
         Assert.Contains(result.Warnings, warning => warning.Code == "roi.non-finite");
+    }
+
+    [Fact]
+    public async Task An_all_non_finite_region_warns_both_non_finite_and_empty()
+    {
+        const int w = 2, h = 2;
+        var z = new float[] { float.NaN, float.NaN, float.PositiveInfinity, float.NaN };
+        using var image = new ScanImageDataset(
+            DatasetId.New(),
+            new DataSource("test", null),
+            new Axis("X", StandardUnits.Nanometre, 0.0, 1.0, w),
+            new Axis("Y", StandardUnits.Nanometre, 0.0, 1.0, h),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(z, w, h),
+            ScanMetadata.Unknown,
+            ProvenanceRecord.Root);
+
+        var result = await NewOperation().RunAsync(new OperationInput(image), Region(0, 0, 2, 2), null, CancellationToken.None);
+        var artifact = Assert.IsAssignableFrom<AnalysisArtifact>(result.Artifact);
+
+        Assert.Equal(0.0, artifact.Scalars["PixelCount"].Value, 12);
+        Assert.Contains(result.Warnings, warning => warning.Code == "roi.non-finite"); // excluded …
+        Assert.Contains(result.Warnings, warning => warning.Code == "roi.empty");      // … and nothing left
     }
 
     [Fact]
