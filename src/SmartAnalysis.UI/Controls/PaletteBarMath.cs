@@ -35,37 +35,28 @@ public static class PaletteBarMath
     }
 
     /// <summary>
-    /// Clamps a proposed window to the data extent, keeping a minimum separation so the range never collapses.
-    /// Moving the min handle pushes it below the max (and vice versa) rather than crossing over.
+    /// A drag of the min (low) handle to pixel-Y. Only the <b>min</b> edge moves: it is clamped to the data
+    /// extent and stops a gap below the fixed <paramref name="currentMax"/> — dragging past the max never
+    /// pushes the max up.
     /// </summary>
-    public static (double Min, double Max) ClampWindow(double min, double max, ValueRange data)
+    public static (double Min, double Max) DragMin(double y, double height, ValueRange data, double currentMax)
     {
         double gap = MinGap(data);
-        min = Clamp(min, data.Min, data.Max);
-        max = Clamp(max, data.Min, data.Max);
-        if (max - min < gap)
-        {
-            // Keep them apart; bias toward staying inside the extent.
-            if (min + gap <= data.Max)
-            {
-                max = min + gap;
-            }
-            else
-            {
-                min = max - gap;
-            }
-        }
-
-        return (min, max);
+        double min = Clamp(ValueAt(y, height, data), data.Min, currentMax - gap);
+        return (min, currentMax);
     }
 
-    /// <summary>A drag of the min (low) handle to pixel-Y, clamped against the current max.</summary>
-    public static (double Min, double Max) DragMin(double y, double height, ValueRange data, double currentMax)
-        => ClampWindow(ValueAt(y, height, data), currentMax, data);
-
-    /// <summary>A drag of the max (high) handle to pixel-Y, clamped against the current min.</summary>
+    /// <summary>
+    /// A drag of the max (high) handle to pixel-Y. Only the <b>max</b> edge moves: it is clamped to the data
+    /// extent and stops a gap above the fixed <paramref name="currentMin"/> — dragging below the min never
+    /// pushes the min down.
+    /// </summary>
     public static (double Min, double Max) DragMax(double y, double height, ValueRange data, double currentMin)
-        => ClampWindow(currentMin, ValueAt(y, height, data), data);
+    {
+        double gap = MinGap(data);
+        double max = Clamp(ValueAt(y, height, data), currentMin + gap, data.Max);
+        return (currentMin, max);
+    }
 
     // A small fraction of the extent so the two handles can't merge into a zero-width (uncolorable) window.
     private static double MinGap(ValueRange data)

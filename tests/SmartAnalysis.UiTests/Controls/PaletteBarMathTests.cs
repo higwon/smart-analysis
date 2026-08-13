@@ -29,21 +29,15 @@ public sealed class PaletteBarMathTests
     }
 
     [Fact]
-    public void Clamp_keeps_the_window_inside_the_data_extent()
+    public void Drag_clamps_the_moved_edge_to_the_data_extent()
     {
-        var (min, max) = PaletteBarMath.ClampWindow(-5.0, 15.0, Data);
-        Assert.Equal(0.0, min, 9);
-        Assert.Equal(10.0, max, 9);
-    }
+        var below = PaletteBarMath.DragMin(500, 100, Data, currentMax: 8.0); // y past the bottom → below Min
+        Assert.Equal(0.0, below.Min, 9);
+        Assert.Equal(8.0, below.Max, 9);
 
-    [Fact]
-    public void Clamp_keeps_a_minimum_gap_so_the_window_never_collapses()
-    {
-        // Drag max down below min: max is pinned just above min, not crossed over.
-        var (min, max) = PaletteBarMath.ClampWindow(8.0, 2.0, Data);
-        Assert.Equal(8.0, min, 9);
-        Assert.True(max > min, "max must stay above min");
-        Assert.Equal(8.0 + (0.01 * 10.0), max, 9); // gap = 1% of the extent
+        var above = PaletteBarMath.DragMax(-500, 100, Data, currentMin: 2.0); // y past the top → above Max
+        Assert.Equal(2.0, above.Min, 9);
+        Assert.Equal(10.0, above.Max, 9);
     }
 
     [Fact]
@@ -56,5 +50,25 @@ public sealed class PaletteBarMathTests
         var afterMax = PaletteBarMath.DragMax(25, 100, Data, currentMin: 2.0); // y=25 → value 7.5
         Assert.Equal(2.0, afterMax.Min, 9);
         Assert.Equal(7.5, afterMax.Max, 9);
+    }
+
+    [Fact]
+    public void Dragging_min_past_max_stops_below_max_and_leaves_max_put()
+    {
+        // window [2,8]; drag the MIN handle up to value 9 (y=10 → 1-0.1=0.9 → 9). It must stop a gap below
+        // the max, and the MAX must not move.
+        var (min, max) = PaletteBarMath.DragMin(10, 100, Data, currentMax: 8.0);
+        Assert.Equal(7.9, min, 9); // 8 - gap(0.1)
+        Assert.Equal(8.0, max, 9);
+    }
+
+    [Fact]
+    public void Dragging_max_below_min_stops_above_min_and_leaves_min_put()
+    {
+        // window [2,8]; drag the MAX handle down to value 1 (y=90 → 1-0.9=0.1 → 1). It must stop a gap above
+        // the min, and the MIN must not move.
+        var (min, max) = PaletteBarMath.DragMax(90, 100, Data, currentMin: 2.0);
+        Assert.Equal(2.0, min, 9);
+        Assert.Equal(2.1, max, 9); // 2 + gap(0.1)
     }
 }
