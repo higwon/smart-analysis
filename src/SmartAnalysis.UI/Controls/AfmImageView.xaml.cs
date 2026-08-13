@@ -13,9 +13,12 @@ namespace SmartAnalysis.UI.Controls;
 /// <summary>
 /// The concrete WPF backend for the V01 <see cref="IImageView"/> port (V02): renders an
 /// <see cref="ImageRenderInput"/> to a <c>Bgra32 WriteableBitmap</c> through the AFM data colormap
-/// (<see cref="ImagePixelMapper"/>), with mouse-wheel zoom (around the cursor), drag pan, double-click Fit,
-/// and a colormap legend. Nearest-neighbor scaling keeps AFM pixels crisp. The data colormap is
-/// theme-independent (ADR-008); only the chrome uses <c>SA.*</c> tokens. No ROI (V06).
+/// (<see cref="ImagePixelMapper"/>) and a colormap legend. Nearest-neighbor scaling keeps AFM pixels crisp.
+/// Interaction (legacy-style, math in the testable <see cref="ImageViewportMath"/>): the image <b>fits the
+/// viewport by default</b> and fit is the <b>zoomed-out limit</b>; the wheel <b>zooms toward the cursor</b>;
+/// the image is <b>only pannable once zoomed in past fit</b> (at fit it stays centred, pan clamped so no edge
+/// enters the viewport); double-click re-fits. The data colormap is theme-independent (ADR-008); only the
+/// chrome uses <c>SA.*</c> tokens. No ROI (V06).
 /// <para>
 /// <b>Lifetime (ADR-011 / V01 contract):</b> <see cref="Render"/> consumes/copies the borrowed
 /// <see cref="ImageRenderInput.Z"/> during the call and <b>retains nothing borrowed</b> — the control
@@ -27,14 +30,12 @@ namespace SmartAnalysis.UI.Controls;
 /// </summary>
 public partial class AfmImageView : UserControl, IImageView
 {
-    private const double MinScale = 0.02;
-    private const double MaxScale = 128.0;
-
     private int _bmpW;
     private int _bmpH;
     private bool _needsFit;
     private bool _dragging;
     private Point _lastPos;
+    private double _fitScale = ImageViewportMath.MinScale; // the zoomed-out limit; refreshed by Fit()/SizeChanged
 
     public AfmImageView() => InitializeComponent();
 
@@ -119,21 +120,42 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        double scale = Math.Min(Viewport.ActualWidth / _bmpW, Viewport.ActualHeight / _bmpH) * 0.96;
-        scale = Clamp(scale);
-        ImgScale.ScaleX = ImgScale.ScaleY = scale;
-        ImgTranslate.X = (Viewport.ActualWidth - (_bmpW * scale)) / 2.0;
-        ImgTranslate.Y = (Viewport.ActualHeight - (_bmpH * scale)) / 2.0;
+        _fitScale = ImageViewportMath.FitScale(Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH);
+        var (x, y) = ImageViewportMath.Center(_fitScale, Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH);
+        ImgScale.ScaleX = ImgScale.ScaleY = _fitScale;
+        ImgTranslate.X = x;
+        ImgTranslate.Y = y;
         _needsFit = false;
     }
 
-    private static double Clamp(double scale) => scale < MinScale ? MinScale : scale > MaxScale ? MaxScale : scale;
+    private void ApplyTranslateClamp()
+    {
+        var (x, y) = ImageViewportMath.ClampTranslate(
+            ImgTranslate.X, ImgTranslate.Y, ImgScale.ScaleX, Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH);
+        ImgTranslate.X = x;
+        ImgTranslate.Y = y;
+    }
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_needsFit)
+        if (_bmpW <= 0 || _bmpH <= 0)
         {
-            Fit();
+            return;
+        }
+
+        // Decide against the OLD fit scale (were we at fit?) BEFORE refreshing it — comparing the current
+        // scale to the NEW fit floor would drop out of fit when the viewport shrinks.
+        double newFit = ImageViewportMath.FitScale(Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH);
+        bool refit = _needsFit || ImageViewportMath.ShouldRefitOnResize(ImgScale.ScaleX, _fitScale, newFit);
+        _fitScale = newFit;
+
+        if (refit)
+        {
+            Fit(); // stays at fit (re-centred for the new size); also recomputes _fitScale
+        }
+        else
+        {
+            ApplyTranslateClamp(); // keep the zoom, just re-clamp the pan so no edge enters the viewport
         }
     }
 
@@ -144,13 +166,23 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        double factor = e.Delta > 0 ? 1.15 : 1.0 / 1.15;
-        double newScale = Clamp(ImgScale.ScaleX * factor);
-        double actual = newScale / ImgScale.ScaleX;
-        var p = e.GetPosition(Viewport); // zoom around the cursor
-        ImgTranslate.X = p.X - ((p.X - ImgTranslate.X) * actual);
-        ImgTranslate.Y = p.Y - ((p.Y - ImgTranslate.Y) * actual);
-        ImgScale.ScaleX = ImgScale.ScaleY = newScale;
+        e.Handled = true; // the wheel is our zoom — don't also scroll a parent ScrollViewer
+
+        var p = e.GetPosition(Viewport);
+        var (scale, x, y) = ImageViewportMath.ZoomAtCursor(
+            ImgScale.ScaleX, ImgTranslate.X, ImgTranslate.Y, p.X, p.Y, e.Delta > 0, _fitScale);
+
+        // Zooming back out to (or below) fit snaps to a centred fit rather than an off-centre fit-scale image.
+        if (scale <= _fitScale)
+        {
+            Fit();
+            return;
+        }
+
+        ImgScale.ScaleX = ImgScale.ScaleY = scale;
+        ImgTranslate.X = x;
+        ImgTranslate.Y = y;
+        ApplyTranslateClamp();
     }
 
     private void Viewport_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -166,6 +198,12 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
+        // Pan only when zoomed in past fit — at fit the image is fully shown and stays centred.
+        if (!ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale))
+        {
+            return;
+        }
+
         _dragging = true;
         _lastPos = e.GetPosition(Viewport);
         Viewport.CaptureMouse();
@@ -176,6 +214,8 @@ public partial class AfmImageView : UserControl, IImageView
     {
         if (!_dragging)
         {
+            // Hint pannability while zoomed in.
+            Cursor = ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale) ? Cursors.SizeAll : Cursors.Arrow;
             return;
         }
 
@@ -183,6 +223,7 @@ public partial class AfmImageView : UserControl, IImageView
         ImgTranslate.X += p.X - _lastPos.X;
         ImgTranslate.Y += p.Y - _lastPos.Y;
         _lastPos = p;
+        ApplyTranslateClamp();
     }
 
     private void Viewport_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
