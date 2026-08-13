@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
@@ -150,9 +151,14 @@ public sealed class PsiaTiffReader : IScanFileReader
         byte[] dataBytes = ReadByteField(fieldReader, dataEntry);
         float[] values = ToPhysicalFloats(dataBytes, count, header.DataType, header.DataGain, header.ZOffset);
 
+        // Identity, axis directions and provenance come from the ImageDescription side-car when we wrote the
+        // file (FF02); a real PSIA file (or any foreign description) has none, so it keeps the legacy fresh-id +
+        // Root + Forward behaviour. The header has no faithful scan-direction field, so direction lives here.
+        var domain = ReadDomainSidecar(ifd, fieldReader);
+
         var lengthUnit = _units.GetUnit(StandardUnits.Micrometre.Symbol); // scan size is µm (legacy MICRO_METER)
-        var xAxis = new Axis("X", lengthUnit, origin: header.XOffset, step: header.XScanSize / header.Width, count: header.Width);
-        var yAxis = new Axis("Y", lengthUnit, origin: header.YOffset, step: header.YScanSize / header.Height, count: header.Height);
+        var xAxis = new Axis("X", lengthUnit, origin: header.XOffset, step: header.XScanSize / header.Width, count: header.Width, direction: domain.XDirection);
+        var yAxis = new Axis("Y", lengthUnit, origin: header.YOffset, step: header.YScanSize / header.Height, count: header.Height, direction: domain.YDirection);
 
         var channel = BuildChannel(header);
         var metadata = BuildMetadata(header, contentHash);
@@ -161,8 +167,7 @@ public sealed class PsiaTiffReader : IScanFileReader
         var buffer = ScanBuffer<float>.TakeOwnership(values, header.Width, header.Height);
         try
         {
-            var dataset = new ScanImageDataset(
-                DatasetId.New(), source, xAxis, yAxis, channel, buffer, metadata, ProvenanceRecord.Root);
+            var dataset = new ScanImageDataset(domain.Id, source, xAxis, yAxis, channel, buffer, metadata, domain.Provenance);
             return FileReadResult.Success(dataset);
         }
         catch
@@ -170,6 +175,26 @@ public sealed class PsiaTiffReader : IScanFileReader
             buffer.Dispose(); // ctor failed → we still own the buffer (ADR-011/012)
             throw;
         }
+    }
+
+    // Standard TIFF ASCII tag; FF02 stores the identity + provenance JSON side-car here.
+    private const ushort TagImageDescription = 0x010E;
+
+    private TiffDomainInfo ReadDomainSidecar(TiffImageFileDirectory ifd, TiffFieldReader fieldReader)
+    {
+        var entry = ifd.FindEntry((TiffTag)TagImageDescription);
+        if (entry.Tag != TiffTag.None && entry.ValueCount > 0)
+        {
+            byte[] bytes = ReadByteField(fieldReader, entry);
+            int nul = System.Array.IndexOf(bytes, (byte)0);
+            string json = Encoding.UTF8.GetString(bytes, 0, nul >= 0 ? nul : bytes.Length);
+            if (TiffDomainSidecar.TryParse(json, _units, out var info))
+            {
+                return info;
+            }
+        }
+
+        return new TiffDomainInfo(DatasetId.New(), ProvenanceRecord.Root, AxisDirection.Forward, AxisDirection.Forward);
     }
 
     private ChannelDescriptor BuildChannel(PsiaImageHeader header)
