@@ -18,6 +18,8 @@ namespace SmartAnalysis.Infrastructure.FileFormats.Tiff;
 /// <para>
 /// X/Y scan geometry is <b>canonicalized to micrometres</b> — the fixed unit the PSIA header (and the reader)
 /// use — so the physical coordinates survive even for a non-µm axis (e.g. nm); a non-length axis is rejected.
+/// The <see cref="Domain.Axes.AxisDirection"/> (which the header cannot express) travels in the side-car, so a
+/// reversed axis (e.g. from an A07 flip/rotate) keeps its physical coordinates on read.
 /// </para>
 /// </summary>
 public sealed class PsiaTiffWriter : IScanFileWriter
@@ -26,7 +28,10 @@ public sealed class PsiaTiffWriter : IScanFileWriter
     private const ushort TagImageDescription = 0x010E;       // standard TIFF ASCII tag → the domain side-car JSON
     private const uint PsiaMagicValue = 0x0E031301;
 
-    public bool CanWrite(AfmDataset dataset) => dataset is ScanImageDataset;
+    public bool CanWrite(AfmDataset dataset)
+        => dataset is ScanImageDataset image
+            && TryToMicrometre(image.X, out _, out _)
+            && TryToMicrometre(image.Y, out _, out _);
 
     public Task<FileWriteResult> WriteAsync(AfmDataset dataset, string path, CancellationToken cancellationToken)
     {

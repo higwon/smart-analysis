@@ -144,6 +144,40 @@ public sealed class PsiaTiffWriterTests
         Assert.Equal(0.02, readBack.Y.Step, 9);    // 20 nm   → 0.02 µm
     }
 
+    [Theory]
+    [InlineData(AxisDirection.Reverse, AxisDirection.Forward)]
+    [InlineData(AxisDirection.Reverse, AxisDirection.Reverse)]
+    [InlineData(AxisDirection.Forward, AxisDirection.Reverse)]
+    public async Task Preserves_axis_direction_so_physical_coordinates_survive(AxisDirection xDir, AxisDirection yDir)
+    {
+        // The PSIA header has no faithful scan-direction field, so a Reverse axis (e.g. from an A07 flip/rotate)
+        // must be carried in the side-car — otherwise the reader rebuilds Forward and every pixel's physical
+        // coordinate shifts. Uses µm axes so RawToReal is directly comparable to the read-back µm axis.
+        using var image = new ScanImageDataset(
+            DatasetId.New(),
+            new DataSource("test", null),
+            new Axis("X", StandardUnits.Micrometre, origin: 0.0, step: 1.0, count: 4, direction: xDir),
+            new Axis("Y", StandardUnits.Micrometre, origin: 0.0, step: 1.0, count: 3, direction: yDir),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Micrometre),
+            ScanBuffer<float>.TakeOwnership(new float[12], 4, 3),
+            ScanMetadata.Unknown,
+            ProvenanceRecord.Root);
+
+        var (written, readBack) = await RoundTripAsync(image);
+
+        Assert.Equal(xDir, readBack.X.Direction);
+        Assert.Equal(yDir, readBack.Y.Direction);
+        for (int x = 0; x < written.X.Count; x++)
+        {
+            Assert.Equal(written.X.RawToReal(x), readBack.X.RawToReal(x), 9);
+        }
+
+        for (int y = 0; y < written.Y.Count; y++)
+        {
+            Assert.Equal(written.Y.RawToReal(y), readBack.Y.RawToReal(y), 9);
+        }
+    }
+
     [Fact]
     public async Task A_file_without_the_sidecar_reads_as_a_root_dataset()
     {

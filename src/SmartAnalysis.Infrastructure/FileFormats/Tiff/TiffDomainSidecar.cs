@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
@@ -7,15 +8,25 @@ using SmartAnalysis.Infrastructure.Persistence.Workspace;
 namespace SmartAnalysis.Infrastructure.FileFormats.Tiff;
 
 /// <summary>
-/// The JSON side-car the PSIA-TIFF writer embeds in the standard <c>ImageDescription</c> tag so a written
-/// result round-trips its <b>identity and provenance</b> (F05) — the pixels/axes/channel already round-trip
-/// through the PSIA header. It deliberately reuses the workspace-package DTO records
-/// (<see cref="ProvenanceDto"/> et al.), so the provenance JSON is byte-identical in shape to the P01
-/// directory package (one schema, two carriers). Absent or unrecognized descriptions fall back to the
-/// reader's legacy behaviour (a fresh id + <see cref="ProvenanceRecord.Root"/>), so real PSIA files are
-/// unaffected.
+/// The identity/axis/provenance the reader restores from a written PSIA-TIFF's <c>ImageDescription</c>
+/// side-car: everything the PSIA header cannot express. The header carries the numeric geometry
+/// (origin/step/count in µm) and the channel; the side-car carries the <see cref="DatasetId"/>, the X/Y
+/// <see cref="AxisDirection"/> (the header has no faithful scan-direction field, and the reader would
+/// otherwise always rebuild <see cref="AxisDirection.Forward"/>), and the provenance (F05).
 /// </summary>
-internal sealed record TiffDomainSidecar(int Schema, string DatasetId, ProvenanceDto Provenance)
+internal readonly record struct TiffDomainInfo(
+    DatasetId Id, ProvenanceRecord Provenance, AxisDirection XDirection, AxisDirection YDirection);
+
+/// <summary>
+/// The JSON side-car the PSIA-TIFF writer embeds in the standard <c>ImageDescription</c> tag so a written
+/// result round-trips its <b>identity, axis directions and provenance</b> (F05). It deliberately reuses the
+/// workspace-package DTO records (<see cref="ProvenanceDto"/> et al.), so the provenance JSON is byte-identical
+/// in shape to the P01 directory package (one schema, two carriers). Absent or unrecognized descriptions fall
+/// back to the reader's legacy behaviour (a fresh id + <see cref="ProvenanceRecord.Root"/> + Forward axes), so
+/// real PSIA files are unaffected.
+/// </summary>
+internal sealed record TiffDomainSidecar(
+    int Schema, string DatasetId, string XDirection, string YDirection, ProvenanceDto Provenance)
 {
     public const int CurrentSchema = 1;
 
@@ -25,12 +36,14 @@ internal sealed record TiffDomainSidecar(int Schema, string DatasetId, Provenanc
         PropertyNameCaseInsensitive = true,
     };
 
-    /// <summary>Serializes a dataset's identity + provenance to the side-car JSON.</summary>
+    /// <summary>Serializes a dataset's identity, axis directions and provenance to the side-car JSON.</summary>
     public static string Serialize(ScanImageDataset image)
     {
         var sidecar = new TiffDomainSidecar(
             CurrentSchema,
             image.Id.Value.ToString("D"),
+            image.X.Direction.ToString(),
+            image.Y.Direction.ToString(),
             ToProvenanceDto(image.Provenance));
         return JsonSerializer.Serialize(sidecar, Json);
     }
@@ -40,10 +53,9 @@ internal sealed record TiffDomainSidecar(int Schema, string DatasetId, Provenanc
     /// for anything that is not our current-schema envelope (so a foreign ImageDescription is ignored, not
     /// mistaken for corruption).
     /// </summary>
-    public static bool TryParse(string? json, IUnitRegistry units, out DatasetId id, out ProvenanceRecord provenance)
+    public static bool TryParse(string? json, IUnitRegistry units, out TiffDomainInfo info)
     {
-        id = default;
-        provenance = ProvenanceRecord.Root;
+        info = default;
         if (string.IsNullOrWhiteSpace(json))
         {
             return false;
@@ -58,8 +70,11 @@ internal sealed record TiffDomainSidecar(int Schema, string DatasetId, Provenanc
                 return false;
             }
 
-            id = new DatasetId(guid);
-            provenance = FromProvenanceDto(sidecar.Provenance, units);
+            info = new TiffDomainInfo(
+                new DatasetId(guid),
+                FromProvenanceDto(sidecar.Provenance, units),
+                ParseDirection(sidecar.XDirection),
+                ParseDirection(sidecar.YDirection));
             return true;
         }
         catch (Exception ex) when (ex is JsonException or FormatException or ArgumentException)
@@ -68,6 +83,12 @@ internal sealed record TiffDomainSidecar(int Schema, string DatasetId, Provenanc
             return false;
         }
     }
+
+    // An unknown/missing direction falls back to Forward (the header's implicit scan order).
+    private static AxisDirection ParseDirection(string? value)
+        => Enum.TryParse<AxisDirection>(value, out var direction) && Enum.IsDefined(direction)
+            ? direction
+            : AxisDirection.Forward;
 
     // --- Domain → DTO (pure; mirrors DirectoryWorkspaceStore so both carriers share the schema) ---
 
