@@ -22,6 +22,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<ImageGeometryOperation>();
         services.AddAnalysisOperation<GrainDetectionOperation>();
         services.AddAnalysisOperation<PixelMathOperation>();
+        services.AddAnalysisOperation<CropOperation>();
         return services;
     }
 }

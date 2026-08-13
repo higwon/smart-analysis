@@ -31,6 +31,9 @@ public sealed class ParameterFormViewModel : ObservableObject
         ApplyCommand = new AsyncRelayCommand(ApplyAsync, onError: ex => ErrorMessage = ex.Message);
     }
 
+    /// <summary>The operation id this form edits (e.g. <c>image.crop</c>) — lets the shell add a semantic preview.</summary>
+    public string Id => _form.Id;
+
     public string DisplayName => _form.DisplayName;
 
     public string Summary => _form.Summary;
