@@ -21,6 +21,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<FourierFilterOperation>();
         services.AddAnalysisOperation<ImageGeometryOperation>();
         services.AddAnalysisOperation<GrainDetectionOperation>();
+        services.AddAnalysisOperation<PixelMathOperation>();
         return services;
     }
 }
