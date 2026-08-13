@@ -22,6 +22,18 @@ public readonly record struct RoiBounds
         {
             throw new ArgumentOutOfRangeException(nameof(height), height, "Height must be >= 0.");
         }
+
+        // The far edges must also be finite: Left/Width may each be finite yet their sum overflow to Infinity.
+        // Guaranteeing a fully-finite box keeps every consumer (rasterizer, overlay, serialization) safe.
+        if (!double.IsFinite(left + width))
+        {
+            throw new ArgumentException($"Left + Width must be finite (Left={left}, Width={width}).", nameof(width));
+        }
+
+        if (!double.IsFinite(top + height))
+        {
+            throw new ArgumentException($"Top + Height must be finite (Top={top}, Height={height}).", nameof(height));
+        }
     }
 
     public double Left { get; }
@@ -64,10 +76,13 @@ public abstract record Roi
 
         var mask = new bool[checked(width * height)];
         var bounds = Bounds;
-        int x0 = Math.Max(0, (int)Math.Floor(bounds.Left));
-        int x1 = Math.Min(width, (int)Math.Ceiling(bounds.Right));
-        int y0 = Math.Max(0, (int)Math.Floor(bounds.Top));
-        int y1 = Math.Min(height, (int)Math.Ceiling(bounds.Bottom));
+
+        // Clip to the grid in DOUBLE space first, then convert — a large coordinate (e.g. −1e20) must not be
+        // cast to int before it is clamped into [0, size] (that cast is undefined outside the Int32 range).
+        int x0 = (int)Math.Floor(Math.Clamp(bounds.Left, 0.0, width));
+        int x1 = (int)Math.Ceiling(Math.Clamp(bounds.Right, 0.0, width));
+        int y0 = (int)Math.Floor(Math.Clamp(bounds.Top, 0.0, height));
+        int y1 = (int)Math.Ceiling(Math.Clamp(bounds.Bottom, 0.0, height));
 
         for (int y = y0; y < y1; y++)
         {

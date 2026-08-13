@@ -94,4 +94,21 @@ public sealed class RoiTests
         Assert.Throws<ArgumentException>(() => new RectangleRoi(double.NaN, 0, 1, 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RectangleRoi(0, 0, -1, 1));
     }
+
+    [Fact]
+    public void A_huge_region_far_outside_the_grid_still_masks_the_whole_grid()
+    {
+        // Coordinates well beyond the Int32 range: clipping must happen in double space before the int cast,
+        // else the region (which geometrically covers the grid) would produce a wrong/empty mask.
+        var roi = new RectangleRoi(-1e20, -1e20, 2e20, 2e20);
+
+        Assert.Equal(16, roi.CountInside(4, 4));
+    }
+
+    [Fact]
+    public void A_bounding_box_whose_far_edge_overflows_to_infinity_is_rejected()
+    {
+        // Left and Width are each finite, but Left + Width overflows → the box is not a finite geometry.
+        Assert.Throws<ArgumentException>(() => new RectangleRoi(double.MaxValue, 0, double.MaxValue, 1));
+    }
 }
