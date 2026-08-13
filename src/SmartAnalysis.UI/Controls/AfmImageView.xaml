@@ -33,9 +33,11 @@
                         </Image.RenderTransform>
                     </Image>
                 </Canvas>
-                <!-- Overlay layer in screen space (constant stroke): a live region preview, e.g. the Crop
-                     rectangle. Positioned from the image transform so it tracks pan/zoom. -->
-                <Canvas x:Name="OverlayLayer" IsHitTestVisible="False">
+                <!-- Overlay layer in screen space (constant stroke): the live region preview + its drag handles
+                     (e.g. the Crop rectangle). Positioned from the image transform so it tracks pan/zoom. The
+                     Canvas has no Background, so empty areas stay hit-transparent (the image still pans there);
+                     only the region rectangle and handles receive the mouse. -->
+                <Canvas x:Name="OverlayLayer">
                     <Rectangle x:Name="RegionOverlay" Visibility="Collapsed"
                                Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"
                                Fill="{DynamicResource SA.Brush.Chart.Selection}"/>

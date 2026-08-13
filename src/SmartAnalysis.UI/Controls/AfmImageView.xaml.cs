@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using SmartAnalysis.Visualization.Colormaps;
 using SmartAnalysis.Visualization.Rendering;
 
@@ -35,13 +36,37 @@ public partial class AfmImageView : UserControl, IImageView
     private bool _needsFit;
     private bool _dragging;
     private Point _lastPos;
+    private const double HandleSize = 9.0;
+
     private double _fitScale = ImageViewportMath.MinScale; // the zoomed-out limit; refreshed by Fit()/SizeChanged
-    private (int Left, int Top, int Width, int Height)? _regionPreview; // e.g. the live Crop rectangle
+    private (int Left, int Top, int Width, int Height)? _regionPreview;   // the requested region (raw form values)
+    private (int Left, int Top, int Width, int Height)? _effectiveRegion; // clamped to the image — what is shown AND dragged
+    private readonly (RegionHandle Handle, Rectangle Rect)[] _regionHandles;
+    private RegionHandle _regionHandle = RegionHandle.None; // the handle being dragged, if any
+    private (int Left, int Top, int Width, int Height) _regionStart;
+    private (double X, double Y) _regionStartPixel;
+    private bool _regionEditable;
 
     public AfmImageView()
     {
         InitializeComponent();
         Palette.RangeChanged += (_, r) => RangeChanged?.Invoke(this, r);
+        RegionOverlay.Cursor = Cursors.SizeAll;
+        RegionOverlay.MouseLeftButtonDown += (_, e) => BeginRegionDrag(RegionHandle.Body, e);
+        _regionHandles = BuildRegionHandles();
+    }
+
+    /// <summary>Raised while the user drags the region overlay: the new (left, top, width, height) in pixels.</summary>
+    public event EventHandler<(int Left, int Top, int Width, int Height)>? RegionChanged;
+
+    /// <summary>The region shown/dragged: the requested rectangle clamped to the image (null when hidden).</summary>
+    public (int Left, int Top, int Width, int Height)? EffectiveRegion => _effectiveRegion;
+
+    /// <summary>Whether the region overlay can be dragged/resized (shows the handles). Single view only.</summary>
+    public bool IsRegionEditable
+    {
+        get => _regionEditable;
+        set { _regionEditable = value; UpdateOverlay(); }
     }
 
     /// <summary>
@@ -54,11 +79,11 @@ public partial class AfmImageView : UserControl, IImageView
         UpdateOverlay();
     }
 
-    /// <summary>Hides the region-preview overlay.</summary>
+    /// <summary>Hides the region-preview overlay — the rectangle, the eight handles, and the effective region.</summary>
     public void ClearRegionPreview()
     {
         _regionPreview = null;
-        RegionOverlay.Visibility = Visibility.Collapsed;
+        HideOverlay(); // clears _effectiveRegion and hides BOTH the rectangle and the handles
     }
 
     // Positions the region overlay in screen space from the current image transform (constant stroke).
@@ -66,27 +91,43 @@ public partial class AfmImageView : UserControl, IImageView
     {
         if (_regionPreview is not { } r || _bmpW <= 0 || _bmpH <= 0)
         {
-            RegionOverlay.Visibility = Visibility.Collapsed;
+            HideOverlay();
             return;
         }
 
-        // Clamp to the image (the crop clamps too), so the preview shows the region that will actually be cut.
-        int left = Math.Clamp(r.Left, 0, _bmpW);
-        int top = Math.Clamp(r.Top, 0, _bmpH);
-        int right = Math.Clamp(r.Left + r.Width, 0, _bmpW);
-        int bottom = Math.Clamp(r.Top + r.Height, 0, _bmpH);
-        if (right <= left || bottom <= top)
+        // Clamp to the image (the crop clamps too): the same box is shown, dragged, and cut.
+        var (left, top, width, height) = RegionEditMath.ClampToImage(r.Left, r.Top, r.Width, r.Height, _bmpW, _bmpH);
+        if (width <= 0 || height <= 0)
         {
-            RegionOverlay.Visibility = Visibility.Collapsed;
+            HideOverlay();
             return;
         }
 
+        _effectiveRegion = (left, top, width, height);
         double s = ImgScale.ScaleX;
-        Canvas.SetLeft(RegionOverlay, (left * s) + ImgTranslate.X);
-        Canvas.SetTop(RegionOverlay, (top * s) + ImgTranslate.Y);
-        RegionOverlay.Width = (right - left) * s;
-        RegionOverlay.Height = (bottom - top) * s;
+        double x = (left * s) + ImgTranslate.X;
+        double y = (top * s) + ImgTranslate.Y;
+        double w = width * s;
+        double h = height * s;
+        Canvas.SetLeft(RegionOverlay, x);
+        Canvas.SetTop(RegionOverlay, y);
+        RegionOverlay.Width = w;
+        RegionOverlay.Height = h;
         RegionOverlay.Visibility = Visibility.Visible;
+        PositionRegionHandles(x, y, w, h, _regionEditable);
+    }
+
+    private void HideOverlay()
+    {
+        _effectiveRegion = null;
+        RegionOverlay.Visibility = Visibility.Collapsed;
+        if (_regionHandles is not null)
+        {
+            foreach (var (_, rect) in _regionHandles)
+            {
+                rect.Visibility = Visibility.Collapsed;
+            }
+        }
     }
 
     /// <summary>Raised while the user drags a palette-bar handle: the new (min, max) value window.</summary>
@@ -254,6 +295,12 @@ public partial class AfmImageView : UserControl, IImageView
 
     private void Viewport_MouseMove(object sender, MouseEventArgs e)
     {
+        if (_regionHandle != RegionHandle.None)
+        {
+            DragRegion(e);
+            return;
+        }
+
         if (!_dragging)
         {
             // Hint pannability while zoomed in.
@@ -270,11 +317,109 @@ public partial class AfmImageView : UserControl, IImageView
 
     private void Viewport_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_regionHandle != RegionHandle.None)
+        {
+            _regionHandle = RegionHandle.None;
+            Viewport.ReleaseMouseCapture();
+            return;
+        }
+
         if (_dragging)
         {
             _dragging = false;
             Viewport.ReleaseMouseCapture();
             Cursor = Cursors.Arrow;
+        }
+    }
+
+    // ---- Region overlay interaction (V06): drag the body to move, an edge/corner handle to resize ----
+
+    private void BeginRegionDrag(RegionHandle handle, MouseButtonEventArgs e)
+    {
+        // Drag from the EFFECTIVE (clamped, on-screen) region, not the raw request — so the box the user sees
+        // is exactly the box that moves/resizes (an over-large form width must not drag from its raw value).
+        if (!_regionEditable || _effectiveRegion is not { } region)
+        {
+            return;
+        }
+
+        _regionHandle = handle;
+        _regionStart = region;
+        var p = e.GetPosition(Viewport);
+        _regionStartPixel = RegionEditMath.ScreenToPixel(p.X, p.Y, ImgScale.ScaleX, ImgTranslate.X, ImgTranslate.Y);
+        Viewport.CaptureMouse();
+        e.Handled = true; // don't let the Viewport start a pan
+    }
+
+    private void DragRegion(MouseEventArgs e)
+    {
+        var p = e.GetPosition(Viewport);
+        var (px, py) = RegionEditMath.ScreenToPixel(p.X, p.Y, ImgScale.ScaleX, ImgTranslate.X, ImgTranslate.Y);
+        var next = RegionEditMath.Drag(
+            _regionHandle, _regionStart.Left, _regionStart.Top, _regionStart.Width, _regionStart.Height,
+            px - _regionStartPixel.X, py - _regionStartPixel.Y, _bmpW, _bmpH);
+        _regionPreview = next;
+        UpdateOverlay();
+        RegionChanged?.Invoke(this, next);
+    }
+
+    // Builds the eight resize handles once; they are positioned/shown by UpdateOverlay.
+    private (RegionHandle Handle, Rectangle Rect)[] BuildRegionHandles()
+    {
+        (RegionHandle Handle, Cursor Cursor)[] specs =
+        [
+            (RegionHandle.TopLeft, Cursors.SizeNWSE), (RegionHandle.Top, Cursors.SizeNS), (RegionHandle.TopRight, Cursors.SizeNESW),
+            (RegionHandle.Left, Cursors.SizeWE), (RegionHandle.Right, Cursors.SizeWE),
+            (RegionHandle.BottomLeft, Cursors.SizeNESW), (RegionHandle.Bottom, Cursors.SizeNS), (RegionHandle.BottomRight, Cursors.SizeNWSE),
+        ];
+
+        var handles = new (RegionHandle, Rectangle)[specs.Length];
+        for (int i = 0; i < specs.Length; i++)
+        {
+            var handle = specs[i].Handle;
+            var rect = new Rectangle
+            {
+                Width = HandleSize,
+                Height = HandleSize,
+                Stroke = Brushes.White,
+                StrokeThickness = 1,
+                Cursor = specs[i].Cursor,
+                Visibility = Visibility.Collapsed,
+            };
+            rect.SetResourceReference(Shape.FillProperty, "SA.Brush.Accent.Primary"); // theme-aware
+            rect.MouseLeftButtonDown += (_, e) => BeginRegionDrag(handle, e);
+            OverlayLayer.Children.Add(rect);
+            handles[i] = (handle, rect);
+        }
+
+        return handles;
+    }
+
+    // Positions each handle at its corner/edge of the screen-space region rect; hidden when not editable.
+    private void PositionRegionHandles(double x, double y, double w, double h, bool visible)
+    {
+        foreach (var (handle, rect) in _regionHandles)
+        {
+            rect.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            if (!visible)
+            {
+                continue;
+            }
+
+            double cx = handle switch
+            {
+                RegionHandle.TopLeft or RegionHandle.Left or RegionHandle.BottomLeft => x,
+                RegionHandle.TopRight or RegionHandle.Right or RegionHandle.BottomRight => x + w,
+                _ => x + (w / 2.0),
+            };
+            double cy = handle switch
+            {
+                RegionHandle.TopLeft or RegionHandle.Top or RegionHandle.TopRight => y,
+                RegionHandle.BottomLeft or RegionHandle.Bottom or RegionHandle.BottomRight => y + h,
+                _ => y + (h / 2.0),
+            };
+            Canvas.SetLeft(rect, cx - (HandleSize / 2.0));
+            Canvas.SetTop(rect, cy - (HandleSize / 2.0));
         }
     }
 }
