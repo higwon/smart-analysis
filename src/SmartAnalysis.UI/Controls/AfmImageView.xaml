@@ -21,17 +21,26 @@
                  viewport, so a large scan (e.g. 4096²) was realized at viewport resolution and the zoom
                  RenderTransform then shrank that further — the image appeared tiny. On a Canvas the transform
                  scales the full-resolution content correctly. -->
-            <Canvas>
-                <Image x:Name="Img" Stretch="None"
-                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0,0">
-                    <Image.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform x:Name="ImgScale"/>
-                            <TranslateTransform x:Name="ImgTranslate"/>
-                        </TransformGroup>
-                    </Image.RenderTransform>
-                </Image>
-            </Canvas>
+            <Grid>
+                <Canvas>
+                    <Image x:Name="Img" Stretch="None"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0,0">
+                        <Image.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="ImgScale"/>
+                                <TranslateTransform x:Name="ImgTranslate"/>
+                            </TransformGroup>
+                        </Image.RenderTransform>
+                    </Image>
+                </Canvas>
+                <!-- Overlay layer in screen space (constant stroke): a live region preview, e.g. the Crop
+                     rectangle. Positioned from the image transform so it tracks pan/zoom. -->
+                <Canvas x:Name="OverlayLayer" IsHitTestVisible="False">
+                    <Rectangle x:Name="RegionOverlay" Visibility="Collapsed"
+                               Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"
+                               Fill="{DynamicResource SA.Brush.Chart.Selection}"/>
+                </Canvas>
+            </Grid>
         </Border>
 
         <!-- Interactive colormap legend / palette bar (draggable min/max handles set the value window) -->

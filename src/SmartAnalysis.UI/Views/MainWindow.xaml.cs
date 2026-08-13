@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -38,8 +41,70 @@ public partial class MainWindow : Window
         _viewModel.ImagesChanged += (_, _) => RenderImages();
         // Dragging the single view's palette-bar handles sets a manual value range on the shell.
         SingleImage.RangeChanged += (_, r) => _viewModel.SetManualRange(r.Min, r.Max);
+        // When the Crop operation form is open, preview its region live on the image.
+        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         RenderImages();
     }
+
+    // ---- Crop region preview: mirror the Crop form's left/top/width/height as an overlay on the image ----
+    private const string CropOperationId = "image.crop";
+    private readonly List<ParameterFieldViewModel> _cropFields = new();
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ShellViewModel.OperationEditor))
+        {
+            WireCropPreview();
+        }
+    }
+
+    private void WireCropPreview()
+    {
+        foreach (var field in _cropFields)
+        {
+            field.PropertyChanged -= CropField_PropertyChanged;
+        }
+
+        _cropFields.Clear();
+
+        if (_viewModel.OperationEditor is ParameterFormViewModel form && form.Id == CropOperationId)
+        {
+            foreach (var field in form.Fields)
+            {
+                _cropFields.Add(field);
+                field.PropertyChanged += CropField_PropertyChanged;
+            }
+
+            UpdateCropPreview();
+        }
+        else
+        {
+            SingleImage.ClearRegionPreview();
+        }
+    }
+
+    private void CropField_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ParameterFieldViewModel.Value))
+        {
+            UpdateCropPreview();
+        }
+    }
+
+    private void UpdateCropPreview()
+    {
+        int Field(string name) => AsInt(_cropFields.FirstOrDefault(f => f.Name == name)?.Value);
+        SingleImage.SetRegionPreview(Field("left"), Field("top"), Field("width"), Field("height"));
+    }
+
+    // The form holds the raw UI primitive (int default, or the TextBox's string once edited).
+    private static int AsInt(object? value) => value switch
+    {
+        int i => i,
+        double d => (int)d,
+        string s when int.TryParse(s, out var n) => n,
+        _ => 0,
+    };
 
     private void ExplorerTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         => _viewModel.Select(e.NewValue as DatasetNodeViewModel);

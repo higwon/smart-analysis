@@ -36,11 +36,57 @@ public partial class AfmImageView : UserControl, IImageView
     private bool _dragging;
     private Point _lastPos;
     private double _fitScale = ImageViewportMath.MinScale; // the zoomed-out limit; refreshed by Fit()/SizeChanged
+    private (int Left, int Top, int Width, int Height)? _regionPreview; // e.g. the live Crop rectangle
 
     public AfmImageView()
     {
         InitializeComponent();
         Palette.RangeChanged += (_, r) => RangeChanged?.Invoke(this, r);
+    }
+
+    /// <summary>
+    /// Shows a live rectangle overlay in image-pixel space (e.g. the Crop region while its form is open),
+    /// clamped to the image so it matches the effective crop. Tracks pan/zoom. Pass nothing to hide it.
+    /// </summary>
+    public void SetRegionPreview(int left, int top, int width, int height)
+    {
+        _regionPreview = (left, top, width, height);
+        UpdateOverlay();
+    }
+
+    /// <summary>Hides the region-preview overlay.</summary>
+    public void ClearRegionPreview()
+    {
+        _regionPreview = null;
+        RegionOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    // Positions the region overlay in screen space from the current image transform (constant stroke).
+    private void UpdateOverlay()
+    {
+        if (_regionPreview is not { } r || _bmpW <= 0 || _bmpH <= 0)
+        {
+            RegionOverlay.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // Clamp to the image (the crop clamps too), so the preview shows the region that will actually be cut.
+        int left = Math.Clamp(r.Left, 0, _bmpW);
+        int top = Math.Clamp(r.Top, 0, _bmpH);
+        int right = Math.Clamp(r.Left + r.Width, 0, _bmpW);
+        int bottom = Math.Clamp(r.Top + r.Height, 0, _bmpH);
+        if (right <= left || bottom <= top)
+        {
+            RegionOverlay.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        double s = ImgScale.ScaleX;
+        Canvas.SetLeft(RegionOverlay, (left * s) + ImgTranslate.X);
+        Canvas.SetTop(RegionOverlay, (top * s) + ImgTranslate.Y);
+        RegionOverlay.Width = (right - left) * s;
+        RegionOverlay.Height = (bottom - top) * s;
+        RegionOverlay.Visibility = Visibility.Visible;
     }
 
     /// <summary>Raised while the user drags a palette-bar handle: the new (min, max) value window.</summary>
@@ -69,6 +115,7 @@ public partial class AfmImageView : UserControl, IImageView
         Img.Source = null;
         Palette.Clear();
         _bmpW = _bmpH = 0;
+        UpdateOverlay(); // hides the region overlay when there is no image
     }
 
     private void RenderCore(ImageRenderInput input)
@@ -119,6 +166,7 @@ public partial class AfmImageView : UserControl, IImageView
         ImgTranslate.X = x;
         ImgTranslate.Y = y;
         _needsFit = false;
+        UpdateOverlay();
     }
 
     private void ApplyTranslateClamp()
@@ -127,6 +175,7 @@ public partial class AfmImageView : UserControl, IImageView
             ImgTranslate.X, ImgTranslate.Y, ImgScale.ScaleX, Viewport.ActualWidth, Viewport.ActualHeight, _bmpW, _bmpH);
         ImgTranslate.X = x;
         ImgTranslate.Y = y;
+        UpdateOverlay();
     }
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e)
