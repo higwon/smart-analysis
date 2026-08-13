@@ -79,11 +79,11 @@ public partial class AfmImageView : UserControl, IImageView
         UpdateOverlay();
     }
 
-    /// <summary>Hides the region-preview overlay.</summary>
+    /// <summary>Hides the region-preview overlay — the rectangle, the eight handles, and the effective region.</summary>
     public void ClearRegionPreview()
     {
         _regionPreview = null;
-        RegionOverlay.Visibility = Visibility.Collapsed;
+        HideOverlay(); // clears _effectiveRegion and hides BOTH the rectangle and the handles
     }
 
     // Positions the region overlay in screen space from the current image transform (constant stroke).

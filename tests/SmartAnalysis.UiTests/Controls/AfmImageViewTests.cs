@@ -1,5 +1,7 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Shapes;
 using SmartAnalysis.UI.Controls;
 using SmartAnalysis.Visualization.Colormaps;
 using SmartAnalysis.Visualization.Rendering;
@@ -88,6 +90,35 @@ public sealed class AfmImageViewTests
         });
 
         Assert.Equal((10, 0, 5, 15), effective);
+    }
+
+    [Fact]
+    public void Clearing_the_region_hides_the_overlay_and_every_handle()
+    {
+        // Closing the Crop form clears the preview: the rectangle, all eight handles, and the effective region
+        // must all go — otherwise stale handles linger and could re-drag a closed ROI.
+        var (effectiveAfterClear, anyShapeVisible) = WpfTestHost.Invoke(() =>
+        {
+            var view = new AfmImageView { IsRegionEditable = true };
+            var host = new Border { Width = 320, Height = 240, Child = view };
+            host.Measure(new Size(320, 240));
+            host.Arrange(new Rect(0, 0, 320, 240));
+            host.UpdateLayout();
+
+            view.Render(SolidInput(64, 64));
+            view.SetRegionPreview(10, 10, 20, 20);
+            host.UpdateLayout();
+
+            view.ClearRegionPreview();
+            host.UpdateLayout();
+
+            var overlay = (Panel)view.FindName("OverlayLayer");
+            bool anyVisible = overlay.Children.OfType<Rectangle>().Any(r => r.Visibility == Visibility.Visible);
+            return (view.EffectiveRegion, anyVisible);
+        });
+
+        Assert.Null(effectiveAfterClear);
+        Assert.False(anyShapeVisible); // the rectangle + all eight handles are collapsed
     }
 
     [Fact]
