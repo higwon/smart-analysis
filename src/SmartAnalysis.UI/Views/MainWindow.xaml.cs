@@ -314,9 +314,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var target = _viewModel.IsBeforeAfter ? (FrameworkElement)CompareContent
-            : _viewModel.Is3D ? SingleSurface
-            : SingleImage;
+        // ShowSingle3D (not raw Is3D) so an overlay editor that forces the 2D stage exports the visible 2D view.
+        var target = ChooseExportTarget(_viewModel.IsBeforeAfter, _viewModel.ShowSingle3D, CompareContent, SingleSurface, SingleImage);
         var bitmap = new RenderTargetBitmap(
             (int)Math.Max(1, target.ActualWidth),
             (int)Math.Max(1, target.ActualHeight),
@@ -328,6 +327,15 @@ public partial class MainWindow : Window
         using var stream = File.Create(dialog.FileName);
         encoder.Save(stream);
     }
+
+    /// <summary>
+    /// Which view to export: the Before/After grid in compare mode, else the surface only when it is actually
+    /// shown (<c>ShowSingle3D</c> — not the raw 3D preference, so an overlay editor forcing the 2D stage exports
+    /// the 2D image the user sees), else the 2D image.
+    /// </summary>
+    public static FrameworkElement ChooseExportTarget(
+        bool isBeforeAfter, bool showSingle3D, FrameworkElement compare, FrameworkElement surface, FrameworkElement image)
+        => isBeforeAfter ? compare : showSingle3D ? surface : image;
 
     // Build transient render inputs and render them; retain nothing borrowed (V02 / ADR-011).
     private void RenderImages()
