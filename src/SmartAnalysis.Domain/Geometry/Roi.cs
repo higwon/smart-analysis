@@ -1,5 +1,12 @@
 namespace SmartAnalysis.Domain.Geometry;
 
+/// <summary>A stable region-shape discriminator (extended as shapes are added: polygon, line, freehand).</summary>
+public enum RoiKind
+{
+    Rectangle,
+    Ellipse,
+}
+
 /// <summary>
 /// A sub-pixel axis-aligned bounding box in <b>pixel-index space</b> (the same space image ops raster over
 /// and the display maps for an overlay). Immutable value type; <see cref="Width"/>/<see cref="Height"/> are
@@ -60,6 +67,10 @@ public abstract record Roi
 {
     /// <summary>The shape's sub-pixel bounding box.</summary>
     public abstract RoiBounds Bounds { get; }
+
+    /// <summary>A stable shape discriminator — so two ROIs with the same <see cref="Bounds"/> but different shapes
+    /// (a rectangle vs its inscribed ellipse) are distinguishable, e.g. in provenance. Extended as shapes are added.</summary>
+    public abstract RoiKind Kind { get; }
 
     /// <summary>Whether the point (in pixel units; use a pixel <b>centre</b> <c>x+0.5, y+0.5</c>) is inside the shape.</summary>
     public abstract bool Contains(double x, double y);

@@ -1,14 +1,21 @@
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Geometry;
 using SmartAnalysis.Domain.Provenance;
 
 namespace SmartAnalysis.Analysis.Operations;
 
-/// <summary>Input to an operation: a primary dataset and optional secondary datasets (binary ops).</summary>
+/// <summary>
+/// Input to an operation: a primary dataset, optional secondary datasets (binary ops), and an optional
+/// <see cref="Region"/> of interest (D02). A region-aware op restricts itself to the region when one is supplied
+/// (e.g. roughness over a drawn ellipse) and operates on the whole dataset when it is <c>null</c>; an op that
+/// ignores the region simply doesn't read it. The shell attaches the current overlay ROI for a region-capable op.
+/// </summary>
 public sealed class OperationInput
 {
-    public OperationInput(AfmDataset primary, IReadOnlyList<AfmDataset>? secondary = null)
+    public OperationInput(AfmDataset primary, IReadOnlyList<AfmDataset>? secondary = null, Roi? region = null)
     {
         Primary = AnalysisGuard.NotNull(primary, nameof(primary));
+        Region = region;
         if (secondary is null || secondary.Count == 0)
         {
             Secondary = [];
@@ -28,7 +35,9 @@ public sealed class OperationInput
     public AfmDataset Primary { get; }
 
     public IReadOnlyList<AfmDataset> Secondary { get; }
-    // NOTE: RegionOfInterest is added with D02; omitted here (MVP operates on whole datasets).
+
+    /// <summary>The region of interest to restrict the operation to, or <c>null</c> for the whole dataset (D02).</summary>
+    public Roi? Region { get; }
 }
 
 /// <summary>Progress report from a running operation: a finite fraction in [0, 1] plus an optional message.</summary>
