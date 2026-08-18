@@ -26,6 +26,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<DeglitchOperation>();
         services.AddAnalysisOperation<RoiStatisticsOperation>();
         services.AddAnalysisOperation<PowerSpectrumOperation>();
+        services.AddAnalysisOperation<ProfileOperation>();
         return services;
     }
 }
