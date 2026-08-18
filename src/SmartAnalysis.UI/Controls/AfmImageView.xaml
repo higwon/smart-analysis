@@ -41,6 +41,10 @@
                     <Rectangle x:Name="RegionOverlay" Visibility="Collapsed"
                                Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"
                                Fill="{DynamicResource SA.Brush.Chart.Selection}"/>
+                    <!-- Elliptical ROI: the inscribed ellipse; the rectangle above becomes a dashed bounding guide. -->
+                    <Ellipse x:Name="RegionEllipseOverlay" Visibility="Collapsed" IsHitTestVisible="False"
+                             Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"
+                             Fill="{DynamicResource SA.Brush.Chart.Selection}"/>
                     <!-- The profile line (endpoints are separate draggable handles built in code). -->
                     <Line x:Name="LineOverlay" Visibility="Collapsed"
                           Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"/>
