@@ -24,6 +24,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<PixelMathOperation>();
         services.AddAnalysisOperation<CropOperation>();
         services.AddAnalysisOperation<DeglitchOperation>();
+        services.AddAnalysisOperation<RoiStatisticsOperation>();
         return services;
     }
 }
