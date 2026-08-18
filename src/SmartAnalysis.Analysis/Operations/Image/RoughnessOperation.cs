@@ -154,6 +154,9 @@ public sealed class RoughnessOperation : IAnalysisOperation
         if (region is { } roi)
         {
             var b = roi.Bounds;
+            // The shape discriminator too: a rectangle and its inscribed ellipse share a bbox but select different
+            // pixels, so history must tell them apart (the #98 shape lesson, on the general Roi channel).
+            regionParams["regionShape"] = new((int)roi.Kind, StandardUnits.One);
             regionParams["regionLeft"] = new(b.Left, StandardUnits.One);
             regionParams["regionTop"] = new(b.Top, StandardUnits.One);
             regionParams["regionWidth"] = new(b.Width, StandardUnits.One);

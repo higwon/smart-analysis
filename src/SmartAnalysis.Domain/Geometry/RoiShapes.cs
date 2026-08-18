@@ -11,6 +11,8 @@ public sealed record RectangleRoi : Roi
 
     public override RoiBounds Bounds { get; }
 
+    public override RoiKind Kind => RoiKind.Rectangle;
+
     public override bool Contains(double x, double y)
         => x >= Bounds.Left && x < Bounds.Right && y >= Bounds.Top && y < Bounds.Bottom;
 }
@@ -25,6 +27,8 @@ public sealed record EllipseRoi : Roi
         => Bounds = new RoiBounds(left, top, width, height);
 
     public override RoiBounds Bounds { get; }
+
+    public override RoiKind Kind => RoiKind.Ellipse;
 
     public override bool Contains(double x, double y)
     {

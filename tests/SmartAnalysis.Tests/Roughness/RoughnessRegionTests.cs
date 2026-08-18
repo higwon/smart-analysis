@@ -75,15 +75,22 @@ public sealed class RoughnessRegionTests
     }
 
     [Fact]
-    public async Task An_ellipse_region_differs_from_the_rectangle_over_the_same_box()
+    public async Task Same_bbox_rectangle_and_ellipse_differ_in_result_and_shape_but_share_bounds()
     {
         using var image = RampImage();
 
         var rect = await RunAsync(image, new RectangleRoi(0, 0, 4, 4));
         var ellipse = await RunAsync(image, new EllipseRoi(0, 0, 4, 4));
 
-        // The inscribed ellipse drops the corner pixels, so the parameters differ from the full box.
+        // The inscribed ellipse drops the corner pixels, so the parameters differ from the full box…
         Assert.NotEqual(rect.Scalars["Sq"].Value, ellipse.Scalars["Sq"].Value, 6);
+
+        // …and history distinguishes them: same bounds, different shape discriminator (Rectangle=0, Ellipse=1).
+        var r = rect.Provenance.Steps[^1].Parameters;
+        var e = ellipse.Provenance.Steps[^1].Parameters;
+        Assert.Equal(r["regionWidth"].Value, e["regionWidth"].Value, 12);
+        Assert.Equal(0.0, r["regionShape"].Value, 12);
+        Assert.Equal(1.0, e["regionShape"].Value, 12);
     }
 
     [Fact]
