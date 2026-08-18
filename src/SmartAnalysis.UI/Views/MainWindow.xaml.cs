@@ -314,7 +314,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var target = _viewModel.IsBeforeAfter ? (FrameworkElement)CompareContent : SingleImage;
+        // ShowSingle3D (not raw Is3D) so an overlay editor that forces the 2D stage exports the visible 2D view.
+        var target = ChooseExportTarget(_viewModel.IsBeforeAfter, _viewModel.ShowSingle3D, CompareContent, SingleSurface, SingleImage);
         var bitmap = new RenderTargetBitmap(
             (int)Math.Max(1, target.ActualWidth),
             (int)Math.Max(1, target.ActualHeight),
@@ -327,6 +328,15 @@ public partial class MainWindow : Window
         encoder.Save(stream);
     }
 
+    /// <summary>
+    /// Which view to export: the Before/After grid in compare mode, else the surface only when it is actually
+    /// shown (<c>ShowSingle3D</c> — not the raw 3D preference, so an overlay editor forcing the 2D stage exports
+    /// the 2D image the user sees), else the 2D image.
+    /// </summary>
+    public static FrameworkElement ChooseExportTarget(
+        bool isBeforeAfter, bool showSingle3D, FrameworkElement compare, FrameworkElement surface, FrameworkElement image)
+        => isBeforeAfter ? compare : showSingle3D ? surface : image;
+
     // Build transient render inputs and render them; retain nothing borrowed (V02 / ADR-011).
     private void RenderImages()
     {
@@ -336,12 +346,25 @@ public partial class MainWindow : Window
             // The first curve-producing op (A08 PSD): route the active line profile to the curve view.
             SingleCurve.Render(RenderInputFactory.ForLineProfile(curve));
             SingleImage.Clear();
+            SingleSurface.Clear();
             BeforeImageView.Clear();
             AfterImageView.Clear();
             return;
         }
 
         SingleCurve.Clear();
+        if (_viewModel.ShowSingle3D && _viewModel.ActiveImage is { } surfaceImage)
+        {
+            // 3D surface view of the single active image (V04) — same render input as the 2D view. ShowSingle3D
+            // (not raw Is3D) so an open overlay editor keeps the 2D stage even when 3D is the preference.
+            SingleSurface.Render(RenderInputFactory.ForImage(surfaceImage, colormap, _viewModel.EffectiveRange));
+            SingleImage.Clear();
+            BeforeImageView.Clear();
+            AfterImageView.Clear();
+            return;
+        }
+
+        SingleSurface.Clear();
         if (_viewModel.IsBeforeAfter && _viewModel.BeforeImage is { } before && _viewModel.ActiveImage is { } after)
         {
             // Each pane uses its OWN data range so both stay legible: a transform like Flatten removes the

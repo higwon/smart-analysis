@@ -237,12 +237,17 @@
                                 </StackPanel>
                             </Border>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                <Button Click="Fit_Click" Style="{StaticResource SA.Button.Toolbar}">
+                                <Button Click="Fit_Click" Style="{StaticResource SA.Button.Toolbar}"
+                                        Visibility="{Binding Is3D, Converter={StaticResource NotBool2Vis}}">
                                     <StackPanel Orientation="Horizontal">
                                         <ds:IconPresenter Data="{StaticResource SA.Icon.ZoomFit}" Margin="{DynamicResource SA.Gap.Right2}"/>
                                         <TextBlock Text="Fit" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
+                                <CheckBox Style="{StaticResource SA.CheckBox}" Content="3D" VerticalAlignment="Center"
+                                          Margin="{DynamicResource SA.Gap.Left2}" IsChecked="{Binding Is3D}"
+                                          Visibility="{Binding CanToggle3D, Converter={StaticResource Bool2Vis}}"
+                                          ToolTip="View the active image as a 3D surface"/>
                                 <!-- Palette: colormap picker + Auto/Manual value range (legacy-parity). Kept compact
                                      so it doesn't crowd out Export at the min window width. -->
                                 <ComboBox Style="{StaticResource SA.ComboBox}" Width="94" VerticalAlignment="Center"
@@ -303,7 +308,9 @@
                         <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <Grid Grid.Row="0">
                         <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}" IsRangeEditable="True"
-                                          Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}"/>
+                                          Visibility="{Binding ShowSingle2D, Converter={StaticResource Bool2Vis}}"/>
+                        <ctl:AfmSurfaceView x:Name="SingleSurface" Margin="{DynamicResource SA.Gap.2}"
+                                            Visibility="{Binding ShowSingle3D, Converter={StaticResource Bool2Vis}}"/>
                         <ctl:AfmCurveView x:Name="SingleCurve" Margin="{DynamicResource SA.Gap.2}"
                                           Visibility="{Binding IsSingleCurve, Converter={StaticResource Bool2Vis}}"/>
                         <Grid x:Name="CompareContent" Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">

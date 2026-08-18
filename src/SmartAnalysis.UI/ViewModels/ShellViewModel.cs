@@ -55,6 +55,8 @@ public sealed class ShellViewModel : ObservableObject
     private ScanImageDataset? _activeImage;
     private ScanImageDataset? _beforeImage;
     private LineProfileDataset? _activeCurve;
+    private bool _is3D;
+    private bool _isInteractiveImageEditing;
     private InspectorRole _inspectorRole = InspectorRole.DatasetProperties;
     private bool _isLauncherOpen;
     private object? _operationEditor;
@@ -168,7 +170,49 @@ public sealed class ShellViewModel : ObservableObject
 
     /// <summary>The current Operation-role editor: a semantic editor (e.g. <see cref="FlattenPanel"/>) or a
     /// generic <see cref="ParameterFormViewModel"/>; null when the Operation role is not showing an editor.</summary>
-    public object? OperationEditor { get => _operationEditor; private set => SetProperty(ref _operationEditor, value); }
+    public object? OperationEditor
+    {
+        get => _operationEditor;
+        private set
+        {
+            // Set the stage mode FIRST: an interactive image operation (region crop/ROI, or a line profile) edits
+            // an overlay that lives on the 2D image view, so its editor forces the 2D stage even when 3D is the
+            // preference — and doing this before the editor change means the 2D image is re-rendered before the
+            // shell seeds the overlay onto it (a seed onto a not-yet-rendered view would find no image).
+            IsInteractiveImageEditing = IsImageOverlayEditor(value);
+            SetProperty(ref _operationEditor, value);
+        }
+    }
+
+    /// <summary>Whether an interactive image-overlay operation (region or line profile) editor is open. While it
+    /// is, the 2D stage is forced (the overlay lives on the 2D view) and the 3D toggle is hidden.</summary>
+    public bool IsInteractiveImageEditing
+    {
+        get => _isInteractiveImageEditing;
+        private set
+        {
+            if (SetProperty(ref _isInteractiveImageEditing, value))
+            {
+                OnPropertyChanged(nameof(ShowSingle2D));
+                OnPropertyChanged(nameof(ShowSingle3D));
+                OnPropertyChanged(nameof(CanToggle3D));
+                ImagesChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    // The overlay editors are recognized by their parameter shape: a region (left/top/width/height) or a line
+    // (x0/y0/x1/y1) — the same fields the shell draws overlays for.
+    private static bool IsImageOverlayEditor(object? editor)
+    {
+        if (editor is not ParameterFormViewModel form)
+        {
+            return false;
+        }
+
+        bool Has(params string[] names) => Array.TrueForAll(names, n => form.Fields.Any(f => f.Name == n));
+        return Has("left", "top", "width", "height") || Has("x0", "y0", "x1", "y1");
+    }
 
     /// <summary>Which role the Inspector shows (doc 26 §13).</summary>
     public InspectorRole InspectorRole
@@ -411,6 +455,30 @@ public sealed class ShellViewModel : ObservableObject
     public bool IsBeforeAfter => _activeImage is not null && _beforeImage is not null;
     public bool IsSingleImage => _activeImage is not null && _beforeImage is null;
     public bool IsSingleCurve => _activeCurve is not null;
+
+    /// <summary>Whether the single image is shown as a 3D surface (V04) rather than the 2D view. Persists across
+    /// active-image changes so the chosen view mode sticks; ignored for Before/After and curves.</summary>
+    public bool Is3D
+    {
+        get => _is3D;
+        set
+        {
+            if (SetProperty(ref _is3D, value))
+            {
+                OnPropertyChanged(nameof(ShowSingle2D));
+                OnPropertyChanged(nameof(ShowSingle3D));
+                ImagesChanged?.Invoke(this, EventArgs.Empty); // re-render into the newly shown view
+            }
+        }
+    }
+
+    // An overlay editor forces 2D even when 3D is preferred (the overlay lives on the 2D view); closing it returns
+    // to the retained 3D preference.
+    public bool ShowSingle2D => IsSingleImage && (!_is3D || _isInteractiveImageEditing);
+    public bool ShowSingle3D => IsSingleImage && _is3D && !_isInteractiveImageEditing;
+
+    /// <summary>Whether the 3D toggle is offered — hidden while an overlay editor forces the 2D stage.</summary>
+    public bool CanToggle3D => IsSingleImage && !_isInteractiveImageEditing;
 
     /// <summary>
     /// Raised when the images to display change. The <b>view</b> handles rendering: it builds a fresh
@@ -665,6 +733,9 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(IsBeforeAfter));
         OnPropertyChanged(nameof(IsSingleImage));
         OnPropertyChanged(nameof(IsSingleCurve));
+        OnPropertyChanged(nameof(ShowSingle2D));
+        OnPropertyChanged(nameof(ShowSingle3D));
+        OnPropertyChanged(nameof(CanToggle3D));
         (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
         _runStatistics.RaiseCanExecuteChanged();
         (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
