@@ -45,9 +45,15 @@ public sealed class PowerSpectrumOperation : IAnalysisOperation
             return ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(ScanImageDataset)} as its primary input.");
         }
 
-        return image.X.Count >= 2
+        if (image.X.Count < 2)
+        {
+            return ValidationResult.Fail($"'{Descriptor.Id}' needs at least 2 samples per line (width was {image.X.Count}).");
+        }
+
+        // The spatial PSD's frequency axis is a reciprocal length; the X axis must therefore be a length.
+        return image.X.Unit.Dimension == StandardUnits.Length
             ? ValidationResult.Success
-            : ValidationResult.Fail($"'{Descriptor.Id}' needs at least 2 samples per line (width was {image.X.Count}).");
+            : ValidationResult.Fail($"'{Descriptor.Id}' needs a spatial (length) X axis, but it is '{image.X.Unit.Dimension.Name}'.");
     }
 
     public Task<OperationResult> RunAsync(
@@ -92,8 +98,16 @@ public sealed class PowerSpectrumOperation : IAnalysisOperation
             warnings.Add(new OperationWarning("psd.skipped-lines", $"{height - result.RowsUsed} of {height} lines contain non-finite samples and were skipped."));
         }
 
-        var frequencyUnit = new Unit($"1/{image.X.Unit.Symbol}", StandardUnits.WaveNumber, 1.0 / image.X.Unit.ScaleToBase);
-        var psdUnit = new Unit($"{image.Channel.Unit.Symbol}²·{image.X.Unit.Symbol}", new Dimension("PsdDensity1D"), 1.0);
+        var zUnit = image.Channel.Unit;
+        var xUnit = image.X.Unit;
+
+        var frequencyUnit = new Unit($"1/{xUnit.Symbol}", StandardUnits.WaveNumber, 1.0 / xUnit.ScaleToBase);
+
+        // PSD is [Z]²·[X-length]. Its dimension carries the source value + length dimensions (so nm²·um ↔ um²·um
+        // convert but nm²·um ↔ pN²·um do not), and its scale to the base is ScaleZ²·ScaleX.
+        var psdDimension = new Dimension($"{zUnit.Dimension.Name}^2*{xUnit.Dimension.Name}");
+        double psdScale = zUnit.ScaleToBase * zUnit.ScaleToBase * xUnit.ScaleToBase;
+        var psdUnit = new Unit($"{zUnit.Symbol}²·{xUnit.Symbol}", psdDimension, psdScale);
 
         // Uniform frequency axis f_k = k·Δf for k = 1..M/2 (DC dropped): origin = Δf, step = Δf.
         var frequencyAxis = new Axis("Frequency", frequencyUnit, result.FrequencyStep, result.FrequencyStep, psd.Length);

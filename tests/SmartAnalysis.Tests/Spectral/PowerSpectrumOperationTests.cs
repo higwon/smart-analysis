@@ -87,6 +87,49 @@ public sealed class PowerSpectrumOperationTests
         Assert.Equal("1/um", profile.X.Unit.Symbol);
         Assert.Equal("nm²·um", profile.Channel.Unit.Symbol);             // [Z]²·[X-length]
         Assert.Equal(profile.X.Origin, profile.X.Step, 12);              // DC dropped → first bin is Δf
+
+        // The PSD value unit's scale to base is ScaleZ²·ScaleX: (nm=1e-9)²·(um=1e-6) = 1e-24.
+        Assert.Equal(1e-24, profile.Channel.Unit.ScaleToBase, 15);
+    }
+
+    [Fact]
+    public async Task Psd_units_of_the_same_composite_dimension_are_convertible_but_different_ones_are_not()
+    {
+        // Two images differing only in Z unit (nm vs um) → PSD units nm²·um and um²·um: same composite
+        // dimension (convertible), and the scale ratio matches (um/nm)² = 1e6.
+        using var nmImage = CosineImage(16, 2, cycles: 2, dx: 1.0);
+        using var umImage = new ScanImageDataset(
+            DatasetId.New(),
+            new DataSource("test", null),
+            new Axis("X", StandardUnits.Micrometre, 0.0, 1.0, 16),
+            new Axis("Y", StandardUnits.Micrometre, 0.0, 1.0, 2),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Micrometre),
+            ScanBuffer<float>.Allocate(16, 2),
+            ScanMetadata.Unknown,
+            ProvenanceRecord.Root);
+
+        using var nmPsd = await RunAsync(nmImage);
+        using var umPsd = await RunAsync(umImage);
+
+        Assert.True(nmPsd.Channel.Unit.IsConvertibleTo(umPsd.Channel.Unit)); // nm²·um ↔ um²·um
+        Assert.Equal(1e6, umPsd.Channel.Unit.ScaleToBase / nmPsd.Channel.Unit.ScaleToBase, 6);
+    }
+
+    [Fact]
+    public void Rejects_a_non_length_x_axis()
+    {
+        // A spectrum's X axis (WaveNumber) is not a length — the spatial PSD is undefined for it.
+        using var spectrumLike = new ScanImageDataset(
+            DatasetId.New(),
+            new DataSource("test", null),
+            new Axis("X", StandardUnits.PerMetre, 0.0, 1.0, 16),
+            new Axis("Y", StandardUnits.Micrometre, 0.0, 1.0, 2),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.Allocate(16, 2),
+            ScanMetadata.Unknown,
+            ProvenanceRecord.Root);
+
+        Assert.False(NewOperation().Validate(new OperationInput(spectrumLike), ParameterSet.Empty).IsValid);
     }
 
     [Fact]
