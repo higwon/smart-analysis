@@ -53,6 +53,31 @@ public sealed class LineProfilePreviewUseCaseTests
     }
 
     [Fact]
+    public void The_returned_input_is_fully_owned_and_valid_after_the_transient_dataset_is_disposed()
+    {
+        // Lifetime contract (ADR-011): the use case builds a transient dataset, projects it to a render input, and
+        // disposes the dataset *before returning*. If the input still borrowed the dataset buffer this would read
+        // freed/pooled memory; because ForLineProfile copies into owned arrays, the values are correct here — read
+        // only after the use case (and its dispose) have completed. z = column index, so a horizontal line reads 0..4.
+        using var image = RampImage();
+        ILineProfilePreview preview = new LineProfilePreviewUseCase();
+
+        var input = preview.Preview(image, 0, 2, 4, 2, samples: 5);
+
+        // Churn allocations that would clobber a pooled buffer if the input were still borrowing one.
+        for (int i = 0; i < 16; i++)
+        {
+            _ = new float[5 * 5];
+        }
+
+        var y = Assert.Single(input!.Series).Y.Span;
+        for (int i = 0; i < y.Length; i++)
+        {
+            Assert.Equal(i, y[i], 5); // still the sampled Z (= column index), post-dispose
+        }
+    }
+
+    [Fact]
     public void Preview_uses_the_effective_clamped_line()
     {
         using var image = RampImage();
