@@ -188,15 +188,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateLinePreview()
-    {
-        double Field(string name) => AsDouble(_lineFields.FirstOrDefault(f => f.Name == name)?.Value);
-        SingleImage.SetLinePreview(Field("x0"), Field("y0"), Field("x1"), Field("y1"));
-    }
-
     private bool _writingLineFields;
 
-    // A drag of the profile line writes the new endpoints back into the form fields.
+    // Form → overlay, then canonicalize the form to the effective (clamped) line the control shows, so the form
+    // value, the drawn line, the drag source, the executed line, and the provenance all agree (the V06 lesson).
+    private void UpdateLinePreview()
+    {
+        if (_writingLineFields)
+        {
+            return; // our own write-back — the overlay is already in sync
+        }
+
+        double Field(string name) => AsDouble(_lineFields.FirstOrDefault(f => f.Name == name)?.Value);
+        SingleImage.SetLinePreview(Field("x0"), Field("y0"), Field("x1"), Field("y1"));
+        if (SingleImage.EffectiveLine is { } e)
+        {
+            WriteLineFields(e);
+        }
+    }
+
+    // Writes the effective endpoints into the form fields (a drag raises the effective line; a form edit is
+    // canonicalized to it). Guarded so the write-back doesn't re-enter UpdateLinePreview.
     private void WriteLineFields((double X0, double Y0, double X1, double Y1) l)
     {
         _writingLineFields = true;
@@ -211,8 +223,6 @@ public partial class MainWindow : Window
         {
             _writingLineFields = false;
         }
-
-        UpdateLinePreview(); // re-render the overlay from the (rounded) field values so drag and form agree
     }
 
     private void SetLineField(string name, double value)

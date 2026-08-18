@@ -39,10 +39,13 @@ public sealed class LineProfileOperation : IAnalysisOperation
         acceptedInputs: [DataKind.ScanImage],
         parameters: new ParameterSchema(
         [
-            new ParameterDescriptor(X0Parameter, typeof(double), defaultValue: 0.0, min: 0.0, max: 1000000.0, help: "Start X (pixels)."),
-            new ParameterDescriptor(Y0Parameter, typeof(double), defaultValue: 0.0, min: 0.0, max: 1000000.0, help: "Start Y (pixels)."),
-            new ParameterDescriptor(X1Parameter, typeof(double), defaultValue: 0.0, min: 0.0, max: 1000000.0, help: "End X (pixels)."),
-            new ParameterDescriptor(Y1Parameter, typeof(double), defaultValue: 0.0, min: 0.0, max: 1000000.0, help: "End Y (pixels)."),
+            // No schema range on the endpoints: they are clamped to the image (the effective line), so an
+            // overhang/negative request is canonicalized rather than rejected — the displayed, dragged, executed,
+            // and recorded line are all the same effective line.
+            new ParameterDescriptor(X0Parameter, typeof(double), defaultValue: 0.0, help: "Start X (pixels; clamped to the image)."),
+            new ParameterDescriptor(Y0Parameter, typeof(double), defaultValue: 0.0, help: "Start Y (pixels; clamped to the image)."),
+            new ParameterDescriptor(X1Parameter, typeof(double), defaultValue: 0.0, help: "End X (pixels; clamped to the image)."),
+            new ParameterDescriptor(Y1Parameter, typeof(double), defaultValue: 0.0, help: "End Y (pixels; clamped to the image)."),
             new ParameterDescriptor(SamplesParameter, typeof(int), defaultValue: DefaultSamples, min: 2, max: 100000, help: "Number of points sampled along the line."),
         ]),
         output: OutputKind.DerivedDataset,
@@ -70,20 +73,26 @@ public sealed class LineProfileOperation : IAnalysisOperation
             return ValidationResult.Fail($"'{Descriptor.Id}' needs spatial (length) X and Y axes to measure arc length.");
         }
 
-        double x0 = parameters.Get<double>(X0Parameter), y0 = parameters.Get<double>(Y0Parameter);
-        double x1 = parameters.Get<double>(X1Parameter), y1 = parameters.Get<double>(Y1Parameter);
-        double maxX = image.X.Count - 1, maxY = image.Y.Count - 1;
-        if (x0 > maxX || x1 > maxX || y0 > maxY || y1 > maxY)
-        {
-            return ValidationResult.Fail($"Line endpoints must lie within the {image.X.Count}×{image.Y.Count} image.");
-        }
-
+        // Clamp to the image (the effective line), then reject only a zero-length effective line.
+        var (x0, y0, x1, y1) = EffectiveLine(image, parameters);
         if (x0 == x1 && y0 == y1)
         {
-            return ValidationResult.Fail("The line has zero length (its endpoints are the same point).");
+            return ValidationResult.Fail("The line has zero length within the image (its clamped endpoints coincide).");
         }
 
         return ValidationResult.Success;
+    }
+
+    // The requested endpoints clamped into [0,width-1]×[0,height-1] — the single effective line that is displayed,
+    // dragged, sampled, and recorded in provenance.
+    private static (double X0, double Y0, double X1, double Y1) EffectiveLine(ScanImageDataset image, IParameterSet parameters)
+    {
+        double maxX = image.X.Count - 1, maxY = image.Y.Count - 1;
+        return (
+            Math.Clamp(parameters.Get<double>(X0Parameter), 0.0, maxX),
+            Math.Clamp(parameters.Get<double>(Y0Parameter), 0.0, maxY),
+            Math.Clamp(parameters.Get<double>(X1Parameter), 0.0, maxX),
+            Math.Clamp(parameters.Get<double>(Y1Parameter), 0.0, maxY));
     }
 
     public Task<OperationResult> RunAsync(
@@ -102,8 +111,9 @@ public sealed class LineProfileOperation : IAnalysisOperation
         }
 
         var image = (ScanImageDataset)input.Primary;
-        double x0 = parameters.Get<double>(X0Parameter), y0 = parameters.Get<double>(Y0Parameter);
-        double x1 = parameters.Get<double>(X1Parameter), y1 = parameters.Get<double>(Y1Parameter);
+        // The single effective line: the request clamped to the image. Everything below — sampling, arc length,
+        // and provenance — uses it, so the executed and recorded line equals the one shown/dragged in the shell.
+        var (x0, y0, x1, y1) = EffectiveLine(image, parameters);
         int samples = parameters.Get<int>(SamplesParameter);
 
         cancellationToken.ThrowIfCancellationRequested();
