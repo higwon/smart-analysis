@@ -1,5 +1,6 @@
 using SmartAnalysis.Analysis.Statistics;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Geometry;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
 
@@ -34,7 +35,7 @@ public sealed class RoughnessOperation : IAnalysisOperation
         id: "image.roughness",
         version: 1,
         displayName: "Roughness (ISO 25178)",
-        summary: "Computes ISO 25178 areal height roughness parameters (Sa, Sq, Sp, Sv, Sz, Ssk, Sku) over the whole image.",
+        summary: "Computes ISO 25178 areal height roughness parameters (Sa, Sq, Sp, Sv, Sz, Ssk, Sku) over the whole image, or a region of interest when one is drawn.",
         acceptedInputs: [DataKind.ScanImage],
         parameters: ParameterSchema.Empty,
         output: OutputKind.Artifact,
@@ -78,17 +79,44 @@ public sealed class RoughnessOperation : IAnalysisOperation
         progress?.Report(new OperationProgress(0.0, "Reading pixels."));
 
         // The image buffer holds physical Z values (FF01); copy to double for the numeric core and flag
-        // non-finite pixels from the INPUT (a +/-Infinity would slip past a NaN-only check).
+        // non-finite pixels from the INPUT (a +/-Infinity would slip past a NaN-only check). With a D02 region of
+        // interest, gather only the masked pixels; otherwise the whole image.
         var pixels = image.Data.Memory.Span;
-        var values = new double[pixels.Length];
+        var region = input.Region;
+        var warnings = new List<OperationWarning>();
+        double[] values;
         bool hasNonFinite = false;
-        for (int i = 0; i < pixels.Length; i++)
+
+        if (region is null)
         {
-            double value = pixels[i];
-            values[i] = value;
-            if (!double.IsFinite(value))
+            values = new double[pixels.Length];
+            for (int i = 0; i < pixels.Length; i++)
             {
-                hasNonFinite = true;
+                double value = pixels[i];
+                values[i] = value;
+                hasNonFinite |= !double.IsFinite(value);
+            }
+        }
+        else
+        {
+            var mask = region.ToMask(image.X.Count, image.Y.Count);
+            var masked = new List<double>();
+            for (int i = 0; i < mask.Length; i++)
+            {
+                if (!mask[i])
+                {
+                    continue;
+                }
+
+                double value = pixels[i];
+                masked.Add(value);
+                hasNonFinite |= !double.IsFinite(value);
+            }
+
+            values = masked.ToArray();
+            if (values.Length == 0)
+            {
+                warnings.Add(new OperationWarning("roughness.empty-region", "The region contains no pixels; roughness parameters are undefined."));
             }
         }
 
@@ -97,7 +125,6 @@ public sealed class RoughnessOperation : IAnalysisOperation
 
         var stats = SummaryStatistics.Compute(values);
         var zUnit = image.Channel.Unit;
-        var warnings = new List<OperationWarning>();
 
         if (hasNonFinite)
         {
@@ -122,6 +149,17 @@ public sealed class RoughnessOperation : IAnalysisOperation
             ["Sku"] = new(stats.Kurtosis, StandardUnits.One),
         };
 
+        // Record the region bounds (if any) so a region roughness is distinguishable from the whole-image run.
+        var regionParams = new Dictionary<string, PhysicalValue>();
+        if (region is { } roi)
+        {
+            var b = roi.Bounds;
+            regionParams["regionLeft"] = new(b.Left, StandardUnits.One);
+            regionParams["regionTop"] = new(b.Top, StandardUnits.One);
+            regionParams["regionWidth"] = new(b.Width, StandardUnits.One);
+            regionParams["regionHeight"] = new(b.Height, StandardUnits.One);
+        }
+
         var artifactId = DatasetId.New();
         var step = new ProvenanceStep(
             stepId: Guid.NewGuid().ToString("D"),
@@ -131,7 +169,7 @@ public sealed class RoughnessOperation : IAnalysisOperation
             operationVersion: Descriptor.Version,
             order: 0,
             environment: _environment.Capture(),
-            parameters: new Dictionary<string, PhysicalValue>(),
+            parameters: regionParams,
             warnings: warnings,
             parentResultId: artifactId);
 
