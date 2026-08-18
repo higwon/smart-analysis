@@ -15,38 +15,44 @@ public static class SurfaceMeshBuilder
 
     /// <param name="z">Row-major samples, length <c>width·height</c>.</param>
     /// <param name="range">The value range mapped to the full height band + colormap (as the 2D view).</param>
+    /// <param name="physicalSpanX">Physical X extent (any common unit) for the footprint aspect; &lt;= 0 falls back to pixels.</param>
+    /// <param name="physicalSpanY">Physical Y extent in the same unit as <paramref name="physicalSpanX"/>.</param>
     /// <param name="maxResolution">The largest grid dimension after decimation (&gt;= 2).</param>
     /// <param name="heightScale">Peak-to-peak height as a fraction of the footprint.</param>
     public static SurfaceMesh Build(
-        ReadOnlySpan<float> z, int width, int height, ValueRange range, int maxResolution = 256, double heightScale = DefaultHeightScale)
+        ReadOnlySpan<float> z, int width, int height, ValueRange range,
+        double physicalSpanX = 0.0, double physicalSpanY = 0.0, int maxResolution = 256, double heightScale = DefaultHeightScale)
     {
         if (width < 2 || height < 2)
         {
             return new SurfaceMesh(0, 0, [], [], [], []);
         }
 
+        // Endpoint-inclusive decimation: at most `cap` nodes per axis, always including index 0 and count-1 so the
+        // mesh fills the full scan extent (a plain stride would drop the far row/column).
         int cap = Math.Max(2, maxResolution);
-        int stride = Math.Max(1, (int)Math.Ceiling((double)Math.Max(width, height) / cap));
-        int gw = ((width - 1) / stride) + 1;
-        int gh = ((height - 1) / stride) + 1;
+        int gw = Math.Min(width, cap);
+        int gh = Math.Min(height, cap);
+        static int Src(int g, int gridCount, int count)
+            => (int)Math.Round((double)g * (count - 1) / (gridCount - 1), MidpointRounding.AwayFromZero);
 
-        // Aspect-preserving unit footprint: the longer axis spans 1.0, centred on the origin.
-        double span = Math.Max(width - 1, height - 1);
-        double halfX = (width - 1) / span / 2.0;
-        double halfY = (height - 1) / span / 2.0;
+        // Aspect-preserving unit footprint from the PHYSICAL extent (not the pixel count), so a 10&#160;µm × 2&#160;µm
+        // scan is not squared up. Fall back to pixels when no physical span is supplied.
+        double spanX = physicalSpanX > 0 && double.IsFinite(physicalSpanX) ? physicalSpanX : width - 1;
+        double spanY = physicalSpanY > 0 && double.IsFinite(physicalSpanY) ? physicalSpanY : height - 1;
+        double maxSpan = Math.Max(spanX, spanY);
+        double halfX = spanX / maxSpan / 2.0;
+        double halfY = spanY / maxSpan / 2.0;
 
         var positions = new double[gw * gh * 3];
         var textureU = new double[gw * gh];
 
-        // Source sample for a grid node (the last row/col snaps to the far edge so the surface fills the footprint).
-        int Src(int g, int stride1, int count) => Math.Min(g * stride1, count - 1);
-
         for (int gy = 0; gy < gh; gy++)
         {
-            int sy = Src(gy, stride, height);
+            int sy = Src(gy, gh, height);
             for (int gx = 0; gx < gw; gx++)
             {
-                int sx = Src(gx, stride, width);
+                int sx = Src(gx, gw, width);
                 double t = range.Normalize(z[(sy * width) + sx]);
                 if (double.IsNaN(t))
                 {

@@ -33,9 +33,45 @@ public sealed class SurfaceMeshBuilderTests
     {
         var mesh = SurfaceMeshBuilder.Build(Constant(400, 400, 0f), 400, 400, new ValueRange(0, 1), maxResolution: 100);
 
-        // stride = ceil(400/100) = 4 → grid = (399/4)+1 = 100 per axis.
         Assert.Equal(100, mesh.GridWidth);
         Assert.Equal(100, mesh.GridHeight);
+    }
+
+    [Fact]
+    public void Decimation_includes_both_endpoints_and_fills_the_full_extent()
+    {
+        // z = column index over [0, 399]. If the far column (399) were dropped (a plain stride bug), the max
+        // texture coordinate would be < 1. Endpoint-inclusive mapping must reach it exactly.
+        var z = new float[400 * 8];
+        for (int y = 0; y < 8; y++)
+        {
+            for (int x = 0; x < 400; x++)
+            {
+                z[(y * 400) + x] = x;
+            }
+        }
+
+        var mesh = SurfaceMeshBuilder.Build(z, 400, 8, new ValueRange(0, 399), maxResolution: 100);
+
+        double maxU = double.NegativeInfinity, minU = double.PositiveInfinity;
+        for (int v = 0; v < mesh.VertexCount; v++)
+        {
+            maxU = Math.Max(maxU, mesh.TextureU[v]);
+            minU = Math.Min(minU, mesh.TextureU[v]);
+        }
+
+        Assert.Equal(0.0, minU, 9); // column 0 included
+        Assert.Equal(1.0, maxU, 9); // column 399 (the far edge) included — not 396/399
+
+        // And the footprint fills the whole unit width (both extreme X positions present).
+        double minX = double.PositiveInfinity, maxX = double.NegativeInfinity;
+        for (int v = 0; v < mesh.VertexCount; v++)
+        {
+            minX = Math.Min(minX, mesh.Positions[v * 3]);
+            maxX = Math.Max(maxX, mesh.Positions[v * 3]);
+        }
+
+        Assert.Equal(1.0, maxX - minX, 9);
     }
 
     [Fact]
@@ -80,10 +116,11 @@ public sealed class SurfaceMeshBuilderTests
     }
 
     [Fact]
-    public void The_footprint_preserves_the_scan_aspect_ratio()
+    public void The_footprint_preserves_the_physical_aspect_not_the_pixel_count()
     {
-        // A wide scan (width > height): X should span the full unit width, Y a proportionally smaller band.
-        var mesh = SurfaceMeshBuilder.Build(Constant(9, 3, 0f), 9, 3, new ValueRange(0, 1));
+        // A SQUARE pixel grid (16×16) but a 10 × 2 physical scan → the footprint must be 5:1, driven by the
+        // physical spans, not the (equal) pixel counts.
+        var mesh = SurfaceMeshBuilder.Build(Constant(16, 16, 0f), 16, 16, new ValueRange(0, 1), physicalSpanX: 10.0, physicalSpanY: 2.0);
 
         double minX = double.PositiveInfinity, maxX = double.NegativeInfinity;
         double minY = double.PositiveInfinity, maxY = double.NegativeInfinity;
@@ -95,8 +132,23 @@ public sealed class SurfaceMeshBuilderTests
             maxY = Math.Max(maxY, mesh.Positions[(v * 3) + 1]);
         }
 
-        Assert.Equal(1.0, maxX - minX, 9);                 // long axis spans the unit footprint
-        Assert.Equal(2.0 / 8.0, maxY - minY, 9);           // short axis is (h-1)/(w-1) of it
+        Assert.Equal(1.0, maxX - minX, 9);       // long physical axis spans the unit footprint
+        Assert.Equal(2.0 / 10.0, maxY - minY, 9); // short axis is spanY/spanX of it, despite equal pixel counts
+    }
+
+    [Fact]
+    public void The_footprint_falls_back_to_pixels_when_no_physical_span_is_given()
+    {
+        var mesh = SurfaceMeshBuilder.Build(Constant(9, 3, 0f), 9, 3, new ValueRange(0, 1));
+
+        double minY = double.PositiveInfinity, maxY = double.NegativeInfinity;
+        for (int v = 0; v < mesh.VertexCount; v++)
+        {
+            minY = Math.Min(minY, mesh.Positions[(v * 3) + 1]);
+            maxY = Math.Max(maxY, mesh.Positions[(v * 3) + 1]);
+        }
+
+        Assert.Equal(2.0 / 8.0, maxY - minY, 9); // (h-1)/(w-1) pixel fallback
     }
 
     [Fact]

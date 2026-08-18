@@ -45,7 +45,10 @@ public partial class AfmSurfaceView : UserControl, ISurfaceView
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var mesh = SurfaceMeshBuilder.Build(input.Z.Span, input.Width, input.Height, input.Range);
+        // Physical extents in the base unit, so the footprint aspect is correct even when X/Y use different units.
+        double spanX = Math.Abs(input.X.End - input.X.Start) * input.X.ScaleToBase;
+        double spanY = Math.Abs(input.Y.End - input.Y.Start) * input.Y.ScaleToBase;
+        var mesh = SurfaceMeshBuilder.Build(input.Z.Span, input.Width, input.Height, input.Range, spanX, spanY);
         _surface.Geometry = ToGeometry(mesh);
         _surface.Material = new DiffuseMaterial(new ImageBrush(ColormapTexture(input.Colormap))
         {
