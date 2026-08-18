@@ -1,4 +1,5 @@
 using System.Numerics;
+using SmartAnalysis.Analysis.Spectral;
 
 namespace SmartAnalysis.Analysis.Filtering;
 
@@ -183,61 +184,8 @@ public static class FourierFilters
         }
     }
 
-    // Iterative in-place radix-2 Cooley–Tukey. Length must be a power of two; the inverse divides by n.
-    private static void Fft1D(Complex[] a, bool inverse)
-    {
-        int n = a.Length;
+    // Radix-2 Cooley–Tukey, shared with the PSD op (A08).
+    private static void Fft1D(Complex[] a, bool inverse) => FastFourierTransform.Transform(a, inverse);
 
-        for (int i = 1, j = 0; i < n; i++)
-        {
-            int bit = n >> 1;
-            for (; (j & bit) != 0; bit >>= 1)
-            {
-                j ^= bit;
-            }
-
-            j ^= bit;
-            if (i < j)
-            {
-                (a[i], a[j]) = (a[j], a[i]);
-            }
-        }
-
-        for (int len = 2; len <= n; len <<= 1)
-        {
-            double angle = 2.0 * Math.PI / len * (inverse ? 1 : -1);
-            var wLen = new Complex(Math.Cos(angle), Math.Sin(angle));
-            for (int i = 0; i < n; i += len)
-            {
-                var w = Complex.One;
-                for (int k = 0; k < len / 2; k++)
-                {
-                    var even = a[i + k];
-                    var odd = a[i + k + (len / 2)] * w;
-                    a[i + k] = even + odd;
-                    a[i + k + (len / 2)] = even - odd;
-                    w *= wLen;
-                }
-            }
-        }
-
-        if (inverse)
-        {
-            for (int i = 0; i < n; i++)
-            {
-                a[i] /= n;
-            }
-        }
-    }
-
-    private static int NextPowerOfTwo(int value)
-    {
-        int power = 1;
-        while (power < value)
-        {
-            power <<= 1;
-        }
-
-        return power;
-    }
+    private static int NextPowerOfTwo(int value) => FastFourierTransform.NextPowerOfTwo(value);
 }

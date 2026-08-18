@@ -52,6 +52,7 @@ public sealed class ShellViewModel : ObservableObject
     private string? _activeMeta;
     private ScanImageDataset? _activeImage;
     private ScanImageDataset? _beforeImage;
+    private LineProfileDataset? _activeCurve;
     private InspectorRole _inspectorRole = InspectorRole.DatasetProperties;
     private bool _isLauncherOpen;
     private object? _operationEditor;
@@ -401,9 +402,13 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>The comparison "before" image (the source) when in Before/After; null otherwise.</summary>
     public ScanImageDataset? BeforeImage { get => _beforeImage; private set => SetProperty(ref _beforeImage, value); }
 
+    /// <summary>The active dataset when it is a 1D curve (profile/spectrum, e.g. a PSD); drives the curve view.</summary>
+    public LineProfileDataset? ActiveCurve { get => _activeCurve; private set => SetProperty(ref _activeCurve, value); }
+
     public bool HasActiveImage => _activeImage is not null;
     public bool IsBeforeAfter => _activeImage is not null && _beforeImage is not null;
     public bool IsSingleImage => _activeImage is not null && _beforeImage is null;
+    public bool IsSingleCurve => _activeCurve is not null;
 
     /// <summary>
     /// Raised when the images to display change. The <b>view</b> handles rendering: it builds a fresh
@@ -630,6 +635,7 @@ public sealed class ShellViewModel : ObservableObject
             (ActiveSubtitle, ActiveMeta) = Describe(dataset);
             BuildHistory(dataset);
             ActiveImage = dataset as ScanImageDataset;
+            ActiveCurve = dataset as LineProfileDataset;
             BeforeImage = FirstComparisonImage(active);
         }
         else
@@ -640,6 +646,7 @@ public sealed class ShellViewModel : ObservableObject
             ActiveMeta = null;
             HistoryRows.Clear();
             ActiveImage = null;
+            ActiveCurve = null;
             BeforeImage = null;
         }
 
@@ -655,6 +662,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(HasActiveImage));
         OnPropertyChanged(nameof(IsBeforeAfter));
         OnPropertyChanged(nameof(IsSingleImage));
+        OnPropertyChanged(nameof(IsSingleCurve));
         (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
         _runStatistics.RaiseCanExecuteChanged();
         (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
