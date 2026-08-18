@@ -345,9 +345,10 @@ public partial class MainWindow : Window
         }
 
         SingleCurve.Clear();
-        if (_viewModel.IsSingleImage && _viewModel.Is3D && _viewModel.ActiveImage is { } surfaceImage)
+        if (_viewModel.ShowSingle3D && _viewModel.ActiveImage is { } surfaceImage)
         {
-            // 3D surface view of the single active image (V04) — same render input as the 2D view.
+            // 3D surface view of the single active image (V04) — same render input as the 2D view. ShowSingle3D
+            // (not raw Is3D) so an open overlay editor keeps the 2D stage even when 3D is the preference.
             SingleSurface.Render(RenderInputFactory.ForImage(surfaceImage, colormap, _viewModel.EffectiveRange));
             SingleImage.Clear();
             BeforeImageView.Clear();

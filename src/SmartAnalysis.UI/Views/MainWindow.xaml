@@ -246,6 +246,7 @@
                                 </Button>
                                 <CheckBox Style="{StaticResource SA.CheckBox}" Content="3D" VerticalAlignment="Center"
                                           Margin="{DynamicResource SA.Gap.Left2}" IsChecked="{Binding Is3D}"
+                                          Visibility="{Binding CanToggle3D, Converter={StaticResource Bool2Vis}}"
                                           ToolTip="View the active image as a 3D surface"/>
                                 <!-- Palette: colormap picker + Auto/Manual value range (legacy-parity). Kept compact
                                      so it doesn't crowd out Export at the min window width. -->
