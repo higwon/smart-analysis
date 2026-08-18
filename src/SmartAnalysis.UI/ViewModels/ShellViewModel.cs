@@ -6,6 +6,7 @@ using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Units;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.Mvvm;
 using SmartAnalysis.UI.Services;
@@ -714,16 +715,57 @@ public sealed class ShellViewModel : ObservableObject
         if (dataset.Provenance.IsRoot)
         {
             var file = dataset.Source.OriginalFilePath is { } p ? Path.GetFileName(p) : dataset.Source.FormatId;
-            HistoryRows.Add(new HistoryRowViewModel(1, "Import", file, HistoryStatus.Done));
+            HistoryRows.Add(new HistoryRowViewModel(1, "Import", file, HistoryStatus.Done, operationId: dataset.Source.FormatId));
             return;
         }
 
         var order = 1;
         foreach (var step in dataset.Provenance.Steps)
         {
-            HistoryRows.Add(new HistoryRowViewModel(order++, FriendlyOp(step.OperationId), step.OperationId, HistoryStatus.Done));
+            var parameters = new List<StepParameterViewModel>();
+            foreach (var (name, value) in step.Parameters)
+            {
+                parameters.Add(new StepParameterViewModel(name, FormatValue(value)));
+            }
+
+            var warnings = new List<string>();
+            foreach (var warning in step.Warnings)
+            {
+                warnings.Add(warning.Message);
+            }
+
+            var status = step.Errors.Count > 0 ? HistoryStatus.Failed : HistoryStatus.Done;
+            HistoryRows.Add(new HistoryRowViewModel(
+                order++,
+                FriendlyOp(step.OperationId),
+                SummarizeParameters(parameters),
+                status,
+                parameters,
+                warnings,
+                step.OperationId));
         }
     }
+
+    // "name value · name value" for the strip; the friendly op name already says what ran.
+    private static string SummarizeParameters(IReadOnlyList<StepParameterViewModel> parameters)
+    {
+        if (parameters.Count == 0)
+        {
+            return "no parameters";
+        }
+
+        var parts = new List<string>(parameters.Count);
+        foreach (var p in parameters)
+        {
+            parts.Add($"{p.Name} {p.Value}");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    // Dimensionless values (unit "1") drop the symbol; everything else shows "value unit".
+    private static string FormatValue(PhysicalValue value)
+        => value.Unit.Symbol == "1" ? $"{value.Value:G4}" : $"{value.Value:G4} {value.Unit.Symbol}";
 
     private static string DatasetLabel(AfmDataset dataset)
     {
