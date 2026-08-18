@@ -108,16 +108,18 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Selecting region."));
 
-        // The measured region is the request clamped to the grid (left/top are in-bounds per Validate); provenance
-        // records this effective extent so two requests that select the same pixels share one history (the A04/crop
-        // lesson). Not the same as the mask's own clamp — this is what we write to history.
+        // The measured region is the request's bounding box clamped to the grid (left/top are in-bounds per
+        // Validate). Provenance records this effective extent, AND the ROI is built from it — so the shape is the
+        // one the shell shows (which also clamps the bbox first). For a rectangle, clamping the box equals clipping
+        // the raw box; for an ellipse it does NOT — the raw box would define a larger, off-centre ellipse whose
+        // clipped half differs from the inscribed ellipse of the clamped box (the displayed ROI). So clamp first.
         int effectiveWidth = Math.Min(roiWidth, width - left);
         int effectiveHeight = Math.Min(roiHeight, height - top);
 
-        // The D02 ROI mask (clamped to the grid by ToMask): gather the finite pixels inside the chosen shape.
+        // The D02 ROI mask (built on the effective bbox; ToMask further clips to the grid): gather the finite pixels.
         Roi roi = shape == RoiShape.Ellipse
-            ? new EllipseRoi(left, top, roiWidth, roiHeight)
-            : new RectangleRoi(left, top, roiWidth, roiHeight);
+            ? new EllipseRoi(left, top, effectiveWidth, effectiveHeight)
+            : new RectangleRoi(left, top, effectiveWidth, effectiveHeight);
         var mask = roi.ToMask(width, height);
         var pixels = image.Data.Memory.Span;
         var values = new List<double>();

@@ -97,6 +97,26 @@ public sealed class RoiStatisticsOperationTests
         Assert.Equal(0.0, rect.Provenance.Steps[^1].Parameters[RoiStatisticsOperation.ShapeParameter].Value, 6);
     }
 
+    [Fact]
+    public async Task An_overhang_ellipse_is_the_inscribed_ellipse_of_the_clamped_bbox_the_shell_shows()
+    {
+        // On a 20×20 image, an overhanging ellipse bbox (0,0,100,100) must be the SAME ROI as (0,0,20,20): the op
+        // builds the ellipse on the effective (clamped) bounding box — the one the V06 overlay draws — so the
+        // measured mask, the stats, and the provenance extent all match the displayed ellipse. (For a raw-bbox
+        // ellipse they would differ, since a bigger off-centre ellipse's clipped part ≠ the inscribed ellipse.)
+        using var image = FlatImage(20, 20);
+
+        var overhang = await RunAsync(image, RegionShaped(RoiShape.Ellipse, 0, 0, 100, 100));
+        var exact = await RunAsync(image, RegionShaped(RoiShape.Ellipse, 0, 0, 20, 20));
+
+        Assert.Equal(exact.Scalars["PixelCount"].Value, overhang.Scalars["PixelCount"].Value, 6);
+        var o = overhang.Provenance.Steps[^1].Parameters;
+        var e = exact.Provenance.Steps[^1].Parameters;
+        Assert.Equal(e[RoiStatisticsOperation.WidthParameter].Value, o[RoiStatisticsOperation.WidthParameter].Value, 6);
+        Assert.Equal(e[RoiStatisticsOperation.HeightParameter].Value, o[RoiStatisticsOperation.HeightParameter].Value, 6);
+        Assert.Equal(20.0, o[RoiStatisticsOperation.WidthParameter].Value, 6); // clamped to the image
+    }
+
     private static async Task<AnalysisArtifact> RunAsync(ScanImageDataset image, ParameterSet region)
     {
         var result = await NewOperation().RunAsync(new OperationInput(image), region, null, CancellationToken.None);
