@@ -298,8 +298,10 @@
                         </Grid>
                     </Border>
 
-                    <!-- content -->
+                    <!-- content: the viewer stack, plus a docked live profile chart (line-profile mode) -->
                     <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
                         <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}" IsRangeEditable="True"
                                           Visibility="{Binding IsSingleImage, Converter={StaticResource Bool2Vis}}"/>
                         <ctl:AfmCurveView x:Name="SingleCurve" Margin="{DynamicResource SA.Gap.2}"
@@ -343,6 +345,18 @@
                                 <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
                                            Foreground="{DynamicResource SA.Brush.Banner.Error.Foreground}" Style="{StaticResource SA.Text.Body}"/>
                             </StackPanel>
+                        </Border>
+                        </Grid>
+
+                        <!-- Live profile chart: shown while a line-profile form is open; updates as the line drags -->
+                        <Border x:Name="LineProfilePanel" Grid.Row="1" Height="220" Visibility="Collapsed"
+                                BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Top}"
+                                Background="{DynamicResource SA.Brush.Surface.Default}">
+                            <DockPanel Margin="{DynamicResource SA.Gap.2}">
+                                <TextBlock DockPanel.Dock="Top" Text="LINE PROFILE" Margin="{DynamicResource SA.Gap.2}"
+                                           Foreground="{DynamicResource SA.Brush.Text.Tertiary}" Style="{StaticResource SA.Text.SectionLabel}"/>
+                                <ctl:AfmCurveView x:Name="ProfileChart"/>
+                            </DockPanel>
                         </Border>
                     </Grid>
                 </DockPanel>
