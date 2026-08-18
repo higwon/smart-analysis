@@ -99,6 +99,44 @@ public sealed class ShellProvenancePanelTests
     }
 
     [Fact]
+    public void The_inspector_shows_the_exact_recorded_value_not_a_rounded_one()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var root = Root();
+
+        // A value with more than G4 significant digits: the auditable Inspector detail must not lose them.
+        const double recorded = 0.123456789;
+        var step = new ProvenanceStep(
+            stepId: "s1",
+            inputDatasetId: root.Id,
+            inputVersion: 0,
+            operationId: "image.fourier",
+            operationVersion: 1,
+            order: 0,
+            environment: ExecutionEnvironment.Unknown,
+            parameters: new Dictionary<string, PhysicalValue> { ["lowCutoff"] = new(recorded, StandardUnits.One) });
+        var derived = new ScanImageDataset(
+            DatasetId.New(), DataSource.Derived, root.X, root.Y, root.Channel,
+            ScanBuffer<float>.Allocate(4, 4), ScanMetadata.Unknown,
+            ProvenanceRecord.DerivedFrom(root.Id, [step]));
+
+        ws.Add(root);
+        ws.Add(derived);
+        ws.SetActive(derived.Id);
+
+        var row = Assert.Single(vm.HistoryRows);
+
+        // Inspector value: exact and round-trippable back to the recorded double.
+        var shown = Assert.Single(row.Parameters).Value;
+        Assert.Equal("0.123456789", shown);
+        Assert.Equal(recorded, double.Parse(shown, System.Globalization.CultureInfo.InvariantCulture), 15);
+
+        // Strip summary may round for a compact glance.
+        Assert.Contains("lowCutoff 0.1235", row.Summary);
+    }
+
+    [Fact]
     public void A_physical_parameter_keeps_its_unit_symbol()
     {
         var ws = new Workspace();

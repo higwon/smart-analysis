@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Windows.Input;
 using SmartAnalysis.Application.Analysis;
@@ -723,9 +724,13 @@ public sealed class ShellViewModel : ObservableObject
         foreach (var step in dataset.Provenance.Steps)
         {
             var parameters = new List<StepParameterViewModel>();
+            var summaryParts = new List<string>();
             foreach (var (name, value) in step.Parameters)
             {
-                parameters.Add(new StepParameterViewModel(name, FormatValue(value)));
+                // The Inspector shows the exact recorded value (round-trippable — this is auditable detail); the
+                // strip summary is only a compact glance, so it may round.
+                parameters.Add(new StepParameterViewModel(name, FormatValuePrecise(value)));
+                summaryParts.Add($"{name} {FormatValueCompact(value)}");
             }
 
             var warnings = new List<string>();
@@ -738,7 +743,7 @@ public sealed class ShellViewModel : ObservableObject
             HistoryRows.Add(new HistoryRowViewModel(
                 order++,
                 FriendlyOp(step.OperationId),
-                SummarizeParameters(parameters),
+                summaryParts.Count == 0 ? "no parameters" : string.Join(" · ", summaryParts),
                 status,
                 parameters,
                 warnings,
@@ -746,25 +751,15 @@ public sealed class ShellViewModel : ObservableObject
         }
     }
 
-    // "name value · name value" for the strip; the friendly op name already says what ran.
-    private static string SummarizeParameters(IReadOnlyList<StepParameterViewModel> parameters)
+    // Inspector detail: the exact recorded value (shortest round-trippable form), so what is shown equals what ran.
+    private static string FormatValuePrecise(PhysicalValue value)
     {
-        if (parameters.Count == 0)
-        {
-            return "no parameters";
-        }
-
-        var parts = new List<string>(parameters.Count);
-        foreach (var p in parameters)
-        {
-            parts.Add($"{p.Name} {p.Value}");
-        }
-
-        return string.Join(" · ", parts);
+        var v = value.Value.ToString(CultureInfo.InvariantCulture);
+        return value.Unit.Symbol == "1" ? v : $"{v} {value.Unit.Symbol}";
     }
 
-    // Dimensionless values (unit "1") drop the symbol; everything else shows "value unit".
-    private static string FormatValue(PhysicalValue value)
+    // Strip glance: a rounded value. Dimensionless values (unit "1") drop the symbol.
+    private static string FormatValueCompact(PhysicalValue value)
         => value.Unit.Symbol == "1" ? $"{value.Value:G4}" : $"{value.Value:G4} {value.Unit.Symbol}";
 
     private static string DatasetLabel(AfmDataset dataset)
