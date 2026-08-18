@@ -314,7 +314,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var target = _viewModel.IsBeforeAfter ? (FrameworkElement)CompareContent : SingleImage;
+        var target = _viewModel.IsBeforeAfter ? (FrameworkElement)CompareContent
+            : _viewModel.Is3D ? SingleSurface
+            : SingleImage;
         var bitmap = new RenderTargetBitmap(
             (int)Math.Max(1, target.ActualWidth),
             (int)Math.Max(1, target.ActualHeight),
@@ -336,12 +338,24 @@ public partial class MainWindow : Window
             // The first curve-producing op (A08 PSD): route the active line profile to the curve view.
             SingleCurve.Render(RenderInputFactory.ForLineProfile(curve));
             SingleImage.Clear();
+            SingleSurface.Clear();
             BeforeImageView.Clear();
             AfterImageView.Clear();
             return;
         }
 
         SingleCurve.Clear();
+        if (_viewModel.IsSingleImage && _viewModel.Is3D && _viewModel.ActiveImage is { } surfaceImage)
+        {
+            // 3D surface view of the single active image (V04) — same render input as the 2D view.
+            SingleSurface.Render(RenderInputFactory.ForImage(surfaceImage, colormap, _viewModel.EffectiveRange));
+            SingleImage.Clear();
+            BeforeImageView.Clear();
+            AfterImageView.Clear();
+            return;
+        }
+
+        SingleSurface.Clear();
         if (_viewModel.IsBeforeAfter && _viewModel.BeforeImage is { } before && _viewModel.ActiveImage is { } after)
         {
             // Each pane uses its OWN data range so both stay legible: a transform like Flatten removes the

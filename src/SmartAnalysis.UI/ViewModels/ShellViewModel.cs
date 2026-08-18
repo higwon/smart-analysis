@@ -55,6 +55,7 @@ public sealed class ShellViewModel : ObservableObject
     private ScanImageDataset? _activeImage;
     private ScanImageDataset? _beforeImage;
     private LineProfileDataset? _activeCurve;
+    private bool _is3D;
     private InspectorRole _inspectorRole = InspectorRole.DatasetProperties;
     private bool _isLauncherOpen;
     private object? _operationEditor;
@@ -412,6 +413,25 @@ public sealed class ShellViewModel : ObservableObject
     public bool IsSingleImage => _activeImage is not null && _beforeImage is null;
     public bool IsSingleCurve => _activeCurve is not null;
 
+    /// <summary>Whether the single image is shown as a 3D surface (V04) rather than the 2D view. Persists across
+    /// active-image changes so the chosen view mode sticks; ignored for Before/After and curves.</summary>
+    public bool Is3D
+    {
+        get => _is3D;
+        set
+        {
+            if (SetProperty(ref _is3D, value))
+            {
+                OnPropertyChanged(nameof(ShowSingle2D));
+                OnPropertyChanged(nameof(ShowSingle3D));
+                ImagesChanged?.Invoke(this, EventArgs.Empty); // re-render into the newly shown view
+            }
+        }
+    }
+
+    public bool ShowSingle2D => IsSingleImage && !_is3D;
+    public bool ShowSingle3D => IsSingleImage && _is3D;
+
     /// <summary>
     /// Raised when the images to display change. The <b>view</b> handles rendering: it builds a fresh
     /// <c>ImageRenderInput</c> from <see cref="ActiveImage"/>/<see cref="BeforeImage"/> and calls
@@ -665,6 +685,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(IsBeforeAfter));
         OnPropertyChanged(nameof(IsSingleImage));
         OnPropertyChanged(nameof(IsSingleCurve));
+        OnPropertyChanged(nameof(ShowSingle2D));
+        OnPropertyChanged(nameof(ShowSingle3D));
         (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
         _runStatistics.RaiseCanExecuteChanged();
         (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
