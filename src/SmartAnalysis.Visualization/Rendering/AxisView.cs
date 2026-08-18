@@ -10,17 +10,20 @@ namespace SmartAnalysis.Visualization.Rendering;
 /// index → coordinate correctly and never mirror the image. Ascending extent, when needed, is
 /// <c>min(Start,End)</c>..<c>max(Start,End)</c>. Decouples the backend from the Domain <see cref="Axis"/>.
 /// </summary>
-public sealed record AxisView(string Title, string Unit, double Start, double End, int Count)
+/// <param name="ScaleToBase">Multiplicative factor from the axis unit to its dimension's base unit (e.g. µm →
+/// 1e-6). Lets a backend compare physical extents across axes with <b>different units</b> (a 1&#160;µm × 500&#160;nm
+/// scan): the physical span in base units is <c>|End−Start|·ScaleToBase</c>. Defaults to 1 for a unit-less axis.</param>
+public sealed record AxisView(string Title, string Unit, double Start, double End, int Count, double ScaleToBase = 1.0)
 {
     public static AxisView FromAxis(Axis axis)
     {
         ArgumentNullException.ThrowIfNull(axis);
         if (axis.Count == 0)
         {
-            return new AxisView(axis.Name, axis.Unit.Symbol, axis.Origin, axis.Origin, 0);
+            return new AxisView(axis.Name, axis.Unit.Symbol, axis.Origin, axis.Origin, 0, axis.Unit.ScaleToBase);
         }
 
         // RawToReal already resolves direction: for Reverse, raw 0 maps to the far coordinate.
-        return new AxisView(axis.Name, axis.Unit.Symbol, axis.RawToReal(0), axis.RawToReal(axis.Count - 1), axis.Count);
+        return new AxisView(axis.Name, axis.Unit.Symbol, axis.RawToReal(0), axis.RawToReal(axis.Count - 1), axis.Count, axis.Unit.ScaleToBase);
     }
 }
