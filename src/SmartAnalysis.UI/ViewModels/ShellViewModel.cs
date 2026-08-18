@@ -57,6 +57,8 @@ public sealed class ShellViewModel : ObservableObject
     private LineProfileDataset? _activeCurve;
     private bool _is3D;
     private bool _isInteractiveImageEditing;
+    private bool _roiEnabled;
+    private bool _roiIsEllipse;
     private InspectorRole _inspectorRole = InspectorRole.DatasetProperties;
     private bool _isLauncherOpen;
     private object? _operationEditor;
@@ -196,7 +198,9 @@ public sealed class ShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(ShowSingle2D));
                 OnPropertyChanged(nameof(ShowSingle3D));
                 OnPropertyChanged(nameof(CanToggle3D));
+                OnPropertyChanged(nameof(CanUseRoi));
                 ImagesChanged?.Invoke(this, EventArgs.Empty);
+                RoiChanged?.Invoke(this, EventArgs.Empty); // an editor opening/closing re-evaluates the ROI overlay
             }
         }
     }
@@ -478,7 +482,35 @@ public sealed class ShellViewModel : ObservableObject
     public bool ShowSingle3D => IsSingleImage && _is3D && !_isInteractiveImageEditing;
 
     /// <summary>Whether the 3D toggle is offered — hidden while an overlay editor forces the 2D stage.</summary>
-    public bool CanToggle3D => IsSingleImage && !_isInteractiveImageEditing;
+    public bool CanToggle3D => IsSingleImage && !_isInteractiveImageEditing && !_roiEnabled;
+
+    /// <summary>Whether a persistent region of interest is drawn on the image; a region-capable op (e.g. Roughness)
+    /// then applies to it instead of the whole image. Independent of any operation form.</summary>
+    public bool RoiEnabled
+    {
+        get => _roiEnabled;
+        set
+        {
+            if (SetProperty(ref _roiEnabled, value))
+            {
+                OnPropertyChanged(nameof(CanToggle3D));
+                RoiChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    /// <summary>Whether the drawn ROI is an ellipse (else a rectangle).</summary>
+    public bool RoiIsEllipse
+    {
+        get => _roiIsEllipse;
+        set { if (SetProperty(ref _roiIsEllipse, value)) RoiChanged?.Invoke(this, EventArgs.Empty); }
+    }
+
+    /// <summary>Whether the ROI toggle is offered — single 2D image, and not while an overlay editor is open.</summary>
+    public bool CanUseRoi => IsSingleImage && !_isInteractiveImageEditing;
+
+    /// <summary>Raised when the ROI enable/shape changes so the shell re-draws the overlay + updates the region.</summary>
+    public event EventHandler? RoiChanged;
 
     /// <summary>
     /// Raised when the images to display change. The <b>view</b> handles rendering: it builds a fresh
@@ -736,6 +768,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSingle2D));
         OnPropertyChanged(nameof(ShowSingle3D));
         OnPropertyChanged(nameof(CanToggle3D));
+        OnPropertyChanged(nameof(CanUseRoi));
+        RoiChanged?.Invoke(this, EventArgs.Empty);
         (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
         _runStatistics.RaiseCanExecuteChanged();
         (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
