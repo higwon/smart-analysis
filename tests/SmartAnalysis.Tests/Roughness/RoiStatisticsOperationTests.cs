@@ -55,6 +55,48 @@ public sealed class RoiStatisticsOperationTests
         [RoiStatisticsOperation.HeightParameter] = height,
     });
 
+    private static ParameterSet RegionShaped(RoiShape shape, int left, int top, int width, int height) => new(new Dictionary<string, object?>
+    {
+        [RoiStatisticsOperation.ShapeParameter] = shape,
+        [RoiStatisticsOperation.LeftParameter] = left,
+        [RoiStatisticsOperation.TopParameter] = top,
+        [RoiStatisticsOperation.WidthParameter] = width,
+        [RoiStatisticsOperation.HeightParameter] = height,
+    });
+
+    private static ScanImageDataset FlatImage(int w, int h)
+    {
+        var z = new float[w * h];
+        Array.Fill(z, 1.0f);
+        return new ScanImageDataset(
+            DatasetId.New(),
+            new DataSource("test", null),
+            new Axis("X", StandardUnits.Nanometre, 0.0, 1.0, w),
+            new Axis("Y", StandardUnits.Nanometre, 0.0, 1.0, h),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(z, w, h),
+            ScanMetadata.Unknown,
+            ProvenanceRecord.Root);
+    }
+
+    [Fact]
+    public async Task An_ellipse_selects_about_pi_over_four_of_the_bounding_box_and_records_the_shape()
+    {
+        using var image = FlatImage(20, 20);
+
+        var rect = await RunAsync(image, RegionShaped(RoiShape.Rectangle, 0, 0, 20, 20));
+        var ellipse = await RunAsync(image, RegionShaped(RoiShape.Ellipse, 0, 0, 20, 20));
+
+        Assert.Equal(400.0, rect.Scalars["PixelCount"].Value, 6);              // the full box
+        double fraction = ellipse.Scalars["PixelCount"].Value / 400.0;
+        Assert.True(ellipse.Scalars["PixelCount"].Value < 400);                // the inscribed ellipse is smaller
+        Assert.Equal(Math.PI / 4.0, fraction, 1);                             // ≈ 0.785 of the box
+
+        // The shape is recorded in provenance (1 == Ellipse) so an ellipse and rectangle run differ in history.
+        Assert.Equal(1.0, ellipse.Provenance.Steps[^1].Parameters[RoiStatisticsOperation.ShapeParameter].Value, 6);
+        Assert.Equal(0.0, rect.Provenance.Steps[^1].Parameters[RoiStatisticsOperation.ShapeParameter].Value, 6);
+    }
+
     private static async Task<AnalysisArtifact> RunAsync(ScanImageDataset image, ParameterSet region)
     {
         var result = await NewOperation().RunAsync(new OperationInput(image), region, null, CancellationToken.None);

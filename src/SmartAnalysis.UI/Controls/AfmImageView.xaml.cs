@@ -46,6 +46,7 @@ public partial class AfmImageView : UserControl, IImageView
     private (int Left, int Top, int Width, int Height) _regionStart;
     private (double X, double Y) _regionStartPixel;
     private bool _regionEditable;
+    private bool _regionIsEllipse;
 
     private (double X0, double Y0, double X1, double Y1)? _linePreview;   // the requested line (raw form values)
     private (double X0, double Y0, double X1, double Y1)? _effectiveLine; // clamped to the image — shown AND dragged
@@ -78,6 +79,13 @@ public partial class AfmImageView : UserControl, IImageView
     {
         get => _regionEditable;
         set { _regionEditable = value; UpdateOverlay(); }
+    }
+
+    /// <summary>Draw the region as an inscribed ellipse (with a dashed bounding box) instead of a filled rectangle.</summary>
+    public bool RegionIsEllipse
+    {
+        get => _regionIsEllipse;
+        set { _regionIsEllipse = value; UpdateOverlay(); }
     }
 
     /// <summary>
@@ -126,6 +134,25 @@ public partial class AfmImageView : UserControl, IImageView
         RegionOverlay.Width = w;
         RegionOverlay.Height = h;
         RegionOverlay.Visibility = Visibility.Visible;
+
+        // For an ellipse ROI: the ellipse carries the fill, and the bounding rectangle becomes a dashed guide.
+        if (_regionIsEllipse)
+        {
+            Canvas.SetLeft(RegionEllipseOverlay, x);
+            Canvas.SetTop(RegionEllipseOverlay, y);
+            RegionEllipseOverlay.Width = w;
+            RegionEllipseOverlay.Height = h;
+            RegionEllipseOverlay.Visibility = Visibility.Visible;
+            RegionOverlay.Fill = Brushes.Transparent;
+            RegionOverlay.StrokeDashArray = new DoubleCollection { 3, 3 };
+        }
+        else
+        {
+            RegionEllipseOverlay.Visibility = Visibility.Collapsed;
+            RegionOverlay.SetResourceReference(Shape.FillProperty, "SA.Brush.Chart.Selection");
+            RegionOverlay.StrokeDashArray = null;
+        }
+
         PositionRegionHandles(x, y, w, h, _regionEditable);
     }
 
@@ -133,6 +160,7 @@ public partial class AfmImageView : UserControl, IImageView
     {
         _effectiveRegion = null;
         RegionOverlay.Visibility = Visibility.Collapsed;
+        RegionEllipseOverlay.Visibility = Visibility.Collapsed;
         if (_regionHandles is not null)
         {
             foreach (var (_, rect) in _regionHandles)

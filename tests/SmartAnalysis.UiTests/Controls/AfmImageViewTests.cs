@@ -147,6 +147,39 @@ public sealed class AfmImageViewTests
     }
 
     [Fact]
+    public void An_ellipse_roi_shows_the_ellipse_and_a_dashed_bounding_rectangle()
+    {
+        var (ellipseVisible, rectDashed, ellipseHiddenAfter) = WpfTestHost.Invoke(() =>
+        {
+            var view = new AfmImageView { IsRegionEditable = true };
+            var host = new Border { Width = 320, Height = 240, Child = view };
+            host.Measure(new Size(320, 240));
+            host.Arrange(new Rect(0, 0, 320, 240));
+            host.UpdateLayout();
+
+            view.Render(SolidInput(32, 32));
+            view.RegionIsEllipse = true;
+            view.SetRegionPreview(4, 4, 20, 20);
+            host.UpdateLayout();
+
+            var ellipse = (UIElement)view.FindName("RegionEllipseOverlay");
+            var rect = (Rectangle)view.FindName("RegionOverlay");
+            bool visible = ellipse.Visibility == Visibility.Visible;
+            bool dashed = rect.StrokeDashArray is { Count: > 0 };
+
+            view.RegionIsEllipse = false; // back to a rectangle → the ellipse goes away
+            host.UpdateLayout();
+            bool hiddenAfter = ((UIElement)view.FindName("RegionEllipseOverlay")).Visibility != Visibility.Visible;
+
+            return (visible, dashed, hiddenAfter);
+        });
+
+        Assert.True(ellipseVisible);
+        Assert.True(rectDashed);       // the bounding box is a dashed guide in ellipse mode
+        Assert.True(ellipseHiddenAfter);
+    }
+
+    [Fact]
     public void The_profile_line_is_shown_and_clamped_when_editable()
     {
         var (lineVisible, effective) = WpfTestHost.Invoke(() =>

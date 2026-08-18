@@ -118,6 +118,9 @@ public partial class MainWindow : Window
     private void UpdateRegionPreview()
     {
         int Field(string name) => AsInt(_regionFields.FirstOrDefault(f => f.Name == name)?.Value);
+        // A "shape" Choice field (Region Statistics) selects the ellipse overlay; region ops without it stay rectangular.
+        var shape = _regionFields.FirstOrDefault(f => f.Name == "shape")?.Value?.ToString();
+        SingleImage.RegionIsEllipse = string.Equals(shape, "Ellipse", StringComparison.OrdinalIgnoreCase);
         SingleImage.SetRegionPreview(Field("left"), Field("top"), Field("width"), Field("height"));
     }
 

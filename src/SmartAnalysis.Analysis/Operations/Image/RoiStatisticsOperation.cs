@@ -6,13 +6,23 @@ using SmartAnalysis.Domain.Units;
 
 namespace SmartAnalysis.Analysis.Operations.Image;
 
+/// <summary>The region-of-interest shape for <see cref="RoiStatisticsOperation"/>.</summary>
+public enum RoiShape
+{
+    /// <summary>A rectangle covering the bounding box.</summary>
+    Rectangle,
+
+    /// <summary>An ellipse inscribed in the bounding box.</summary>
+    Ellipse,
+}
+
 /// <summary>
 /// Region statistics on the F04 contract: height stats + roughness (Sq/Sa/Sz, mean, min/max) over a
-/// <b>rectangular region of interest</b> — the first consumer of the D02 <see cref="RectangleRoi"/> mask. The
-/// region is given as left/top/width/height pixels (a drawn V06 overlay pre-fills them); a pixel counts when
-/// its centre is inside the region and finite. Emits an <see cref="AnalysisArtifact"/> measurement (like A03
-/// roughness) attached to the source. Plain schema (four int extents), so U08's generic form drives it with
-/// no shell code. Deterministic; DI-only (ADR-005).
+/// <b>rectangular or elliptical region of interest</b> — a consumer of the D02 <see cref="RectangleRoi"/> /
+/// <see cref="EllipseRoi"/> masks. The region is a bounding box (left/top/width/height pixels, a drawn V06
+/// overlay pre-fills them) plus a <c>shape</c>; a pixel counts when its centre is inside the shape and finite.
+/// Emits an <see cref="AnalysisArtifact"/> measurement (like A03 roughness) attached to the source. Plain schema
+/// (four int extents + a shape enum), so U08's generic form drives it with no shell code. Deterministic; DI-only.
 /// </summary>
 public sealed class RoiStatisticsOperation : IAnalysisOperation
 {
@@ -20,6 +30,7 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
     public const string TopParameter = "top";
     public const string WidthParameter = "width";
     public const string HeightParameter = "height";
+    public const string ShapeParameter = "shape";
 
     private readonly IExecutionEnvironmentProvider _environment;
 
@@ -30,10 +41,11 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
         id: "image.roi-statistics",
         version: 1,
         displayName: "Region Statistics",
-        summary: "Height statistics + roughness (Sq, Sa, Sz, mean) over a rectangular region.",
+        summary: "Height statistics + roughness (Sq, Sa, Sz, mean) over a rectangular or elliptical region.",
         acceptedInputs: [DataKind.ScanImage],
         parameters: new ParameterSchema(
         [
+            new ParameterDescriptor(ShapeParameter, typeof(RoiShape), defaultValue: RoiShape.Rectangle, help: "Region shape (rectangle or inscribed ellipse)."),
             new ParameterDescriptor(LeftParameter, typeof(int), defaultValue: 0, min: 0, max: 1000000, help: "Region left edge (pixels)."),
             new ParameterDescriptor(TopParameter, typeof(int), defaultValue: 0, min: 0, max: 1000000, help: "Region top edge (pixels)."),
             new ParameterDescriptor(WidthParameter, typeof(int), defaultValue: 64, min: 1, max: 1000000, help: "Region width in pixels (clamped to the image)."),
@@ -91,6 +103,7 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
         int top = parameters.Get<int>(TopParameter);
         int roiWidth = parameters.Get<int>(WidthParameter);
         int roiHeight = parameters.Get<int>(HeightParameter);
+        var shape = parameters.TryGet<RoiShape>(ShapeParameter, out var s) ? s : RoiShape.Rectangle;
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Selecting region."));
@@ -101,8 +114,11 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
         int effectiveWidth = Math.Min(roiWidth, width - left);
         int effectiveHeight = Math.Min(roiHeight, height - top);
 
-        // The D02 ROI mask (clamped to the grid by ToMask): gather the finite pixels inside the region.
-        var mask = new RectangleRoi(left, top, roiWidth, roiHeight).ToMask(width, height);
+        // The D02 ROI mask (clamped to the grid by ToMask): gather the finite pixels inside the chosen shape.
+        Roi roi = shape == RoiShape.Ellipse
+            ? new EllipseRoi(left, top, roiWidth, roiHeight)
+            : new RectangleRoi(left, top, roiWidth, roiHeight);
+        var mask = roi.ToMask(width, height);
         var pixels = image.Data.Memory.Span;
         var values = new List<double>();
         var warnings = new List<OperationWarning>();
@@ -162,6 +178,7 @@ public sealed class RoiStatisticsOperation : IAnalysisOperation
             environment: _environment.Capture(),
             parameters: new Dictionary<string, PhysicalValue>
             {
+                [ShapeParameter] = new((int)shape, StandardUnits.One),
                 [LeftParameter] = new(left, StandardUnits.One),
                 [TopParameter] = new(top, StandardUnits.One),
                 [WidthParameter] = new(effectiveWidth, StandardUnits.One),
