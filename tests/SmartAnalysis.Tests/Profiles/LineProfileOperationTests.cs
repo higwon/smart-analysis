@@ -106,12 +106,28 @@ public sealed class LineProfileOperationTests
     }
 
     [Fact]
-    public void Rejects_a_zero_length_line_and_out_of_bounds_endpoints()
+    public async Task Out_of_bounds_endpoints_are_clamped_not_rejected_and_recorded_effective()
+    {
+        using var image = RampImage(width: 5, height: 5, dx: 1.0, dy: 1.0);
+
+        // Overhang request (x1 = 30) is the same effective line as (0,0)→(4,0): validation passes, and the
+        // executed + recorded line is the clamped one — the displayed/dragged/executed/recorded line all agree.
+        Assert.True(NewOperation().Validate(new OperationInput(image), Line(0, 0, 30, 0, 8)).IsValid);
+
+        using var profile = await RunAsync(image, Line(0, 0, 30, 0, 8));
+        var step = profile.Provenance.Steps[^1];
+        Assert.Equal(4.0, step.Parameters[LineProfileOperation.X1Parameter].Value, 12); // clamped to width-1
+        Assert.Equal(4.0, profile.X.RawToReal(profile.X.Count - 1), 12);                // arc length from the effective line
+    }
+
+    [Fact]
+    public void Rejects_a_line_that_is_zero_length_within_the_image()
     {
         using var image = RampImage(width: 5, height: 5);
 
-        Assert.False(NewOperation().Validate(new OperationInput(image), Line(2, 2, 2, 2, 10)).IsValid); // zero length
-        Assert.False(NewOperation().Validate(new OperationInput(image), Line(0, 0, 5, 0, 10)).IsValid); // x1 = 5 > 4
+        Assert.False(NewOperation().Validate(new OperationInput(image), Line(2, 2, 2, 2, 10)).IsValid); // coincident
+        // Two distinct requests that both clamp to the same corner (x = 4) → a zero-length effective line.
+        Assert.False(NewOperation().Validate(new OperationInput(image), Line(20, 2, 30, 2, 10)).IsValid);
         Assert.True(NewOperation().Validate(new OperationInput(image), Line(0, 0, 4, 4, 10)).IsValid);
     }
 

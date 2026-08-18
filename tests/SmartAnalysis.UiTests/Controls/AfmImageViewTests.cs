@@ -145,4 +145,54 @@ public sealed class AfmImageViewTests
 
         Assert.Equal(512.0, imgWidth, 3);
     }
+
+    [Fact]
+    public void The_profile_line_is_shown_and_clamped_when_editable()
+    {
+        var (lineVisible, effective) = WpfTestHost.Invoke(() =>
+        {
+            var view = new AfmImageView { IsLineEditable = true };
+            var host = new Border { Width = 320, Height = 240, Child = view };
+            host.Measure(new Size(320, 240));
+            host.Arrange(new Rect(0, 0, 320, 240));
+            host.UpdateLayout();
+
+            view.Render(SolidInput(15, 15));
+            view.SetLinePreview(-5, 7, 999, 7); // endpoints overhang the 15×15 image (max index 14)
+            host.UpdateLayout();
+
+            var line = (UIElement)view.FindName("LineOverlay");
+            return (line.Visibility == Visibility.Visible, view.EffectiveLine);
+        });
+
+        Assert.True(lineVisible);
+        Assert.Equal((0.0, 7.0, 14.0, 7.0), effective); // clamped to [0,14] on X
+    }
+
+    [Fact]
+    public void Clearing_the_line_hides_the_overlay_and_its_endpoint_handles()
+    {
+        var (effectiveAfterClear, anyDotVisible) = WpfTestHost.Invoke(() =>
+        {
+            var view = new AfmImageView { IsLineEditable = true };
+            var host = new Border { Width = 320, Height = 240, Child = view };
+            host.Measure(new Size(320, 240));
+            host.Arrange(new Rect(0, 0, 320, 240));
+            host.UpdateLayout();
+
+            view.Render(SolidInput(64, 64));
+            view.SetLinePreview(4, 4, 40, 40);
+            host.UpdateLayout();
+
+            view.ClearLinePreview();
+            host.UpdateLayout();
+
+            var overlay = (Panel)view.FindName("OverlayLayer");
+            bool anyVisible = overlay.Children.OfType<Ellipse>().Any(d => d.Visibility == Visibility.Visible);
+            return (view.EffectiveLine, anyVisible);
+        });
+
+        Assert.Null(effectiveAfterClear);
+        Assert.False(anyDotVisible); // the line + both endpoint dots are collapsed
+    }
 }
