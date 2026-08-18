@@ -56,7 +56,7 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2" Text="{Binding Operation}" VerticalAlignment="Center"
                            Margin="{DynamicResource SA.Gap.Right2}" Style="{StaticResource SA.Text.Caption}"/>
-                <TextBlock Grid.Column="3" Text="{Binding Parameters}" VerticalAlignment="Center"
+                <TextBlock Grid.Column="3" Text="{Binding Summary}" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Style="{StaticResource SA.Text.Micro}"/>
             </Grid>
         </DataTemplate>
@@ -513,7 +513,43 @@
                                 Visibility="{Binding RoleIsStep, Converter={StaticResource Bool2Vis}}">
                         <TextBlock Text="RECORDED STEP" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
                         <TextBlock Text="{Binding SelectedStep.Operation}" Style="{StaticResource SA.Text.Title}"/>
-                        <TextBlock Text="{Binding SelectedStep.Parameters}" Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Numeric}"/>
+                        <TextBlock Text="{Binding SelectedStep.OperationId}" Foreground="{DynamicResource SA.Brush.Text.Tertiary}"
+                                   Margin="{DynamicResource SA.Gap.Bottom2}" Style="{StaticResource SA.Text.Micro}"/>
+
+                        <!-- parameters that were applied -->
+                        <TextBlock Text="PARAMETERS" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom1}"
+                                   Visibility="{Binding SelectedStep.HasParameters, Converter={StaticResource Bool2Vis}}"/>
+                        <ItemsControl ItemsSource="{Binding SelectedStep.Parameters}"
+                                      Visibility="{Binding SelectedStep.HasParameters, Converter={StaticResource Bool2Vis}}"
+                                      Margin="{DynamicResource SA.Gap.Bottom2}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:StepParameterViewModel}">
+                                    <Grid Margin="{DynamicResource SA.Gap.Bottom1}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Style="{StaticResource SA.Text.Caption}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource SA.Text.Numeric}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="No parameters." Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom2}"
+                                   Foreground="{DynamicResource SA.Brush.Text.Tertiary}"
+                                   Visibility="{Binding SelectedStep.HasParameters, Converter={StaticResource NotBool2Vis}}"/>
+
+                        <!-- warnings recorded when the step ran -->
+                        <TextBlock Text="WARNINGS" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom1}"
+                                   Foreground="{DynamicResource SA.Brush.Status.Warning}"
+                                   Visibility="{Binding SelectedStep.HasWarnings, Converter={StaticResource Bool2Vis}}"/>
+                        <ItemsControl ItemsSource="{Binding SelectedStep.Warnings}" Margin="{DynamicResource SA.Gap.Bottom2}"
+                                      Visibility="{Binding SelectedStep.HasWarnings, Converter={StaticResource Bool2Vis}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"
+                                               Foreground="{DynamicResource SA.Brush.Status.Warning}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <Border Style="{StaticResource SA.Card}" Background="{DynamicResource SA.Brush.Surface.Sunken}">
                             <TextBlock Text="A recorded step is read-only. Selecting it does not change the active dataset."
                                        TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>

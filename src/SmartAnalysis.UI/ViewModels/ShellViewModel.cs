@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Windows.Input;
 using SmartAnalysis.Application.Analysis;
@@ -6,6 +7,7 @@ using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Units;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.Mvvm;
 using SmartAnalysis.UI.Services;
@@ -714,16 +716,51 @@ public sealed class ShellViewModel : ObservableObject
         if (dataset.Provenance.IsRoot)
         {
             var file = dataset.Source.OriginalFilePath is { } p ? Path.GetFileName(p) : dataset.Source.FormatId;
-            HistoryRows.Add(new HistoryRowViewModel(1, "Import", file, HistoryStatus.Done));
+            HistoryRows.Add(new HistoryRowViewModel(1, "Import", file, HistoryStatus.Done, operationId: dataset.Source.FormatId));
             return;
         }
 
         var order = 1;
         foreach (var step in dataset.Provenance.Steps)
         {
-            HistoryRows.Add(new HistoryRowViewModel(order++, FriendlyOp(step.OperationId), step.OperationId, HistoryStatus.Done));
+            var parameters = new List<StepParameterViewModel>();
+            var summaryParts = new List<string>();
+            foreach (var (name, value) in step.Parameters)
+            {
+                // The Inspector shows the exact recorded value (round-trippable — this is auditable detail); the
+                // strip summary is only a compact glance, so it may round.
+                parameters.Add(new StepParameterViewModel(name, FormatValuePrecise(value)));
+                summaryParts.Add($"{name} {FormatValueCompact(value)}");
+            }
+
+            var warnings = new List<string>();
+            foreach (var warning in step.Warnings)
+            {
+                warnings.Add(warning.Message);
+            }
+
+            var status = step.Errors.Count > 0 ? HistoryStatus.Failed : HistoryStatus.Done;
+            HistoryRows.Add(new HistoryRowViewModel(
+                order++,
+                FriendlyOp(step.OperationId),
+                summaryParts.Count == 0 ? "no parameters" : string.Join(" · ", summaryParts),
+                status,
+                parameters,
+                warnings,
+                step.OperationId));
         }
     }
+
+    // Inspector detail: the exact recorded value (shortest round-trippable form), so what is shown equals what ran.
+    private static string FormatValuePrecise(PhysicalValue value)
+    {
+        var v = value.Value.ToString(CultureInfo.InvariantCulture);
+        return value.Unit.Symbol == "1" ? v : $"{v} {value.Unit.Symbol}";
+    }
+
+    // Strip glance: a rounded value. Dimensionless values (unit "1") drop the symbol.
+    private static string FormatValueCompact(PhysicalValue value)
+        => value.Unit.Symbol == "1" ? $"{value.Value:G4}" : $"{value.Value:G4} {value.Unit.Symbol}";
 
     private static string DatasetLabel(AfmDataset dataset)
     {
