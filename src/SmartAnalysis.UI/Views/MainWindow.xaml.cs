@@ -178,6 +178,17 @@ public partial class MainWindow : Window
     private void RenderImages()
     {
         var colormap = _viewModel.Colormap;
+        if (_viewModel.ActiveCurve is { } curve)
+        {
+            // The first curve-producing op (A08 PSD): route the active line profile to the curve view.
+            SingleCurve.Render(RenderInputFactory.ForLineProfile(curve));
+            SingleImage.Clear();
+            BeforeImageView.Clear();
+            AfterImageView.Clear();
+            return;
+        }
+
+        SingleCurve.Clear();
         if (_viewModel.IsBeforeAfter && _viewModel.BeforeImage is { } before && _viewModel.ActiveImage is { } after)
         {
             // Each pane uses its OWN data range so both stay legible: a transform like Flatten removes the
