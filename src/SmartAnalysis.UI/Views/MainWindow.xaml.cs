@@ -45,6 +45,9 @@ public partial class MainWindow : Window
         // image — and let the user drag it.
         SingleImage.IsRegionEditable = true;
         SingleImage.RegionChanged += (_, r) => WriteRegionFields(r);
+        // When a line-profile form is open, preview its line live on the image — and let the user drag it.
+        SingleImage.IsLineEditable = true;
+        SingleImage.LineChanged += (_, l) => WriteLineFields(l);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         RenderImages();
     }
@@ -53,11 +56,16 @@ public partial class MainWindow : Window
     private static readonly string[] RegionFieldNames = ["left", "top", "width", "height"];
     private readonly List<ParameterFieldViewModel> _regionFields = new();
 
+    // ---- Line preview: mirror any form's x0/y0/x1/y1 as a draggable profile line on the image ----
+    private static readonly string[] LineFieldNames = ["x0", "y0", "x1", "y1"];
+    private readonly List<ParameterFieldViewModel> _lineFields = new();
+
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ShellViewModel.OperationEditor))
         {
             WireRegionPreview();
+            WireLinePreview();
         }
     }
 
@@ -123,6 +131,99 @@ public partial class MainWindow : Window
         }
     }
 
+    // Any operation form with x0/y0/x1/y1 fields (the free line profile) drives — and is driven by — the
+    // draggable profile line on the image.
+    private void WireLinePreview()
+    {
+        foreach (var field in _lineFields)
+        {
+            field.PropertyChanged -= LineField_PropertyChanged;
+        }
+
+        _lineFields.Clear();
+
+        if (_viewModel.OperationEditor is ParameterFormViewModel form && HasLineFields(form))
+        {
+            foreach (var field in form.Fields)
+            {
+                _lineFields.Add(field);
+                field.PropertyChanged += LineField_PropertyChanged;
+            }
+
+            SeedDefaultLineIfEmpty();
+            UpdateLinePreview();
+        }
+        else
+        {
+            SingleImage.ClearLinePreview();
+        }
+    }
+
+    // A fresh line-profile form has all-zero endpoints (a degenerate point); seed a horizontal mid-line across
+    // the active image so there is a usable line to drag from the start.
+    private void SeedDefaultLineIfEmpty()
+    {
+        double Field(string name) => AsDouble(_lineFields.FirstOrDefault(f => f.Name == name)?.Value);
+        if (Field("x0") != 0 || Field("y0") != 0 || Field("x1") != 0 || Field("y1") != 0)
+        {
+            return; // the user (or a prior draw) already set a line
+        }
+
+        if (_viewModel.ActiveImage is not { } image)
+        {
+            return;
+        }
+
+        WriteLineFields((0, (image.Y.Count - 1) / 2.0, image.X.Count - 1, (image.Y.Count - 1) / 2.0));
+    }
+
+    private static bool HasLineFields(ParameterFormViewModel form)
+        => LineFieldNames.All(name => form.Fields.Any(f => f.Name == name));
+
+    private void LineField_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!_writingLineFields && e.PropertyName == nameof(ParameterFieldViewModel.Value))
+        {
+            UpdateLinePreview();
+        }
+    }
+
+    private void UpdateLinePreview()
+    {
+        double Field(string name) => AsDouble(_lineFields.FirstOrDefault(f => f.Name == name)?.Value);
+        SingleImage.SetLinePreview(Field("x0"), Field("y0"), Field("x1"), Field("y1"));
+    }
+
+    private bool _writingLineFields;
+
+    // A drag of the profile line writes the new endpoints back into the form fields.
+    private void WriteLineFields((double X0, double Y0, double X1, double Y1) l)
+    {
+        _writingLineFields = true;
+        try
+        {
+            SetLineField("x0", l.X0);
+            SetLineField("y0", l.Y0);
+            SetLineField("x1", l.X1);
+            SetLineField("y1", l.Y1);
+        }
+        finally
+        {
+            _writingLineFields = false;
+        }
+
+        UpdateLinePreview(); // re-render the overlay from the (rounded) field values so drag and form agree
+    }
+
+    private void SetLineField(string name, double value)
+    {
+        var field = _lineFields.FirstOrDefault(f => f.Name == name);
+        if (field is not null)
+        {
+            field.Value = value;
+        }
+    }
+
     // The form holds the raw UI primitive (int default, or the TextBox's string once edited).
     private static int AsInt(object? value) => value switch
     {
@@ -130,6 +231,14 @@ public partial class MainWindow : Window
         double d => (int)d,
         string s when int.TryParse(s, out var n) => n,
         _ => 0,
+    };
+
+    private static double AsDouble(object? value) => value switch
+    {
+        double d => d,
+        int i => i,
+        string s when double.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, out var n) => n,
+        _ => 0.0,
     };
 
     private void ExplorerTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)

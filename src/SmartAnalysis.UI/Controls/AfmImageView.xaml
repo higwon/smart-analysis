@@ -41,6 +41,9 @@
                     <Rectangle x:Name="RegionOverlay" Visibility="Collapsed"
                                Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"
                                Fill="{DynamicResource SA.Brush.Chart.Selection}"/>
+                    <!-- The profile line (endpoints are separate draggable handles built in code). -->
+                    <Line x:Name="LineOverlay" Visibility="Collapsed"
+                          Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"/>
                 </Canvas>
             </Grid>
         </Border>

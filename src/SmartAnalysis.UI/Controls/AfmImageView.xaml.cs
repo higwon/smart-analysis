@@ -47,6 +47,14 @@ public partial class AfmImageView : UserControl, IImageView
     private (double X, double Y) _regionStartPixel;
     private bool _regionEditable;
 
+    private (double X0, double Y0, double X1, double Y1)? _linePreview;   // the requested line (raw form values)
+    private (double X0, double Y0, double X1, double Y1)? _effectiveLine; // clamped to the image — shown AND dragged
+    private readonly (LineHandle Handle, Ellipse Dot)[] _lineHandles;     // [Start, End]
+    private LineHandle _lineHandle = LineHandle.None;
+    private (double X0, double Y0, double X1, double Y1) _lineStart;
+    private (double X, double Y) _lineStartPixel;
+    private bool _lineEditable;
+
     public AfmImageView()
     {
         InitializeComponent();
@@ -54,6 +62,9 @@ public partial class AfmImageView : UserControl, IImageView
         RegionOverlay.Cursor = Cursors.SizeAll;
         RegionOverlay.MouseLeftButtonDown += (_, e) => BeginRegionDrag(RegionHandle.Body, e);
         _regionHandles = BuildRegionHandles();
+        LineOverlay.Cursor = Cursors.SizeAll;
+        LineOverlay.MouseLeftButtonDown += (_, e) => BeginLineDrag(LineHandle.Body, e);
+        _lineHandles = BuildLineHandles();
     }
 
     /// <summary>Raised while the user drags the region overlay: the new (left, top, width, height) in pixels.</summary>
@@ -89,6 +100,7 @@ public partial class AfmImageView : UserControl, IImageView
     // Positions the region overlay in screen space from the current image transform (constant stroke).
     private void UpdateOverlay()
     {
+        UpdateLineOverlay(); // the profile line tracks pan/zoom from the same call sites
         if (_regionPreview is not { } r || _bmpW <= 0 || _bmpH <= 0)
         {
             HideOverlay();
@@ -128,6 +140,138 @@ public partial class AfmImageView : UserControl, IImageView
                 rect.Visibility = Visibility.Collapsed;
             }
         }
+    }
+
+    // ---- Profile line overlay: draw/drag a 2-point line whose endpoints drive the line-profile op ----
+
+    /// <summary>Raised while the user drags the profile line: the new (x0, y0, x1, y1) endpoints in image pixels.</summary>
+    public event EventHandler<(double X0, double Y0, double X1, double Y1)>? LineChanged;
+
+    /// <summary>The line shown/dragged: the requested endpoints clamped to the image (null when hidden).</summary>
+    public (double X0, double Y0, double X1, double Y1)? EffectiveLine => _effectiveLine;
+
+    /// <summary>Whether the profile line can be dragged (shows the endpoint handles). Single view only.</summary>
+    public bool IsLineEditable
+    {
+        get => _lineEditable;
+        set { _lineEditable = value; UpdateLineOverlay(); }
+    }
+
+    /// <summary>Shows a live profile line in image-pixel space (e.g. while the line-profile form is open).</summary>
+    public void SetLinePreview(double x0, double y0, double x1, double y1)
+    {
+        _linePreview = (x0, y0, x1, y1);
+        UpdateLineOverlay();
+    }
+
+    /// <summary>Hides the profile-line overlay — the line, both endpoint handles, and the effective line.</summary>
+    public void ClearLinePreview()
+    {
+        _linePreview = null;
+        HideLineOverlay();
+    }
+
+    private void UpdateLineOverlay()
+    {
+        if (_linePreview is not { } l || _bmpW <= 0 || _bmpH <= 0)
+        {
+            HideLineOverlay();
+            return;
+        }
+
+        var (x0, y0, x1, y1) = LineEditMath.ClampToImage(l.X0, l.Y0, l.X1, l.Y1, _bmpW, _bmpH);
+        _effectiveLine = (x0, y0, x1, y1);
+
+        double s = ImgScale.ScaleX;
+        double sx0 = (x0 * s) + ImgTranslate.X, sy0 = (y0 * s) + ImgTranslate.Y;
+        double sx1 = (x1 * s) + ImgTranslate.X, sy1 = (y1 * s) + ImgTranslate.Y;
+        LineOverlay.X1 = sx0; LineOverlay.Y1 = sy0;
+        LineOverlay.X2 = sx1; LineOverlay.Y2 = sy1;
+        LineOverlay.Visibility = Visibility.Visible;
+        PositionLineHandles(sx0, sy0, sx1, sy1, _lineEditable);
+    }
+
+    private void HideLineOverlay()
+    {
+        _effectiveLine = null;
+        LineOverlay.Visibility = Visibility.Collapsed;
+        if (_lineHandles is not null)
+        {
+            foreach (var (_, dot) in _lineHandles)
+            {
+                dot.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    // Builds the two endpoint handles once; positioned/shown by UpdateLineOverlay.
+    private (LineHandle Handle, Ellipse Dot)[] BuildLineHandles()
+    {
+        var handles = new (LineHandle, Ellipse)[2];
+        var which = new[] { LineHandle.Start, LineHandle.End };
+        for (int i = 0; i < which.Length; i++)
+        {
+            var handle = which[i];
+            var dot = new Ellipse
+            {
+                Width = HandleSize,
+                Height = HandleSize,
+                Stroke = Brushes.White,
+                StrokeThickness = 1,
+                Cursor = Cursors.Cross,
+                Visibility = Visibility.Collapsed,
+            };
+            dot.SetResourceReference(Shape.FillProperty, "SA.Brush.Accent.Primary"); // theme-aware
+            dot.MouseLeftButtonDown += (_, e) => BeginLineDrag(handle, e);
+            OverlayLayer.Children.Add(dot);
+            handles[i] = (handle, dot);
+        }
+
+        return handles;
+    }
+
+    private void PositionLineHandles(double sx0, double sy0, double sx1, double sy1, bool visible)
+    {
+        foreach (var (handle, dot) in _lineHandles)
+        {
+            dot.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            if (!visible)
+            {
+                continue;
+            }
+
+            double cx = handle == LineHandle.Start ? sx0 : sx1;
+            double cy = handle == LineHandle.Start ? sy0 : sy1;
+            Canvas.SetLeft(dot, cx - (HandleSize / 2.0));
+            Canvas.SetTop(dot, cy - (HandleSize / 2.0));
+        }
+    }
+
+    private void BeginLineDrag(LineHandle handle, MouseButtonEventArgs e)
+    {
+        if (!_lineEditable || _effectiveLine is not { } line)
+        {
+            return;
+        }
+
+        _lineHandle = handle;
+        _lineStart = line;
+        var p = e.GetPosition(Viewport);
+        _lineStartPixel = RegionEditMath.ScreenToPixel(p.X, p.Y, ImgScale.ScaleX, ImgTranslate.X, ImgTranslate.Y);
+        Viewport.CaptureMouse();
+        e.Handled = true; // don't let the Viewport start a pan
+    }
+
+    private void DragLine(MouseEventArgs e)
+    {
+        var p = e.GetPosition(Viewport);
+        var (px, py) = RegionEditMath.ScreenToPixel(p.X, p.Y, ImgScale.ScaleX, ImgTranslate.X, ImgTranslate.Y);
+        var next = LineEditMath.Drag(
+            _lineHandle, _lineStart.X0, _lineStart.Y0, _lineStart.X1, _lineStart.Y1,
+            px - _lineStartPixel.X, py - _lineStartPixel.Y, _bmpW, _bmpH);
+        _linePreview = next;
+        UpdateLineOverlay();
+        LineChanged?.Invoke(this, next);
     }
 
     /// <summary>Raised while the user drags a palette-bar handle: the new (min, max) value window.</summary>
@@ -301,6 +445,12 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
+        if (_lineHandle != LineHandle.None)
+        {
+            DragLine(e);
+            return;
+        }
+
         if (!_dragging)
         {
             // Hint pannability while zoomed in.
@@ -320,6 +470,13 @@ public partial class AfmImageView : UserControl, IImageView
         if (_regionHandle != RegionHandle.None)
         {
             _regionHandle = RegionHandle.None;
+            Viewport.ReleaseMouseCapture();
+            return;
+        }
+
+        if (_lineHandle != LineHandle.None)
+        {
+            _lineHandle = LineHandle.None;
             Viewport.ReleaseMouseCapture();
             return;
         }
