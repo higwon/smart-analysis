@@ -21,3 +21,14 @@ public interface ICurveView
 {
     void Render(CurveRenderInput input);
 }
+
+/// <summary>
+/// Renders a scan as a 3D height-field surface (V04). A port: the WPF backend (<c>Viewport3D</c>) implements it.
+/// Consumes the same <see cref="ImageRenderInput"/> as the 2D view (Z + range + colormap + axes), so no separate
+/// input type is needed. The same borrowed-lifetime rule as <see cref="IImageView"/> applies: the backend must
+/// build its mesh during the call and not retain <see cref="ImageRenderInput.Z"/> afterwards.
+/// </summary>
+public interface ISurfaceView
+{
+    void Render(ImageRenderInput input);
+}
