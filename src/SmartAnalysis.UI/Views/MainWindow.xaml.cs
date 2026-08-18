@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.ViewModels;
@@ -30,11 +31,13 @@ public partial class MainWindow : Window
 
     private readonly ShellViewModel _viewModel;
     private readonly ThemeManager _theme;
+    private readonly ILineProfilePreview _lineProfilePreview;
 
-    public MainWindow(ShellViewModel viewModel, ThemeManager theme)
+    public MainWindow(ShellViewModel viewModel, ThemeManager theme, ILineProfilePreview lineProfilePreview)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
+        _lineProfilePreview = lineProfilePreview ?? throw new ArgumentNullException(nameof(lineProfilePreview));
         InitializeComponent();
         DataContext = viewModel;
 
@@ -45,9 +48,14 @@ public partial class MainWindow : Window
         // image — and let the user drag it.
         SingleImage.IsRegionEditable = true;
         SingleImage.RegionChanged += (_, r) => WriteRegionFields(r);
-        // When a line-profile form is open, preview its line live on the image — and let the user drag it.
+        // When a line-profile form is open, preview its line live on the image — and let the user drag it, with
+        // the profile chart updating live from the dragged endpoints.
         SingleImage.IsLineEditable = true;
-        SingleImage.LineChanged += (_, l) => WriteLineFields(l);
+        SingleImage.LineChanged += (_, l) =>
+        {
+            WriteLineFields(l);
+            RefreshLineProfileChart();
+        };
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         RenderImages();
     }
@@ -151,11 +159,14 @@ public partial class MainWindow : Window
             }
 
             SeedDefaultLineIfEmpty();
+            LineProfilePanel.Visibility = Visibility.Visible; // dock the live chart
             UpdateLinePreview();
         }
         else
         {
             SingleImage.ClearLinePreview();
+            LineProfilePanel.Visibility = Visibility.Collapsed;
+            ProfileChart.Clear();
         }
     }
 
@@ -204,6 +215,29 @@ public partial class MainWindow : Window
         if (SingleImage.EffectiveLine is { } e)
         {
             WriteLineFields(e);
+        }
+
+        RefreshLineProfileChart();
+    }
+
+    // Renders the live profile of the current effective line into the docked chart (no workspace mutation).
+    private void RefreshLineProfileChart()
+    {
+        if (SingleImage.EffectiveLine is not { } e || _viewModel.ActiveImage is not { } image)
+        {
+            ProfileChart.Clear();
+            return;
+        }
+
+        int samples = AsInt(_lineFields.FirstOrDefault(f => f.Name == "samples")?.Value);
+        var input = _lineProfilePreview.Preview(image, e.X0, e.Y0, e.X1, e.Y1, samples);
+        if (input is not null)
+        {
+            ProfileChart.Render(input);
+        }
+        else
+        {
+            ProfileChart.Clear();
         }
     }
 

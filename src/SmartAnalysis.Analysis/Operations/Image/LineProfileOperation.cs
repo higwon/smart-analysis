@@ -1,6 +1,4 @@
 using SmartAnalysis.Analysis.Profiles;
-using SmartAnalysis.Domain.Axes;
-using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
@@ -111,26 +109,14 @@ public sealed class LineProfileOperation : IAnalysisOperation
         }
 
         var image = (ScanImageDataset)input.Primary;
-        // The single effective line: the request clamped to the image. Everything below — sampling, arc length,
-        // and provenance — uses it, so the executed and recorded line equals the one shown/dragged in the shell.
+        // The single effective line: the request clamped to the image. Sampling, arc length, and provenance all
+        // use it (via the shared builder), so the executed and recorded line equals the one shown/dragged in the shell.
         var (x0, y0, x1, y1) = EffectiveLine(image, parameters);
         int samples = parameters.Get<int>(SamplesParameter);
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Sampling line."));
 
-        var line = LineSampler.Sample(image.Data.Memory.Span, image.X.Count, image.Y.Count, x0, y0, x1, y1, samples);
-
-        // Physical arc length: convert the pixel deltas through each axis step to the base unit, then back to the
-        // X unit — so a diagonal is measured correctly even when X and Y steps (or units) differ.
-        double dxBase = (x1 - x0) * image.X.Step * image.X.Unit.ScaleToBase;
-        double dyBase = (y1 - y0) * image.Y.Step * image.Y.Unit.ScaleToBase;
-        double lengthInXUnit = Math.Sqrt((dxBase * dxBase) + (dyBase * dyBase)) / image.X.Unit.ScaleToBase;
-        double stepInXUnit = lengthInXUnit / (samples - 1);
-
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var distanceAxis = new Axis("Distance", image.X.Unit, 0.0, stepInXUnit, samples);
         var artifactId = DatasetId.New();
         var step = new ProvenanceStep(
             stepId: Guid.NewGuid().ToString("D"),
@@ -150,25 +136,10 @@ public sealed class LineProfileOperation : IAnalysisOperation
             },
             parentResultId: artifactId);
 
-        var buffer = ScanBuffer<float>.TakeOwnership(line, line.Length, 1);
-        try
-        {
-            var profile = new LineProfileDataset(
-                artifactId,
-                DataSource.Derived,
-                distanceAxis,
-                image.Channel,
-                buffer,
-                image.Metadata,
-                ProvenanceRecord.DerivedFrom(image.Id, [step]));
+        var profile = LineProfileBuilder.Build(
+            image, x0, y0, x1, y1, samples, artifactId, ProvenanceRecord.DerivedFrom(image.Id, [step]));
 
-            progress?.Report(new OperationProgress(1.0, "Done."));
-            return Task.FromResult(OperationResult.Derived(profile));
-        }
-        catch
-        {
-            buffer.Dispose(); // ctor failed → we still own the buffer (ADR-011/012)
-            throw;
-        }
+        progress?.Report(new OperationProgress(1.0, "Done."));
+        return Task.FromResult(OperationResult.Derived(profile));
     }
 }

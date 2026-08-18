@@ -36,6 +36,7 @@ public static class CompositionRoot
 
         // Application use cases the UI drives (doc 11: UI → Application, not Analysis).
         services.AddSingleton<IImageAnalysisUseCase, ImageAnalysisUseCase>();
+        services.AddSingleton<ILineProfilePreview, LineProfilePreviewUseCase>();
         services.AddSingleton<IOperationLauncher, OperationLauncherUseCase>();
         services.AddSingleton<IWorkspacePersistence, WorkspacePersistenceUseCase>(); // save/open (over IWorkspaceStore)
 
