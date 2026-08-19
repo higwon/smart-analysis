@@ -29,6 +29,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<ProfileOperation>();
         services.AddAnalysisOperation<LineProfileOperation>();
         services.AddAnalysisOperation<ProfileRoughnessOperation>();
+        services.AddAnalysisOperation<ProfileFilterOperation>();
         return services;
     }
 }
