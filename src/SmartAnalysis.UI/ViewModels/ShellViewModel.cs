@@ -476,10 +476,10 @@ public sealed class ShellViewModel : ObservableObject
         }
     }
 
-    // An overlay editor forces 2D even when 3D is preferred (the overlay lives on the 2D view); closing it returns
-    // to the retained 3D preference.
-    public bool ShowSingle2D => IsSingleImage && (!_is3D || _isInteractiveImageEditing);
-    public bool ShowSingle3D => IsSingleImage && _is3D && !_isInteractiveImageEditing;
+    // An overlay editor OR a drawn ROI forces 2D even when 3D is preferred (both live on the 2D view); turning
+    // them off returns to the retained 3D preference.
+    public bool ShowSingle2D => IsSingleImage && (!_is3D || _isInteractiveImageEditing || _roiEnabled);
+    public bool ShowSingle3D => IsSingleImage && _is3D && !_isInteractiveImageEditing && !_roiEnabled;
 
     /// <summary>Whether the 3D toggle is offered — hidden while an overlay editor forces the 2D stage.</summary>
     public bool CanToggle3D => IsSingleImage && !_isInteractiveImageEditing && !_roiEnabled;
@@ -493,7 +493,12 @@ public sealed class ShellViewModel : ObservableObject
         {
             if (SetProperty(ref _roiEnabled, value))
             {
+                // The ROI forces the 2D stage (its overlay lives on the 2D view); swap + re-render BEFORE the ROI
+                // is drawn so it lands on a rendered image, then return to the 3D preference when the ROI is off.
+                OnPropertyChanged(nameof(ShowSingle2D));
+                OnPropertyChanged(nameof(ShowSingle3D));
                 OnPropertyChanged(nameof(CanToggle3D));
+                ImagesChanged?.Invoke(this, EventArgs.Empty);
                 RoiChanged?.Invoke(this, EventArgs.Empty);
             }
         }

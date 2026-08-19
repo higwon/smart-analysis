@@ -447,6 +447,7 @@ public partial class MainWindow : Window
             SingleImage.Render(RenderInputFactory.ForImage(image, colormap, _viewModel.EffectiveRange));
             BeforeImageView.Clear();
             AfterImageView.Clear();
+            RefreshRoiOverlay(); // draw + publish the persistent ROI onto the just-rendered 2D image
         }
         else
         {
