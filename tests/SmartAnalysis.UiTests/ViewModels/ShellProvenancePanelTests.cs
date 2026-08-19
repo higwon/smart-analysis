@@ -129,6 +129,37 @@ public sealed class ShellProvenancePanelTests
     }
 
     [Fact]
+    public void A_recorded_region_shape_shows_its_kind_name()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var root = Root();
+
+        // A region roughness step records the shared ROI projection; the shell reads regionShape 1 as "Ellipse".
+        var step = new ProvenanceStep(
+            stepId: "s1",
+            inputDatasetId: root.Id,
+            inputVersion: 0,
+            operationId: "image.roughness",
+            operationVersion: 1,
+            order: 0,
+            environment: ExecutionEnvironment.Unknown,
+            parameters: SmartAnalysis.Domain.Geometry.RegionProvenance.Describe(
+                new SmartAnalysis.Domain.Geometry.EllipseRoi(3, 3, 8, 8)));
+        var derived = new ScanImageDataset(
+            DatasetId.New(), DataSource.Derived, root.X, root.Y, root.Channel,
+            ScanBuffer<float>.Allocate(4, 4), ScanMetadata.Unknown,
+            ProvenanceRecord.DerivedFrom(root.Id, [step]));
+
+        ws.Add(root);
+        ws.Add(derived);
+        ws.SetActive(derived.Id);
+
+        var shape = Assert.Single(Assert.Single(vm.HistoryRows).Parameters, p => p.Name == "regionShape");
+        Assert.Equal("Ellipse", shape.Value); // the kind name, not "1"
+    }
+
+    [Fact]
     public void A_step_recorded_by_a_different_version_falls_back_to_the_raw_number()
     {
         var ws = new Workspace();

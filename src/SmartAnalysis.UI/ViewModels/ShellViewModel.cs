@@ -7,6 +7,7 @@ using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Geometry;
 using SmartAnalysis.Domain.Units;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.Mvvm;
@@ -837,9 +838,11 @@ public sealed class ShellViewModel : ObservableObject
             var summaryParts = new List<string>();
             foreach (var (name, value) in step.Parameters)
             {
-                // An enum parameter is recorded as its integer code; show the member name (e.g. "BandStop") instead.
+                // An enum parameter is recorded as its integer code; show the member name (e.g. "BandStop") instead —
+                // via the op schema, or the shared ROI-shape discriminator for a recorded region (regionShape → "Ellipse").
                 // Otherwise the Inspector shows the exact recorded value (round-trippable) and the strip may round.
-                var enumLabel = _launcher.EnumParameterLabel(step.OperationId, step.OperationVersion, name, value.Value);
+                var enumLabel = _launcher.EnumParameterLabel(step.OperationId, step.OperationVersion, name, value.Value)
+                    ?? (name == RegionProvenance.ShapeKey ? RegionProvenance.ShapeLabel(value.Value) : null);
                 parameters.Add(new StepParameterViewModel(name, enumLabel ?? FormatValuePrecise(value)));
                 summaryParts.Add($"{name} {enumLabel ?? FormatValueCompact(value)}");
             }
