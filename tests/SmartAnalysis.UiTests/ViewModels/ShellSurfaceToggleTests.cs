@@ -82,6 +82,33 @@ public sealed class ShellSurfaceToggleTests
     }
 
     [Fact]
+    public void Enabling_the_roi_while_3d_forces_2d_and_disabling_restores_3d()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+        vm.Is3D = true;
+        Assert.True(vm.ShowSingle3D);
+
+        // The ROI overlay lives on the 2D view, so enabling it must force 2D even with the 3D preference on.
+        vm.RoiEnabled = true;
+
+        Assert.True(vm.ShowSingle2D);
+        Assert.False(vm.ShowSingle3D);
+        Assert.True(vm.Is3D);        // …the preference is retained
+        Assert.False(vm.CanToggle3D); // the 3D toggle is hidden while the ROI is on
+
+        // Turning the ROI off returns to the retained 3D view.
+        vm.RoiEnabled = false;
+
+        Assert.True(vm.ShowSingle3D);
+        Assert.False(vm.ShowSingle2D);
+        Assert.True(vm.CanToggle3D);
+    }
+
+    [Fact]
     public void A_curve_is_never_shown_as_a_surface_even_in_3d_mode()
     {
         var ws = new Workspace();

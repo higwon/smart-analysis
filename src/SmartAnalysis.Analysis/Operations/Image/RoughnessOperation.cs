@@ -40,7 +40,8 @@ public sealed class RoughnessOperation : IAnalysisOperation
         parameters: ParameterSchema.Empty,
         output: OutputKind.Artifact,
         isDeterministic: true,
-        tags: ["roughness", "iso25178", "areal", "image"]);
+        tags: ["roughness", "iso25178", "areal", "image"],
+        usesRegion: true);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

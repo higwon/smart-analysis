@@ -9,7 +9,9 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using SmartAnalysis.Application.Analysis;
+using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Geometry;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.ViewModels;
 using SmartAnalysis.Visualization.Colormaps;
@@ -32,22 +34,35 @@ public partial class MainWindow : Window
     private readonly ShellViewModel _viewModel;
     private readonly ThemeManager _theme;
     private readonly ILineProfilePreview _lineProfilePreview;
+    private readonly RegionContext _regionContext;
 
-    public MainWindow(ShellViewModel viewModel, ThemeManager theme, ILineProfilePreview lineProfilePreview)
+    public MainWindow(ShellViewModel viewModel, ThemeManager theme, ILineProfilePreview lineProfilePreview, RegionContext regionContext)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _lineProfilePreview = lineProfilePreview ?? throw new ArgumentNullException(nameof(lineProfilePreview));
+        _regionContext = regionContext ?? throw new ArgumentNullException(nameof(regionContext));
         InitializeComponent();
         DataContext = viewModel;
 
         _viewModel.ImagesChanged += (_, _) => RenderImages();
+        _viewModel.RoiChanged += (_, _) => RefreshRoiOverlay();
         // Dragging the single view's palette-bar handles sets a manual value range on the shell.
         SingleImage.RangeChanged += (_, r) => _viewModel.SetManualRange(r.Min, r.Max);
         // When a region operation form is open (Crop, Region Statistics, …), preview its region live on the
-        // image — and let the user drag it.
+        // image — and let the user drag it; otherwise a drag edits the persistent ROI (when enabled).
         SingleImage.IsRegionEditable = true;
-        SingleImage.RegionChanged += (_, r) => WriteRegionFields(r);
+        SingleImage.RegionChanged += (_, r) =>
+        {
+            if (_regionFields.Count > 0)
+            {
+                WriteRegionFields(r);
+            }
+            else if (_viewModel.RoiEnabled)
+            {
+                UpdateRoi(r);
+            }
+        };
         // When a line-profile form is open, preview its line live on the image — and let the user drag it, with
         // the profile chart updating live from the dragged endpoints.
         SingleImage.IsLineEditable = true;
@@ -102,6 +117,8 @@ public partial class MainWindow : Window
         {
             SingleImage.ClearRegionPreview();
         }
+
+        RefreshRoiOverlay(); // restore the persistent ROI once a region form is no longer driving the overlay
     }
 
     private static bool HasRegionFields(ParameterFormViewModel form)
@@ -271,6 +288,52 @@ public partial class MainWindow : Window
         }
     }
 
+    // ---- Persistent ROI: a drawn region (rect/ellipse) that region-capable ops (Roughness) apply to ----
+    private (int Left, int Top, int Width, int Height)? _roiBbox;
+
+    private void RefreshRoiOverlay()
+    {
+        // A region operation form drives the overlay itself (Crop/Region Statistics); don't fight it.
+        if (_regionFields.Count > 0)
+        {
+            return;
+        }
+
+        if (!_viewModel.RoiEnabled || !_viewModel.CanUseRoi || _viewModel.ActiveImage is not { } image)
+        {
+            SingleImage.RegionIsEllipse = false;
+            SingleImage.ClearRegionPreview();
+            _regionContext.Current = null; // no ROI → region-capable ops run whole-image
+            return;
+        }
+
+        // Seed a centred default the first time the ROI is enabled.
+        _roiBbox ??= (image.X.Count / 4, image.Y.Count / 4, Math.Max(1, image.X.Count / 2), Math.Max(1, image.Y.Count / 2));
+        SingleImage.RegionIsEllipse = _viewModel.RoiIsEllipse;
+        SingleImage.SetRegionPreview(_roiBbox.Value.Left, _roiBbox.Value.Top, _roiBbox.Value.Width, _roiBbox.Value.Height);
+        CommitRoi();
+    }
+
+    private void UpdateRoi((int Left, int Top, int Width, int Height) r)
+    {
+        _roiBbox = r;
+        CommitRoi();
+    }
+
+    // Publish the drawn ROI (the effective, clamped region + shape) so the launcher attaches it to region ops.
+    private void CommitRoi()
+    {
+        if (SingleImage.EffectiveRegion is not { } e)
+        {
+            _regionContext.Current = null;
+            return;
+        }
+
+        _regionContext.Current = _viewModel.RoiIsEllipse
+            ? new EllipseRoi(e.Left, e.Top, e.Width, e.Height)
+            : new RectangleRoi(e.Left, e.Top, e.Width, e.Height);
+    }
+
     // The form holds the raw UI primitive (int default, or the TextBox's string once edited).
     private static int AsInt(object? value) => value switch
     {
@@ -384,6 +447,7 @@ public partial class MainWindow : Window
             SingleImage.Render(RenderInputFactory.ForImage(image, colormap, _viewModel.EffectiveRange));
             BeforeImageView.Clear();
             AfterImageView.Clear();
+            RefreshRoiOverlay(); // draw + publish the persistent ROI onto the just-rendered 2D image
         }
         else
         {

@@ -44,6 +44,7 @@ public static class CompositionRoot
         // controller, and the shell (U01). The workspace owns datasets only; measurements live beside it.
         services.AddSingleton<Workspace>();
         services.AddSingleton<MeasurementStore>();
+        services.AddSingleton<RegionContext>(); // the drawn ROI shared shell → launcher
         services.AddSingleton<ThemeManager>();
         services.AddSingleton<IScanFilePicker, WpfScanFilePicker>();
         services.AddSingleton<IWorkspacePathPicker, WpfWorkspacePathPicker>();

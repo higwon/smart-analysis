@@ -150,7 +150,8 @@ public sealed record OperationDescriptor
         ParameterSchema parameters,
         OutputKind output,
         bool isDeterministic = true,
-        IReadOnlyList<string>? tags = null)
+        IReadOnlyList<string>? tags = null,
+        bool usesRegion = false)
     {
         Id = AnalysisGuard.Text(id, nameof(id));
         Version = AnalysisGuard.NonNegative(version, nameof(version));
@@ -159,6 +160,7 @@ public sealed record OperationDescriptor
         Parameters = AnalysisGuard.NotNull(parameters, nameof(parameters));
         Output = AnalysisGuard.DefinedEnum(output, nameof(output));
         IsDeterministic = isDeterministic;
+        UsesRegion = usesRegion;
 
         ArgumentNullException.ThrowIfNull(acceptedInputs);
         if (acceptedInputs.Count == 0)
@@ -192,6 +194,10 @@ public sealed record OperationDescriptor
     public bool IsDeterministic { get; }
 
     public IReadOnlyList<string> Tags { get; }
+
+    /// <summary>Whether the op restricts itself to <see cref="OperationInput.Region"/> when a region is active
+    /// (the shell attaches the drawn ROI for such ops); a whole-dataset op leaves this false.</summary>
+    public bool UsesRegion { get; }
 
     public bool Accepts(DataKind kind) => AcceptedInputs.Contains(kind);
 }

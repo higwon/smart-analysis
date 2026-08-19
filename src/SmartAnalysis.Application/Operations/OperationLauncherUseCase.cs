@@ -19,12 +19,14 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
     private readonly Workspace _workspace;
     private readonly IOperationRegistry _registry;
     private readonly MeasurementStore _measurements;
+    private readonly RegionContext _region;
 
-    public OperationLauncherUseCase(Workspace workspace, IOperationRegistry registry, MeasurementStore measurements)
+    public OperationLauncherUseCase(Workspace workspace, IOperationRegistry registry, MeasurementStore measurements, RegionContext? region = null)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
+        _region = region ?? new RegionContext();
     }
 
     public IReadOnlyList<OperationLauncherItem> ApplicableToActive()
@@ -79,7 +81,9 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
             return OperationRunResult.Failed($"A parameter value could not be interpreted: {ex.Message}");
         }
 
-        var input = new OperationInput(source);
+        // Attach the active ROI only for a region-capable op; a whole-dataset op never sees it.
+        var region = operation.Descriptor.UsesRegion ? _region.Current : null;
+        var input = new OperationInput(source, region: region);
         var validation = operation.Validate(input, parameters);
         if (!validation.IsValid)
         {
