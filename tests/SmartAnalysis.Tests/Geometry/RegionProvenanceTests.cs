@@ -33,6 +33,15 @@ public sealed class RegionProvenanceTests
     }
 
     [Fact]
+    public void Roi_kind_codes_are_a_pinned_persisted_contract()
+    {
+        // These map recorded provenance back to the shape that ran; a saved history must never be remapped, so
+        // the codes are fixed here. New shapes append with the next explicit value — never renumber or insert.
+        Assert.Equal(0, (int)RoiKind.Rectangle);
+        Assert.Equal(1, (int)RoiKind.Ellipse);
+    }
+
+    [Fact]
     public void Shape_label_maps_the_code_to_the_kind_name()
     {
         Assert.Equal("Rectangle", RegionProvenance.ShapeLabel(0));
