@@ -1,10 +1,14 @@
 namespace SmartAnalysis.Domain.Geometry;
 
-/// <summary>A stable region-shape discriminator (extended as shapes are added: polygon, line, freehand).</summary>
+/// <summary>
+/// A stable region-shape discriminator recorded in provenance. The numeric values are a <b>persisted contract</b>
+/// (a saved history reads them back as the shape that ran), so they are pinned explicitly: <b>never renumber or
+/// insert</b> — new shapes (polygon, line, freehand) only <b>append</b> with the next explicit value.
+/// </summary>
 public enum RoiKind
 {
-    Rectangle,
-    Ellipse,
+    Rectangle = 0,
+    Ellipse = 1,
 }
 
 /// <summary>

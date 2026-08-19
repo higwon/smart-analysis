@@ -150,19 +150,9 @@ public sealed class RoughnessOperation : IAnalysisOperation
             ["Sku"] = new(stats.Kurtosis, StandardUnits.One),
         };
 
-        // Record the region bounds (if any) so a region roughness is distinguishable from the whole-image run.
-        var regionParams = new Dictionary<string, PhysicalValue>();
-        if (region is { } roi)
-        {
-            var b = roi.Bounds;
-            // The shape discriminator too: a rectangle and its inscribed ellipse share a bbox but select different
-            // pixels, so history must tell them apart (the #98 shape lesson, on the general Roi channel).
-            regionParams["regionShape"] = new((int)roi.Kind, StandardUnits.One);
-            regionParams["regionLeft"] = new(b.Left, StandardUnits.One);
-            regionParams["regionTop"] = new(b.Top, StandardUnits.One);
-            regionParams["regionWidth"] = new(b.Width, StandardUnits.One);
-            regionParams["regionHeight"] = new(b.Height, StandardUnits.One);
-        }
+        // Record the region (if any) via the shared projection — shape + bounds — so every region-aware op records
+        // it the same way and the history distinguishes a rectangle from its inscribed ellipse (same bbox, different pixels).
+        var regionParams = region is { } roi ? RegionProvenance.Describe(roi) : new Dictionary<string, PhysicalValue>();
 
         var artifactId = DatasetId.New();
         var step = new ProvenanceStep(
