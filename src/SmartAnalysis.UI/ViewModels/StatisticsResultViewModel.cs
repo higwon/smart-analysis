@@ -32,7 +32,7 @@ public sealed class ReadoutViewModel
     public string Value { get; }
 }
 
-/// <summary>The measurement result card (U03 Measure → Result): readouts + a histogram, attached to a source.</summary>
+/// <summary>The measurement result card (U03 Measure → Result): readouts + a histogram + an optional table.</summary>
 public sealed class StatisticsResultViewModel
 {
     public StatisticsResultViewModel(StatisticsResult result)
@@ -49,9 +49,27 @@ public sealed class StatisticsResultViewModel
         {
             HistogramBars.Add(max > 0 ? (double)c / max : 0.0);
         }
+
+        // The optional tabular result (e.g. the full peak list): column headers + rows of cell strings.
+        if (result.Table is { } table)
+        {
+            foreach (var col in table.Columns)
+            {
+                TableColumns.Add(col);
+            }
+
+            foreach (var row in table.Rows)
+            {
+                TableRows.Add(new ObservableCollection<string>(row));
+            }
+        }
     }
 
     public string SourceLabel { get; }
     public ObservableCollection<ReadoutViewModel> Readouts { get; } = new();
     public ObservableCollection<double> HistogramBars { get; } = new();
+    public bool HasHistogram => HistogramBars.Count > 0;
+    public ObservableCollection<string> TableColumns { get; } = new();
+    public ObservableCollection<ObservableCollection<string>> TableRows { get; } = new();
+    public bool HasTable => TableColumns.Count > 0;
 }

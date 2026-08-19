@@ -207,7 +207,28 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
             .ToArray();
         var histogram = artifact.Histogram is { } h ? h.Counts.Select(c => (int)Math.Min(c, int.MaxValue)).ToArray() : [];
         var sourceLabel = _workspace.TryGet(artifact.SourceId, out var source) ? DatasetLabel(source) : null;
-        return new StatisticsResult(true, sourceLabel, readouts, histogram, null);
+        return new StatisticsResult(true, sourceLabel, readouts, histogram, null, ProjectTable(artifact.Table));
+    }
+
+    // A table's unit is folded into each column header (peaks share a unit per column); cells carry the value.
+    private static MeasurementTableDto? ProjectTable(MeasurementTable? table)
+    {
+        if (table is null)
+        {
+            return null;
+        }
+
+        var headers = new string[table.ColumnCount];
+        for (int c = 0; c < table.ColumnCount; c++)
+        {
+            var unit = table.RowCount > 0 ? table.Rows[0][c].Unit.Symbol : string.Empty;
+            headers[c] = unit is "" or "1" ? table.Columns[c] : $"{table.Columns[c]} ({unit})";
+        }
+
+        var rows = table.Rows
+            .Select(r => (IReadOnlyList<string>)r.Select(cell => $"{cell.Value:G4}").ToArray())
+            .ToArray();
+        return new MeasurementTableDto(headers, rows);
     }
 
     private static ParameterFieldDescriptor ToField(ParameterDescriptor p)

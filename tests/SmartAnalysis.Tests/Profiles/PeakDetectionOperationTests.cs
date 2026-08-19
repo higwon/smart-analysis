@@ -125,6 +125,39 @@ public sealed class PeakDetectionOperationTests
     }
 
     [Fact]
+    public async Task Emits_the_full_peak_list_as_a_table()
+    {
+        using var profile = BumpProfile(step: 0.5);
+
+        var artifact = await RunAsync(profile, prominence: 0.1);
+
+        Assert.NotNull(artifact.Table);
+        Assert.Equal(new[] { "Position", "Value", "Prominence" }, artifact.Table!.Columns);
+        Assert.Equal(2, artifact.Table.RowCount);                          // one row per peak (bumps at 20 and 50)
+        Assert.Equal(20 * 0.5, artifact.Table.Rows[0][0].Value, 6);        // first peak position
+        Assert.Equal(profile.X.Unit, artifact.Table.Rows[0][0].Unit);      // position in the X unit
+        Assert.Equal(1.0, artifact.Table.Rows[0][1].Value, 3);             // its value
+    }
+
+    [Fact]
+    public async Task The_launcher_projects_the_table_with_units_in_the_headers()
+    {
+        using var profile = BumpProfile();
+        var ws = new Workspace();
+        ws.Add(profile);
+        ws.SetActive(profile.Id);
+        IOperationLauncher launcher = new OperationLauncherUseCase(
+            ws, new OperationRegistry([new PeakDetectionOperation(new SystemExecutionEnvironmentProvider())]), new MeasurementStore());
+
+        var run = await launcher.RunAsync("curve.peaks", new Dictionary<string, object?> { ["prominence"] = 0.1 });
+
+        var table = run.Measurement!.Table;
+        Assert.NotNull(table);
+        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)" }, table!.Columns); // unit folded into the header
+        Assert.Equal(2, table.Rows.Count);
+    }
+
+    [Fact]
     public void Rejects_a_non_profile_input()
     {
         using var image = new ScanImageDataset(

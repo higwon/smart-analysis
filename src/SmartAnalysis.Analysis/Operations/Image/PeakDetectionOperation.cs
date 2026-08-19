@@ -128,12 +128,27 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             warnings: warnings,
             parentResultId: artifactId);
 
+        // The full peak list (one row per peak) beside the scalar summary.
+        var rows = new List<IReadOnlyList<PhysicalValue>>(peaks.Count);
+        foreach (var peak in peaks)
+        {
+            rows.Add(new PhysicalValue[]
+            {
+                new(profile.X.RawToReal(peak.Index), xUnit),
+                new(peak.Value, yUnit),
+                new(peak.Prominence, yUnit),
+            });
+        }
+
+        var table = new MeasurementTable(["Position", "Value", "Prominence"], rows);
+
         var artifact = new AnalysisArtifact(
             id: artifactId,
             sourceId: profile.Id,
             operationId: Descriptor.Id,
             scalars: scalars,
-            provenance: ProvenanceRecord.DerivedFrom(profile.Id, [step]));
+            provenance: ProvenanceRecord.DerivedFrom(profile.Id, [step]),
+            table: table);
 
         progress?.Report(new OperationProgress(1.0, "Done."));
         return Task.FromResult(OperationResult.Measurement(artifact, warnings));
