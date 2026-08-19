@@ -73,4 +73,14 @@ public sealed class PeakDetectionTests
     {
         Assert.Empty(PeakDetection.Find(new float[] { 0, 1 }, 0.1));
     }
+
+    [Fact]
+    public void Rejects_a_prominence_fraction_outside_zero_to_one()
+    {
+        var curve = Bumps(20, 3.0, (10, 1.0));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => PeakDetection.Find(curve, -0.1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PeakDetection.Find(curve, 1.5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PeakDetection.Find(curve, double.NaN));
+    }
 }

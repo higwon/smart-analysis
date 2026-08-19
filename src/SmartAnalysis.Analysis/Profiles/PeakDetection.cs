@@ -17,6 +17,11 @@ public static class PeakDetection
     /// <returns>The qualifying peaks in ascending index order.</returns>
     public static IReadOnlyList<Peak> Find(ReadOnlySpan<float> values, double prominenceFraction)
     {
+        if (!double.IsFinite(prominenceFraction) || prominenceFraction < 0.0 || prominenceFraction > 1.0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(prominenceFraction), prominenceFraction, "The prominence fraction must be in [0, 1].");
+        }
+
         int n = values.Length;
         var peaks = new List<Peak>();
         if (n < 3)

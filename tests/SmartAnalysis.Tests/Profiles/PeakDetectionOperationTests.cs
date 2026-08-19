@@ -67,6 +67,33 @@ public sealed class PeakDetectionOperationTests
     }
 
     [Fact]
+    public async Task The_dominant_peak_is_the_most_prominent_not_the_tallest()
+    {
+        // A taller peak (value 10) sits in a notch below a taller monotonic ramp → prominence only 0.2; a shorter
+        // peak (value 6) is isolated → prominence 6. The dominant peak must be the more prominent one (value 6),
+        // matching the prominence-based detection, not the raw-tallest (value 10).
+        var z = new float[]
+        {
+            0, 3, 6, 3, 0,          // 0-4:  isolated peak B at index 2 (value 6, prominence 6)
+            0, 0, 0, 0, 0,          // 5-9
+            9.8f, 10f, 9.8f,        // 10-12: peak A at index 11 (value 10) …
+            11, 12, 13, 14, 15, 16, 16.1f, // 13-19: … bounded on the right by a taller ramp → A's prominence ≈ 0.2
+        };
+        using var profile = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Distance", StandardUnits.Micrometre, 0.0, 1.0, z.Length),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(z, z.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var artifact = await RunAsync(profile, prominence: 0.01);
+
+        Assert.Equal(2.0, artifact.Scalars["PeakCount"].Value, 12);            // both A and B qualify
+        Assert.Equal(2.0, artifact.Scalars["DominantPosition"].Value, 6);     // index 2 (B), not index 11 (A)
+        Assert.Equal(6.0, artifact.Scalars["DominantValue"].Value, 5);        // the more prominent (shorter) peak
+        Assert.True(artifact.Scalars["DominantProminence"].Value > 5.0);
+    }
+
+    [Fact]
     public async Task Position_carries_the_x_unit_and_value_the_channel_unit()
     {
         using var profile = BumpProfile();

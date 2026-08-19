@@ -89,11 +89,12 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
 
         if (peaks.Count > 0)
         {
-            // The dominant peak is the tallest of the significant peaks.
+            // The dominant peak is the MOST PROMINENT — the same significance measure used to detect them, so a
+            // small ripple on a high baseline never outranks a lower but far more prominent peak.
             var dominant = peaks[0];
             for (int i = 1; i < peaks.Count; i++)
             {
-                if (peaks[i].Value > dominant.Value)
+                if (peaks[i].Prominence > dominant.Prominence)
                 {
                     dominant = peaks[i];
                 }
