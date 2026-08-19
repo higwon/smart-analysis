@@ -28,6 +28,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<PowerSpectrumOperation>();
         services.AddAnalysisOperation<ProfileOperation>();
         services.AddAnalysisOperation<LineProfileOperation>();
+        services.AddAnalysisOperation<ProfileRoughnessOperation>();
         return services;
     }
 }
