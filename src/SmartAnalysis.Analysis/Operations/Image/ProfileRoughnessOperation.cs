@@ -6,11 +6,14 @@ using SmartAnalysis.Domain.Units;
 namespace SmartAnalysis.Analysis.Operations.Image;
 
 /// <summary>
-/// ISO 4287 <b>profile (line) roughness parameters</b> (Ra/Rq/Rp/Rv/Rz/Rsk/Rku) on the F04 contract — the first
-/// operation that <b>consumes a curve</b> (<see cref="LineProfileDataset"/>) rather than an image, so a cross-section
-/// or drawn line profile (A36/A37) can be measured for line roughness. Relative to the mean line, from the
-/// MV00-golden <see cref="SummaryStatistics"/> core (the same moments as the areal A03, in the 1D naming), so the
-/// parameters are golden by construction. Non-finite samples are excluded (and warned). Emits an
+/// <b>Unfiltered profile (line) height parameters</b> in the conventional Ra/Rq/Rp/Rv/Rz/Rsk/Rku naming, on the F04
+/// contract — the first operation that <b>consumes a curve</b> (<see cref="LineProfileDataset"/>) rather than an
+/// image, so a cross-section or drawn line profile (A36/A37) can be measured. Computed over the whole finite
+/// profile relative to its mean line, from the MV00-golden <see cref="SummaryStatistics"/> core (the same moments
+/// as the areal A03, in the 1D naming), so the parameters are golden by construction. <b>This is the raw profile:
+/// there is no waviness/roughness separation</b> — a Gaussian λc long-wavelength cutoff and the sampling/evaluation
+/// lengths a profile standard (e.g. ISO 21920-2, which superseded the withdrawn ISO 4287) requires are a follow-up;
+/// only then would a standard name be warranted. Non-finite samples are excluded (and warned). Emits an
 /// <see cref="AnalysisArtifact"/> measurement attached to the profile. Parameterless; DI-only (ADR-005).
 /// </summary>
 public sealed class ProfileRoughnessOperation : IAnalysisOperation
@@ -23,13 +26,13 @@ public sealed class ProfileRoughnessOperation : IAnalysisOperation
     public OperationDescriptor Descriptor { get; } = new(
         id: "profile.roughness",
         version: 1,
-        displayName: "Profile Roughness (ISO 4287)",
-        summary: "Computes ISO 4287 line roughness parameters (Ra, Rq, Rp, Rv, Rz, Rsk, Rku) over a profile.",
+        displayName: "Profile Roughness (Unfiltered)",
+        summary: "Computes unfiltered profile height parameters (Ra, Rq, Rp, Rv, Rz, Rsk, Rku) over a profile.",
         acceptedInputs: [DataKind.LineProfile],
         parameters: ParameterSchema.Empty,
         output: OutputKind.Artifact,
         isDeterministic: true,
-        tags: ["roughness", "iso4287", "profile", "line", "curve"]);
+        tags: ["roughness", "unfiltered", "profile", "line", "curve"]);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {
@@ -98,7 +101,7 @@ public sealed class ProfileRoughnessOperation : IAnalysisOperation
             warnings.Add(new OperationWarning("profile-roughness.empty", "The profile has no finite samples; parameters are undefined."));
         }
 
-        // ISO 4287 line height parameters from the golden summary moments (relative to the mean line).
+        // Line height parameters (conventional Ra/Rq/... naming) from the golden summary moments about the mean line.
         var scalars = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)
         {
             ["Ra"] = new(stats.MeanAbsoluteDeviation, zUnit),

@@ -16,9 +16,9 @@ using Xunit;
 namespace SmartAnalysis.Tests.Roughness;
 
 /// <summary>
-/// ISO 4287 profile roughness (`profile.roughness`) — the first op that consumes a curve. Verifies the parameters
-/// against the MV00-golden <see cref="SummaryStatistics"/> core over the profile samples, the ISO identity
-/// (Rz = Rp + Rv), units, non-finite exclusion, and the U08 launcher payoff for a LineProfile active dataset.
+/// Unfiltered profile roughness (`profile.roughness`) — the first op that consumes a curve. Verifies the parameters
+/// against the MV00-golden <see cref="SummaryStatistics"/> core over the profile samples, the height identity
+/// (Rz = Rp + Rv), units, non-finite exclusion / empty warning, and the U08 launcher payoff for a LineProfile.
 /// </summary>
 public sealed class ProfileRoughnessOperationTests
 {
@@ -83,6 +83,17 @@ public sealed class ProfileRoughnessOperationTests
 
         Assert.Equal(expected.Rms, artifact.Scalars["Rq"].Value, 12); // NaN dropped
         Assert.Contains(result.Warnings, w => w.Code == "profile-roughness.non-finite");
+    }
+
+    [Fact]
+    public async Task An_all_non_finite_profile_warns_empty()
+    {
+        using var profile = Profile(float.NaN, float.PositiveInfinity, float.NaN);
+
+        var result = await NewOperation().RunAsync(new OperationInput(profile), ParameterSet.Empty, null, CancellationToken.None);
+
+        Assert.Contains(result.Warnings, w => w.Code == "profile-roughness.non-finite"); // all excluded …
+        Assert.Contains(result.Warnings, w => w.Code == "profile-roughness.empty");      // … and nothing left
     }
 
     [Fact]
