@@ -82,9 +82,10 @@ public sealed class FilteredProfileRoughnessOperation : IAnalysisOperation
         }
 
         int n = profile.Values.Memory.Length;
-        if (n * dx < cutoff)
+        double profileSpan = (n - 1) * dx; // N samples enclose N−1 intervals
+        if (profileSpan < cutoff)
         {
-            return ValidationResult.Fail($"The profile ({n * dx}) is shorter than one sampling length (λc = {cutoff}); it cannot be evaluated.");
+            return ValidationResult.Fail($"The profile ({profileSpan}) is shorter than one sampling length (λc = {cutoff}); it cannot be evaluated.");
         }
 
         return ValidationResult.Success;
@@ -163,7 +164,9 @@ public sealed class FilteredProfileRoughnessOperation : IAnalysisOperation
             ["Rsk"] = new(stats.Skewness, StandardUnits.One),
             ["Rku"] = new(stats.Kurtosis, StandardUnits.One),
             ["SamplingLengths"] = new(window.SamplingLengths, StandardUnits.One),
-            ["EvaluationLength"] = new(window.SamplingLengths * cutoff, xUnit),
+            // The ACTUAL sampled span of the window (its N−1 intervals), not the theoretical target lengths·λc —
+            // λc/dx is rarely an integer, so the two differ; the readout must state what was really measured.
+            ["EvaluationLength"] = new((window.Length - 1) * dx, xUnit),
         };
 
         var artifactId = DatasetId.New();

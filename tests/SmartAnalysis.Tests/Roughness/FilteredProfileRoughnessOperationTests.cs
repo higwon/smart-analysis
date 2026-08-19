@@ -84,7 +84,8 @@ public sealed class FilteredProfileRoughnessOperationTests
 
         Assert.Equal(5.0, artifact.Scalars["SamplingLengths"].Value, 12);
         Assert.Equal(StandardUnits.One, artifact.Scalars["SamplingLengths"].Unit);
-        Assert.Equal(5 * 0.8, artifact.Scalars["EvaluationLength"].Value, 12);  // 5 sampling lengths of λc
+        // The reported evaluation length is the ACTUAL sampled span (401 samples → 400 intervals · 0.01 = 4.0 µm here).
+        Assert.Equal(4.0, artifact.Scalars["EvaluationLength"].Value, 12);
         Assert.Equal(profile.X.Unit, artifact.Scalars["EvaluationLength"].Unit); // in the profile's length unit
         Assert.Equal(profile.Channel.Unit, artifact.Scalars["Ra"].Unit);
         Assert.Equal(StandardUnits.One, artifact.Scalars["Rsk"].Unit);

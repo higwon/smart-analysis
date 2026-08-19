@@ -15,8 +15,9 @@ public readonly record struct EvaluationWindow(int Start, int Length, int Sampli
 
     /// <summary>
     /// Picks the largest integer number of whole sampling lengths (≤ <paramref name="maxSamplingLengths"/>) that fit
-    /// in <paramref name="sampleCount"/> samples of spacing <paramref name="dx"/> at cutoff <paramref name="cutoff"/>
-    /// (lr = λc), and centres that window. Returns <see cref="None"/> if not even one sampling length fits.
+    /// in the profile's physical span and centres that window. All length reasoning is on the <b>interval</b> span
+    /// <c>(sampleCount − 1)·dx</c> — N samples enclose N−1 intervals — so the window never overstates the data it
+    /// covers. Returns <see cref="None"/> if not even one sampling length fits.
     /// </summary>
     public static EvaluationWindow Central(int sampleCount, double dx, double cutoff, int maxSamplingLengths = 5)
     {
@@ -40,17 +41,16 @@ public readonly record struct EvaluationWindow(int Start, int Length, int Sampli
             throw new ArgumentOutOfRangeException(nameof(maxSamplingLengths), maxSamplingLengths, "There must be at least one sampling length.");
         }
 
-        double samplesPerLength = cutoff / dx;
-        int fit = (int)Math.Floor(sampleCount / samplesPerLength);
-        int lengths = Math.Min(maxSamplingLengths, fit);
+        double availableSpan = (sampleCount - 1) * dx;
+        int lengths = Math.Min(maxSamplingLengths, (int)Math.Floor(availableSpan / cutoff));
         if (lengths < 1)
         {
             return None;
         }
 
-        int windowLength = Math.Min(sampleCount, (int)Math.Round(lengths * samplesPerLength, MidpointRounding.AwayFromZero));
-        windowLength = Math.Max(1, windowLength);
-        int start = (sampleCount - windowLength) / 2;
-        return new EvaluationWindow(start, windowLength, lengths);
+        // Largest whole number of intervals that fits the target span (lengths·λc); window = intervals + 1 samples.
+        double targetSpan = lengths * cutoff;
+        int intervals = Math.Min(sampleCount - 1, (int)Math.Floor(targetSpan / dx));
+        return new EvaluationWindow((sampleCount - (intervals + 1)) / 2, intervals + 1, lengths);
     }
 }
