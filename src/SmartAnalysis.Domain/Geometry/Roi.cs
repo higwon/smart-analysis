@@ -9,6 +9,7 @@ public enum RoiKind
 {
     Rectangle = 0,
     Ellipse = 1,
+    Polygon = 2,
 }
 
 /// <summary>
@@ -64,8 +65,8 @@ public readonly record struct RoiBounds
 /// A region of interest over a scan-image grid: a domain-free (no WPF), immutable shape in <b>pixel-index
 /// space</b> (doc 05 "MShape", ADR "domain-free geometry"). Ops restrict a computation to the region via
 /// <see cref="ToMask"/> (a pixel is inside iff its <b>centre</b> is inside the shape); a viewer overlay (V06)
-/// draws the same shape mapped through the display transform. MVP shapes: rectangle and ellipse; polygon /
-/// line / freehand are follow-ups.
+/// draws the same shape mapped through the display transform. Shapes: rectangle, ellipse, polygon; line /
+/// freehand are follow-ups.
 /// </summary>
 public abstract record Roi
 {
