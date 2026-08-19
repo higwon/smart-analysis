@@ -21,14 +21,25 @@ public sealed class EnumParameterLabelTests
         return new OperationLauncherUseCase(new Workspace(), registry, new MeasurementStore());
     }
 
+    // The Fourier descriptor is version 1 (matches the recorded step version in these tests).
     [Fact]
-    public void An_enum_parameter_code_maps_to_its_member_name()
+    public void An_enum_parameter_code_maps_to_its_member_name_at_the_matching_version()
     {
         var launcher = NewLauncher();
 
         // FourierFilterKind: LowPass=0, HighPass=1, BandPass=2, BandStop=3.
-        Assert.Equal("BandStop", launcher.EnumParameterLabel("image.fourier", "kind", 3));
-        Assert.Equal("LowPass", launcher.EnumParameterLabel("image.fourier", "kind", 0));
+        Assert.Equal("BandStop", launcher.EnumParameterLabel("image.fourier", 1, "kind", 3));
+        Assert.Equal("LowPass", launcher.EnumParameterLabel("image.fourier", 1, "kind", 0));
+    }
+
+    [Fact]
+    public void A_step_from_a_different_operation_version_is_not_relabelled()
+    {
+        var launcher = NewLauncher();
+
+        // A newer op version may have reassigned the enum codes, so a past step must not adopt the current name.
+        Assert.Null(launcher.EnumParameterLabel("image.fourier", 2, "kind", 3));
+        Assert.Null(launcher.EnumParameterLabel("image.fourier", 0, "kind", 3));
     }
 
     [Fact]
@@ -36,7 +47,16 @@ public sealed class EnumParameterLabelTests
     {
         var launcher = NewLauncher();
 
-        Assert.Null(launcher.EnumParameterLabel("image.fourier", "lowCutoff", 0.25)); // a Number, not an enum
+        Assert.Null(launcher.EnumParameterLabel("image.fourier", 1, "lowCutoff", 0.25)); // a Number, not an enum
+    }
+
+    [Fact]
+    public void A_non_integer_or_non_finite_code_yields_null()
+    {
+        var launcher = NewLauncher();
+
+        Assert.Null(launcher.EnumParameterLabel("image.fourier", 1, "kind", 3.4));            // corrupt fractional code
+        Assert.Null(launcher.EnumParameterLabel("image.fourier", 1, "kind", double.NaN));
     }
 
     [Fact]
@@ -44,9 +64,9 @@ public sealed class EnumParameterLabelTests
     {
         var launcher = NewLauncher();
 
-        Assert.Null(launcher.EnumParameterLabel("image.nope", "kind", 3));      // unknown op
-        Assert.Null(launcher.EnumParameterLabel("image.fourier", "nope", 3));   // unknown parameter
-        Assert.Null(launcher.EnumParameterLabel("image.fourier", "kind", 99));  // code outside the enum
-        Assert.Null(launcher.EnumParameterLabel("image.roughness", "kind", 0)); // parameterless op has no such field
+        Assert.Null(launcher.EnumParameterLabel("image.nope", 1, "kind", 3));      // unknown op
+        Assert.Null(launcher.EnumParameterLabel("image.fourier", 1, "nope", 3));   // unknown parameter
+        Assert.Null(launcher.EnumParameterLabel("image.fourier", 1, "kind", 99));  // code outside the enum
+        Assert.Null(launcher.EnumParameterLabel("image.roughness", 1, "kind", 0)); // parameterless op has no such field
     }
 }

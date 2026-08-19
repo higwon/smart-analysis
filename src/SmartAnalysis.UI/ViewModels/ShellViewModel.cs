@@ -839,7 +839,7 @@ public sealed class ShellViewModel : ObservableObject
             {
                 // An enum parameter is recorded as its integer code; show the member name (e.g. "BandStop") instead.
                 // Otherwise the Inspector shows the exact recorded value (round-trippable) and the strip may round.
-                var enumLabel = _launcher.EnumParameterLabel(step.OperationId, name, value.Value);
+                var enumLabel = _launcher.EnumParameterLabel(step.OperationId, step.OperationVersion, name, value.Value);
                 parameters.Add(new StepParameterViewModel(name, enumLabel ?? FormatValuePrecise(value)));
                 summaryParts.Add($"{name} {enumLabel ?? FormatValueCompact(value)}");
             }
