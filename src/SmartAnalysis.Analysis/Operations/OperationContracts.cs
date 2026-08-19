@@ -210,6 +210,15 @@ public interface IAnalysisOperation
 {
     OperationDescriptor Descriptor { get; }
 
+    /// <summary>
+    /// Whether the operation applies to <paramref name="dataset"/> <b>beyond</b> the coarse
+    /// <see cref="OperationDescriptor.AcceptedInputs"/> DataKind — a dataset-level predicate the launcher uses to
+    /// decide what to offer (e.g. a wavelength filter needs a <b>spatial</b> length-axis profile, not a PSD's
+    /// frequency axis). Params aren't available yet, so this is coarse; the full check stays in
+    /// <see cref="Validate"/>. Default: applicable whenever the DataKind matches.
+    /// </summary>
+    bool IsApplicableTo(AfmDataset dataset) => true;
+
     /// <summary>Checks input applicability + parameters. Returns typed failures (never throws for expected invalidity).</summary>
     ValidationResult Validate(OperationInput input, IParameterSet parameters);
 

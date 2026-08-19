@@ -40,6 +40,11 @@ public sealed class ProfileFilterOperation : IAnalysisOperation
         isDeterministic: true,
         tags: ["profile", "filter", "gaussian", "roughness", "waviness", "curve"]);
 
+    // A wavelength filter only applies to a spatial profile (length X axis) — so the launcher doesn't offer it for
+    // a PSD's frequency-axis curve. Validate() enforces the same rule for a direct run.
+    public bool IsApplicableTo(AfmDataset dataset)
+        => dataset is LineProfileDataset profile && profile.X.Unit.Dimension == StandardUnits.Length;
+
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {
         ArgumentNullException.ThrowIfNull(input);

@@ -155,6 +155,50 @@ public sealed class ProfileFilterOperationTests
     }
 
     [Fact]
+    public void Is_applicable_only_to_a_spatial_profile()
+    {
+        var env = new SystemExecutionEnvironmentProvider();
+        var op = new ProfileFilterOperation(env);
+
+        using var spatial = SineProfile(32, 0.1, 10.0, 1.0); // X = µm
+        var z = new float[16];
+        using var psd = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Frequency", StandardUnits.PerMetre, 1.0, 1.0, z.Length),
+            new ChannelDescriptor("psd", ChannelKind.Unknown, StandardUnits.One, "PSD"),
+            ScanBuffer<float>.TakeOwnership(z, z.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        Assert.True(op.IsApplicableTo(spatial));
+        Assert.False(op.IsApplicableTo(psd)); // frequency axis
+    }
+
+    [Fact]
+    public void The_launcher_offers_it_for_a_spatial_profile_but_not_a_psd_curve()
+    {
+        var env = new SystemExecutionEnvironmentProvider();
+        var registry = new OperationRegistry([new ProfileFilterOperation(env)]);
+
+        using var spatial = SineProfile(32, 0.1, 10.0, 1.0);
+        var wsSpatial = new Workspace();
+        wsSpatial.Add(spatial);
+        wsSpatial.SetActive(spatial.Id);
+        IOperationLauncher spatialLauncher = new OperationLauncherUseCase(wsSpatial, registry, new MeasurementStore());
+        Assert.Contains(spatialLauncher.ApplicableToActive(), i => i.Id == "profile.filter");
+
+        var z = new float[16];
+        using var psd = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Frequency", StandardUnits.PerMetre, 1.0, 1.0, z.Length),
+            new ChannelDescriptor("psd", ChannelKind.Unknown, StandardUnits.One, "PSD"),
+            ScanBuffer<float>.TakeOwnership(z, z.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+        var wsPsd = new Workspace();
+        wsPsd.Add(psd);
+        wsPsd.SetActive(psd.Id);
+        IOperationLauncher psdLauncher = new OperationLauncherUseCase(wsPsd, registry, new MeasurementStore());
+        Assert.DoesNotContain(psdLauncher.ApplicableToActive(), i => i.Id == "profile.filter"); // not offered
+    }
+
+    [Fact]
     public async Task Running_on_a_non_spatial_curve_fails_in_the_launcher()
     {
         var z = new float[32];

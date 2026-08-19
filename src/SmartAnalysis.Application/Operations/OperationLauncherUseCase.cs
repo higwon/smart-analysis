@@ -39,6 +39,9 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         }
 
         return _registry.ApplicableTo(kind)
+            // Dataset-level applicability (beyond DataKind): an op can require more of the active dataset (e.g. a
+            // wavelength filter needs a spatial profile), so it isn't offered where it could only fail to run.
+            .Where(d => _registry.TryGet(d.Id, out var op) && op.IsApplicableTo(dataset))
             .Select(d => new OperationLauncherItem(d.Id, d.DisplayName, d.Summary, CategoryOf(d.Output)))
             .OrderBy(i => i.Category)
             .ThenBy(i => i.DisplayName, StringComparer.Ordinal)
