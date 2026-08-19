@@ -514,26 +514,51 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   Visibility="{Binding RoleIsResult, Converter={StaticResource Bool2Vis}}">
                         <StackPanel DataContext="{Binding Statistics}" Margin="{DynamicResource SA.Pad.Panel}">
-                            <TextBlock Text="MEASUREMENT · ROUGHNESS" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="MEASUREMENT" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
                             <Border Style="{StaticResource SA.Card}" Background="{DynamicResource SA.Brush.Surface.Sunken}" Margin="{DynamicResource SA.Gap.Bottom2}">
                                 <TextBlock TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}">
                                     <Run Text="Attached to "/><Run Text="{Binding SourceLabel, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" — active unchanged"/>
                                 </TextBlock>
                             </Border>
                             <ItemsControl ItemsSource="{Binding Readouts}"/>
-                            <ItemsControl ItemsSource="{Binding HistogramBars}" Height="52" Margin="{DynamicResource SA.Gap.Top2}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Width="7" Margin="{DynamicResource SA.Gap.BarX}" VerticalAlignment="Bottom"
-                                                Background="{DynamicResource SA.Brush.Accent.Primary}"
-                                                Height="{Binding Converter={StaticResource Ratio2H}, ConverterParameter=48}"/>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Text="Height histogram · golden-verified (MV00)" Style="{StaticResource SA.Text.Micro}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                            <StackPanel Visibility="{Binding HasHistogram, Converter={StaticResource Bool2Vis}}">
+                                <ItemsControl ItemsSource="{Binding HistogramBars}" Height="52" Margin="{DynamicResource SA.Gap.Top2}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="7" Margin="{DynamicResource SA.Gap.BarX}" VerticalAlignment="Bottom"
+                                                    Background="{DynamicResource SA.Brush.Accent.Primary}"
+                                                    Height="{Binding Converter={StaticResource Ratio2H}, ConverterParameter=48}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="Height histogram · golden-verified (MV00)" Style="{StaticResource SA.Text.Micro}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                            </StackPanel>
+
+                            <!-- Optional tabular result (e.g. the full peak list). Equal-width columns via UniformGrid. -->
+                            <StackPanel Visibility="{Binding HasTable, Converter={StaticResource Bool2Vis}}" Margin="{DynamicResource SA.Gap.Top2}">
+                                <ItemsControl ItemsSource="{Binding TableColumns}" Margin="{DynamicResource SA.Gap.Bottom1}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource SA.Text.Micro}"
+                                                                 Foreground="{DynamicResource SA.Brush.Text.Tertiary}"/></DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding TableRows}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ItemsControl ItemsSource="{Binding}" Margin="{DynamicResource SA.Gap.Bottom1}">
+                                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource SA.Text.Numeric}"/></DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
 
