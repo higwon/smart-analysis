@@ -99,6 +99,20 @@ public sealed class ProfileFilterOperationTests
     }
 
     [Fact]
+    public void Rejects_a_non_spatial_profile_such_as_a_psd_curve()
+    {
+        // A PSD's X axis is spatial frequency (1/µm), not a length — a wavelength cutoff is meaningless there.
+        var z = new float[32];
+        using var psd = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Frequency", StandardUnits.PerMetre, 1.0, 1.0, z.Length),
+            new ChannelDescriptor("psd", ChannelKind.Unknown, StandardUnits.One, "PSD"),
+            ScanBuffer<float>.TakeOwnership(z, z.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        Assert.False(NewOperation().Validate(new OperationInput(psd), Params(ProfileBand.Roughness, 5.0)).IsValid);
+    }
+
+    [Fact]
     public void Rejects_a_non_profile_input_and_a_too_small_cutoff()
     {
         using var profile = SineProfile(50, 0.1, 10.0, 1.0); // dx = 0.1 → λc must be ≥ 0.2
@@ -138,5 +152,27 @@ public sealed class ProfileFilterOperationTests
         Assert.NotNull(run.DerivedId);
         Assert.Equal(run.DerivedId, ws.Active.ActiveId);
         Assert.IsType<LineProfileDataset>(ws.TryGet(run.DerivedId!.Value, out var d) ? d : null);
+    }
+
+    [Fact]
+    public async Task Running_on_a_non_spatial_curve_fails_in_the_launcher()
+    {
+        var z = new float[32];
+        using var psd = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Frequency", StandardUnits.PerMetre, 1.0, 1.0, z.Length),
+            new ChannelDescriptor("psd", ChannelKind.Unknown, StandardUnits.One, "PSD"),
+            ScanBuffer<float>.TakeOwnership(z, z.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+        var ws = new Workspace();
+        ws.Add(psd);
+        ws.SetActive(psd.Id);
+
+        var env = new SystemExecutionEnvironmentProvider();
+        IOperationLauncher launcher = new OperationLauncherUseCase(ws, new OperationRegistry([new ProfileFilterOperation(env)]), new MeasurementStore());
+
+        var run = await launcher.RunAsync("profile.filter", new Dictionary<string, object?> { ["band"] = ProfileBand.Roughness, ["cutoff"] = 2.0 });
+
+        Assert.False(run.Success);                 // a wavelength filter is invalid on a spatial-frequency axis
+        Assert.Equal(psd.Id, ws.Active.ActiveId);  // nothing was derived
     }
 }

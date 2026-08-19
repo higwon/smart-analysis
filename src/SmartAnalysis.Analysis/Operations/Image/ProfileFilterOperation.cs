@@ -56,6 +56,13 @@ public sealed class ProfileFilterOperation : IAnalysisOperation
             return ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(LineProfileDataset)} as its primary input.");
         }
 
+        // A wavelength cutoff over a physical spacing only makes sense on a SPATIAL profile: a curve whose X axis is
+        // not a length (e.g. a PSD's spatial-frequency axis, 1/µm) must not be filtered as if dx/λc were lengths.
+        if (profile.X.Unit.Dimension != StandardUnits.Length)
+        {
+            return ValidationResult.Fail($"'{Descriptor.Id}' requires a spatial profile with a length X axis (its axis is '{profile.X.Unit.Dimension.Name}').");
+        }
+
         double cutoff = parameters.Get<double>(CutoffParameter);
         if (!(cutoff > 0.0))
         {
