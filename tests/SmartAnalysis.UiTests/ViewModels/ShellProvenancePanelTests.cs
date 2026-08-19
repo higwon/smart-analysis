@@ -99,6 +99,36 @@ public sealed class ShellProvenancePanelTests
     }
 
     [Fact]
+    public void An_enum_parameter_shows_its_member_name_not_the_raw_code()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var root = Root();
+
+        var step = new ProvenanceStep(
+            stepId: "s1",
+            inputDatasetId: root.Id,
+            inputVersion: 0,
+            operationId: "image.fourier",
+            operationVersion: 1,
+            order: 0,
+            environment: ExecutionEnvironment.Unknown,
+            parameters: new Dictionary<string, PhysicalValue> { ["kind"] = new(3, StandardUnits.One) });
+        var derived = new ScanImageDataset(
+            DatasetId.New(), DataSource.Derived, root.X, root.Y, root.Channel,
+            ScanBuffer<float>.Allocate(4, 4), ScanMetadata.Unknown,
+            ProvenanceRecord.DerivedFrom(root.Id, [step]));
+
+        ws.Add(root);
+        ws.Add(derived);
+        ws.SetActive(derived.Id);
+
+        var row = Assert.Single(vm.HistoryRows);
+        Assert.Equal("BandStop", Assert.Single(row.Parameters).Value); // the member name, not "3"
+        Assert.Contains("kind BandStop", row.Summary);
+    }
+
+    [Fact]
     public void The_inspector_shows_the_exact_recorded_value_not_a_rounded_one()
     {
         var ws = new Workspace();
@@ -234,6 +264,10 @@ public sealed class ShellProvenancePanelTests
         public IReadOnlyList<OperationLauncherItem> ApplicableToActive() => Array.Empty<OperationLauncherItem>();
 
         public OperationForm? GetForm(string operationId) => null;
+
+        // Stand in for the registry's enum mapping: a "kind" parameter reads as its member name.
+        public string? EnumParameterLabel(string operationId, string parameterName, double value)
+            => parameterName == "kind" ? (value == 3 ? "BandStop" : $"kind{value}") : null;
 
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromException<OperationRunResult>(new NotImplementedException());

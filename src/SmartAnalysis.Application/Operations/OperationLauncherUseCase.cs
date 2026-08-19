@@ -45,6 +45,20 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
             .ToArray();
     }
 
+    public string? EnumParameterLabel(string operationId, string parameterName, double value)
+    {
+        var descriptor = _registry.All.FirstOrDefault(d => d.Id == operationId);
+        var parameter = descriptor?.Parameters.Parameters.FirstOrDefault(p => p.Name == parameterName);
+        if (parameter is null || !parameter.Type.IsEnum)
+        {
+            return null;
+        }
+
+        // Provenance stores the enum as its integer value; map it back to the member name (null if out of range).
+        int code = (int)Math.Round(value);
+        return Enum.IsDefined(parameter.Type, code) ? Enum.GetName(parameter.Type, code) : null;
+    }
+
     public OperationForm? GetForm(string operationId)
     {
         var descriptor = _registry.All.FirstOrDefault(d => d.Id == operationId);
