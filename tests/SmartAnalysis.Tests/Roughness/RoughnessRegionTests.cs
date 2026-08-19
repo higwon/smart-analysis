@@ -108,6 +108,23 @@ public sealed class RoughnessRegionTests
     }
 
     [Fact]
+    public async Task A_polygon_region_runs_through_the_general_contract_and_records_its_shape()
+    {
+        using var image = RampImage();
+
+        // A triangle over the top-left corner (offset so no pixel centre lands on the hypotenuse x + y = 3.4):
+        // the centres with x + y < 3.4 are indices {0,1,2,4,5,8}; the general Region path masks and measures those.
+        var expected = SummaryStatistics.Compute(new double[] { 0, 1, 2, 4, 5, 8 });
+        var artifact = await RunAsync(image, new PolygonRoi([new(0.2, 0.2), new(3.2, 0.2), new(0.2, 3.2)]));
+
+        Assert.Equal(expected.Rms, artifact.Scalars["Sq"].Value, 12);
+
+        var whole = await RunAsync(image, region: null);
+        Assert.NotEqual(whole.Scalars["Sq"].Value, artifact.Scalars["Sq"].Value, 6);
+        Assert.Equal(2.0, artifact.Provenance.Steps[^1].Parameters["regionShape"].Value, 12); // Polygon
+    }
+
+    [Fact]
     public async Task An_empty_region_warns()
     {
         using var image = RampImage();

@@ -39,6 +39,18 @@ public sealed class RegionProvenanceTests
         // the codes are fixed here. New shapes append with the next explicit value — never renumber or insert.
         Assert.Equal(0, (int)RoiKind.Rectangle);
         Assert.Equal(1, (int)RoiKind.Ellipse);
+        Assert.Equal(2, (int)RoiKind.Polygon);
+    }
+
+    [Fact]
+    public void A_polygon_records_its_shape_and_vertex_bounds()
+    {
+        var poly = RegionProvenance.Describe(new PolygonRoi([new(0, 0), new(4, 0), new(2, 3)]));
+
+        Assert.Equal(2.0, poly[RegionProvenance.ShapeKey].Value, 12); // Polygon
+        Assert.Equal(0.0, poly[RegionProvenance.LeftKey].Value, 12);
+        Assert.Equal(4.0, poly[RegionProvenance.WidthKey].Value, 12);
+        Assert.Equal(3.0, poly[RegionProvenance.HeightKey].Value, 12);
     }
 
     [Fact]
@@ -46,6 +58,7 @@ public sealed class RegionProvenanceTests
     {
         Assert.Equal("Rectangle", RegionProvenance.ShapeLabel(0));
         Assert.Equal("Ellipse", RegionProvenance.ShapeLabel(1));
+        Assert.Equal("Polygon", RegionProvenance.ShapeLabel(2));
     }
 
     [Fact]

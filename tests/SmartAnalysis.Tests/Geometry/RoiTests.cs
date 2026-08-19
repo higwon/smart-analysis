@@ -111,4 +111,61 @@ public sealed class RoiTests
         // Left and Width are each finite, but Left + Width overflows → the box is not a finite geometry.
         Assert.Throws<ArgumentException>(() => new RectangleRoi(double.MaxValue, 0, double.MaxValue, 1));
     }
+
+    [Fact]
+    public void A_square_polygon_masks_the_same_pixels_as_the_equivalent_rectangle()
+    {
+        // Vertices of the box [1,3]×[1,3] → the four interior pixel centres (1.5/2.5) are inside, like the rectangle.
+        var poly = new PolygonRoi([new(1, 1), new(3, 1), new(3, 3), new(1, 3)]);
+
+        Assert.Equal(4, poly.CountInside(4, 4));
+        Assert.Equal(new RectangleRoi(1, 1, 2, 2).CountInside(4, 4), poly.CountInside(4, 4));
+    }
+
+    [Fact]
+    public void A_triangle_contains_only_the_points_below_its_hypotenuse()
+    {
+        var tri = new PolygonRoi([new(0, 0), new(4, 0), new(0, 4)]); // x + y < 4
+
+        Assert.True(tri.Contains(0.5, 0.5));
+        Assert.True(tri.Contains(1.0, 1.0));
+        Assert.False(tri.Contains(3.0, 3.0)); // beyond the hypotenuse
+        Assert.False(tri.Contains(5.0, 0.5)); // outside the bounds
+    }
+
+    [Fact]
+    public void A_concave_polygon_excludes_its_notch()
+    {
+        // An L-shape: the full 4×4 box minus the top-right 2×2 block ([2,4)×[2,4)).
+        var l = new PolygonRoi([new(0, 0), new(4, 0), new(4, 2), new(2, 2), new(2, 4), new(0, 4)]);
+
+        Assert.True(l.Contains(1, 1));      // bottom-left arm
+        Assert.True(l.Contains(3, 1));      // bottom-right arm
+        Assert.True(l.Contains(1, 3));      // top-left arm
+        Assert.False(l.Contains(3, 3));     // the removed notch
+        Assert.Equal(12, l.CountInside(4, 4)); // 16 − the 4 notch pixels
+    }
+
+    [Fact]
+    public void Polygon_bounds_are_the_vertex_extent()
+    {
+        var poly = new PolygonRoi([new(1.5, 2.0), new(5.0, 3.0), new(2.0, 6.0)]);
+
+        Assert.Equal(1.5, poly.Bounds.Left, 9);
+        Assert.Equal(2.0, poly.Bounds.Top, 9);
+        Assert.Equal(5.0, poly.Bounds.Right, 9);
+        Assert.Equal(6.0, poly.Bounds.Bottom, 9);
+    }
+
+    [Fact]
+    public void A_polygon_with_fewer_than_three_vertices_is_rejected()
+    {
+        Assert.Throws<ArgumentException>(() => new PolygonRoi([new(0, 0), new(1, 1)]));
+    }
+
+    [Fact]
+    public void A_polygon_with_a_non_finite_vertex_is_rejected()
+    {
+        Assert.Throws<ArgumentException>(() => new PolygonRoi([new(0, 0), new(double.NaN, 1), new(1, 0)]));
+    }
 }
