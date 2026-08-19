@@ -27,4 +27,15 @@ public interface IOperationLauncher
     /// parameters / a run failure come back as a typed <see cref="OperationRunResult.Error"/>.
     /// </summary>
     Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The display name of an <b>enum</b> parameter value for <paramref name="operationId"/> — e.g. "BandStop"
+    /// for <c>kind = 3</c> — so provenance/history shows the member name instead of the raw code. Returns
+    /// <c>null</c> (the caller then formats the number) when the parameter is not a known enum on that operation,
+    /// the value is not an in-range integer, or the recorded <paramref name="operationVersion"/> does not match the
+    /// current descriptor — a past step must not be relabelled with a newer schema's (possibly different) enum
+    /// meaning; an unknown version is shown as the raw number, which is safe. A default no-op keeps non-registry
+    /// implementations (test doubles) simple.
+    /// </summary>
+    string? EnumParameterLabel(string operationId, int operationVersion, string parameterName, double value) => null;
 }

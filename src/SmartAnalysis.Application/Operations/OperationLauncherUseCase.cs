@@ -45,6 +45,33 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
             .ToArray();
     }
 
+    public string? EnumParameterLabel(string operationId, int operationVersion, string parameterName, double value)
+    {
+        var descriptor = _registry.All.FirstOrDefault(d => d.Id == operationId);
+
+        // Only relabel a step recorded by the CURRENT schema: a newer op version may have reassigned the enum
+        // codes, so a past step's "3" could mean something else now — show the raw number rather than a wrong name.
+        if (descriptor is null || descriptor.Version != operationVersion)
+        {
+            return null;
+        }
+
+        var parameter = descriptor.Parameters.Parameters.FirstOrDefault(p => p.Name == parameterName);
+        if (parameter is null || !parameter.Type.IsEnum)
+        {
+            return null;
+        }
+
+        // Provenance stores the enum as its integer value; a fractional/non-finite value is corrupt → don't guess.
+        if (!double.IsFinite(value) || value != Math.Floor(value))
+        {
+            return null;
+        }
+
+        int code = (int)value;
+        return Enum.IsDefined(parameter.Type, code) ? Enum.GetName(parameter.Type, code) : null;
+    }
+
     public OperationForm? GetForm(string operationId)
     {
         var descriptor = _registry.All.FirstOrDefault(d => d.Id == operationId);

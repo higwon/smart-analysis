@@ -837,10 +837,11 @@ public sealed class ShellViewModel : ObservableObject
             var summaryParts = new List<string>();
             foreach (var (name, value) in step.Parameters)
             {
-                // The Inspector shows the exact recorded value (round-trippable — this is auditable detail); the
-                // strip summary is only a compact glance, so it may round.
-                parameters.Add(new StepParameterViewModel(name, FormatValuePrecise(value)));
-                summaryParts.Add($"{name} {FormatValueCompact(value)}");
+                // An enum parameter is recorded as its integer code; show the member name (e.g. "BandStop") instead.
+                // Otherwise the Inspector shows the exact recorded value (round-trippable) and the strip may round.
+                var enumLabel = _launcher.EnumParameterLabel(step.OperationId, step.OperationVersion, name, value.Value);
+                parameters.Add(new StepParameterViewModel(name, enumLabel ?? FormatValuePrecise(value)));
+                summaryParts.Add($"{name} {enumLabel ?? FormatValueCompact(value)}");
             }
 
             var warnings = new List<string>();
