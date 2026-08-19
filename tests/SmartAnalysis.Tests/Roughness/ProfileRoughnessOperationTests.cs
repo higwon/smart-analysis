@@ -41,7 +41,7 @@ public sealed class ProfileRoughnessOperationTests
     }
 
     [Fact]
-    public async Task Parameters_match_the_golden_core_and_the_iso_identity()
+    public async Task Parameters_match_the_golden_core_and_the_height_identity()
     {
         using var profile = Profile(0, 1, 2, 3, 4, 5);
         var expected = SummaryStatistics.Compute(new double[] { 0, 1, 2, 3, 4, 5 });
