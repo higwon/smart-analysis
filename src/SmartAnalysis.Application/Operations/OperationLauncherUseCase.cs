@@ -210,7 +210,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         return new StatisticsResult(true, sourceLabel, readouts, histogram, null, ProjectTable(artifact.Table));
     }
 
-    // A table's unit is folded into each column header (peaks share a unit per column); cells carry the value.
+    // Each column owns its unit; it is folded into the header (so an empty table still shows units), cells the value.
     private static MeasurementTableDto? ProjectTable(MeasurementTable? table)
     {
         if (table is null)
@@ -221,8 +221,9 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         var headers = new string[table.ColumnCount];
         for (int c = 0; c < table.ColumnCount; c++)
         {
-            var unit = table.RowCount > 0 ? table.Rows[0][c].Unit.Symbol : string.Empty;
-            headers[c] = unit is "" or "1" ? table.Columns[c] : $"{table.Columns[c]} ({unit})";
+            var column = table.Columns[c];
+            var unit = column.Unit.Symbol;
+            headers[c] = unit is "" or "1" ? column.Name : $"{column.Name} ({unit})";
         }
 
         var rows = table.Rows

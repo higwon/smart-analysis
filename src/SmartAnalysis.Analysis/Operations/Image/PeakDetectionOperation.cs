@@ -140,7 +140,13 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             });
         }
 
-        var table = new MeasurementTable(["Position", "Value", "Prominence"], rows);
+        var columns = new[]
+        {
+            new MeasurementColumn("Position", xUnit),
+            new MeasurementColumn("Value", yUnit),
+            new MeasurementColumn("Prominence", yUnit),
+        };
+        var table = new MeasurementTable(columns, rows);
 
         var artifact = new AnalysisArtifact(
             id: artifactId,

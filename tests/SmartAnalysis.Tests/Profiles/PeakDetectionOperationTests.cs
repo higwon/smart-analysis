@@ -132,11 +132,38 @@ public sealed class PeakDetectionOperationTests
         var artifact = await RunAsync(profile, prominence: 0.1);
 
         Assert.NotNull(artifact.Table);
-        Assert.Equal(new[] { "Position", "Value", "Prominence" }, artifact.Table!.Columns);
+        Assert.Equal(new[] { "Position", "Value", "Prominence" }, artifact.Table!.Columns.Select(c => c.Name));
+        Assert.Equal(profile.X.Unit, artifact.Table.Columns[0].Unit);      // position column in the X unit
+        Assert.Equal(profile.Channel.Unit, artifact.Table.Columns[1].Unit); // value column in the channel unit
         Assert.Equal(2, artifact.Table.RowCount);                          // one row per peak (bumps at 20 and 50)
         Assert.Equal(20 * 0.5, artifact.Table.Rows[0][0].Value, 6);        // first peak position
-        Assert.Equal(profile.X.Unit, artifact.Table.Rows[0][0].Unit);      // position in the X unit
         Assert.Equal(1.0, artifact.Table.Rows[0][1].Value, 3);             // its value
+    }
+
+    [Fact]
+    public async Task An_empty_peak_list_still_projects_column_units_in_the_headers()
+    {
+        // A flat profile → zero peaks → an empty-body table. The units must survive (they live on the columns,
+        // not the — absent — cells), so the launcher still renders "Position (um)" etc.
+        var flat = new float[64];
+        Array.Fill(flat, 2.0f);
+        using var profile = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Distance", StandardUnits.Micrometre, 0.0, 0.5, flat.Length),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(flat, flat.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+        var ws = new Workspace();
+        ws.Add(profile);
+        ws.SetActive(profile.Id);
+        IOperationLauncher launcher = new OperationLauncherUseCase(
+            ws, new OperationRegistry([new PeakDetectionOperation(new SystemExecutionEnvironmentProvider())]), new MeasurementStore());
+
+        var run = await launcher.RunAsync("curve.peaks", new Dictionary<string, object?> { ["prominence"] = 0.1 });
+
+        var table = run.Measurement!.Table;
+        Assert.NotNull(table);
+        Assert.Empty(table!.Rows);
+        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)" }, table.Columns); // units kept with no rows
     }
 
     [Fact]
