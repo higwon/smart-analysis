@@ -29,6 +29,10 @@ public sealed class FilteredRoughnessOperation : IAnalysisOperation
     public FilteredRoughnessOperation(IExecutionEnvironmentProvider environment)
         => _environment = environment ?? throw new ArgumentNullException(nameof(environment));
 
+    // The Y sample spacing expressed in the X axis unit (both are lengths — guaranteed convertible by Validate).
+    private static double DyInXUnit(ScanImageDataset image)
+        => new PhysicalValue(Math.Abs(image.Y.Step), image.Y.Unit).TryConvertTo(image.X.Unit).Value.Value;
+
     public OperationDescriptor Descriptor { get; } = new(
         id: "image.roughness-filtered",
         version: 1,
@@ -70,8 +74,10 @@ public sealed class FilteredRoughnessOperation : IAnalysisOperation
             return ValidationResult.Fail("The cutoff wavelength must be greater than zero.");
         }
 
+        // cutoff is in the X unit; express the Y spacing in that same unit so dx/dy/cutoff/spans all compare (a µm
+        // X axis and a nm Y axis can be a physically square pixel — 0.1 µm = 100 nm).
         double dx = Math.Abs(image.X.Step);
-        double dy = Math.Abs(image.Y.Step);
+        double dy = DyInXUnit(image);
         double step = Math.Max(dx, dy);
         if (cutoff < 2.0 * step)
         {
@@ -107,7 +113,7 @@ public sealed class FilteredRoughnessOperation : IAnalysisOperation
         var image = (ScanImageDataset)input.Primary;
         double cutoff = parameters.Get<double>(CutoffParameter);
         double dx = Math.Abs(image.X.Step);
-        double dy = Math.Abs(image.Y.Step);
+        double dy = DyInXUnit(image); // Y spacing expressed in the X (== cutoff) unit
         var zUnit = image.Channel.Unit;
 
         cancellationToken.ThrowIfCancellationRequested();

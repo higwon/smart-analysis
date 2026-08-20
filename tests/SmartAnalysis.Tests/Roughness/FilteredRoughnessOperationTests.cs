@@ -22,8 +22,9 @@ namespace SmartAnalysis.Tests.Roughness;
 /// </summary>
 public sealed class FilteredRoughnessOperationTests
 {
-    // A surface = a big X-tilt (0..200, pure form) + a fine 0.4-µm ripple (±5), at spacing `step`.
-    private static ScanImageDataset TiltPlusRipple(int w, int h, double step)
+    // A surface = a big X-tilt (0..200, pure form) + a fine 4-sample ripple (±5). The Z depends on the pixel index
+    // only, so two images with the same grid but different axis units/steps carry identical pixel data.
+    private static float[] TiltRipplePixels(int w, int h)
     {
         var z = new float[w * h];
         for (int y = 0; y < h; y++)
@@ -34,13 +35,19 @@ public sealed class FilteredRoughnessOperationTests
             }
         }
 
-        return new ScanImageDataset(
-            DatasetId.New(), new DataSource("test", null),
-            new Axis("X", StandardUnits.Micrometre, 0.0, step, w),
-            new Axis("Y", StandardUnits.Micrometre, 0.0, step, h),
-            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
-            ScanBuffer<float>.TakeOwnership(z, w, h), ScanMetadata.Unknown, ProvenanceRecord.Root);
+        return z;
     }
+
+    private static ScanImageDataset TiltPlusRipple(int w, int h, double step)
+        => ImageWithAxes(w, h, StandardUnits.Micrometre, step, StandardUnits.Micrometre, step);
+
+    private static ScanImageDataset ImageWithAxes(int w, int h, Unit xUnit, double xStep, Unit yUnit, double yStep)
+        => new(
+            DatasetId.New(), new DataSource("test", null),
+            new Axis("X", xUnit, 0.0, xStep, w),
+            new Axis("Y", yUnit, 0.0, yStep, h),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(TiltRipplePixels(w, h), w, h), ScanMetadata.Unknown, ProvenanceRecord.Root);
 
     private static FilteredRoughnessOperation NewOperation() => new(new SystemExecutionEnvironmentProvider());
 
@@ -86,6 +93,23 @@ public sealed class FilteredRoughnessOperationTests
 
         Assert.Equal(StandardUnits.One, artifact.Scalars["Ssk"].Unit);
         Assert.Equal(StandardUnits.One, artifact.Scalars["Sku"].Unit);
+    }
+
+    [Fact]
+    public async Task Different_x_and_y_axis_units_for_the_same_physical_pixel_give_the_same_result()
+    {
+        // The same physically-square grid two ways: Y in µm (0.1) vs Y in nm (100). λc 0.8 is in the X unit (µm).
+        // The op must convert the Y spacing into the X unit, so both produce identical parameters.
+        using var square = ImageWithAxes(64, 64, StandardUnits.Micrometre, 0.1, StandardUnits.Micrometre, 0.1);
+        using var mixed = ImageWithAxes(64, 64, StandardUnits.Micrometre, 0.1, StandardUnits.Nanometre, 100.0);
+
+        Assert.True(NewOperation().Validate(new OperationInput(mixed), Params(0.8)).IsValid); // validation also normalizes
+
+        var a = await RunAsync(square, 0.8);
+        var b = await RunAsync(mixed, 0.8);
+
+        Assert.Equal(a.Scalars["Sa"].Value, b.Scalars["Sa"].Value, 9);
+        Assert.Equal(a.Scalars["Sq"].Value, b.Scalars["Sq"].Value, 9);
     }
 
     [Fact]
