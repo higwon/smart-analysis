@@ -7,6 +7,7 @@ using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Geometry;
 using SmartAnalysis.Domain.Metadata;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
@@ -110,6 +111,93 @@ public sealed class FilteredRoughnessOperationTests
 
         Assert.Equal(a.Scalars["Sa"].Value, b.Scalars["Sa"].Value, 9);
         Assert.Equal(a.Scalars["Sq"].Value, b.Scalars["Sq"].Value, 9);
+    }
+
+    [Fact]
+    public async Task A_region_restricts_the_evaluation_and_records_its_shape()
+    {
+        using var image = TiltPlusRipple(32, 32, 0.1);
+
+        var whole = await RunAsync(image, 0.5);
+        var result = await NewOperation().RunAsync(
+            new OperationInput(image, region: new RectangleRoi(8, 8, 16, 16)), Params(0.5), null, CancellationToken.None);
+        var region = Assert.IsAssignableFrom<AnalysisArtifact>(result.Artifact);
+
+        Assert.NotEqual(whole.Scalars["Sa"].Value, region.Scalars["Sa"].Value, 6); // fewer pixels → different parameter
+        var p = region.Provenance.Steps[^1].Parameters;
+        Assert.Equal(0.0, p["regionShape"].Value, 12); // Rectangle
+        Assert.Equal(16.0, p["regionWidth"].Value, 12);
+    }
+
+    [Fact]
+    public async Task Two_polygons_with_the_same_bbox_differ_in_both_result_and_provenance()
+    {
+        using var image = TiltPlusRipple(32, 32, 0.1);
+
+        // Same bounding box (4,4,24,24) and both RoiKind.Polygon, but a near-rectangle vs a deep concave notch — so
+        // they mask different pixels (different Sa) and must be distinguishable in provenance (vertex sequence).
+        var rectLike = new PolygonRoi([new(4, 4), new(28, 4), new(28, 28), new(4, 28)]);
+        var concave = new PolygonRoi([new(4, 4), new(28, 4), new(16, 16), new(28, 28), new(4, 28)]);
+
+        var a = Assert.IsAssignableFrom<AnalysisArtifact>((await NewOperation().RunAsync(
+            new OperationInput(image, region: rectLike), Params(0.5), null, CancellationToken.None)).Artifact);
+        var b = Assert.IsAssignableFrom<AnalysisArtifact>((await NewOperation().RunAsync(
+            new OperationInput(image, region: concave), Params(0.5), null, CancellationToken.None)).Artifact);
+
+        Assert.NotEqual(a.Scalars["Sa"].Value, b.Scalars["Sa"].Value, 6); // different masks → different parameter
+
+        var pa = a.Provenance.Steps[^1].Parameters;
+        var pb = b.Provenance.Steps[^1].Parameters;
+        Assert.Equal(pa["regionWidth"].Value, pb["regionWidth"].Value, 12);                 // same bbox…
+        Assert.NotEqual(pa["regionVertexCount"].Value, pb["regionVertexCount"].Value, 12);  // …distinct vertices recorded
+    }
+
+    [Fact]
+    public async Task An_empty_region_warns()
+    {
+        using var image = TiltPlusRipple(32, 32, 0.1);
+
+        var result = await NewOperation().RunAsync(
+            new OperationInput(image, region: new RectangleRoi(100, 100, 4, 4)), Params(0.5), null, CancellationToken.None);
+
+        Assert.Contains(result.Warnings, w => w.Code == "filtered-roughness.empty-region");
+    }
+
+    [Fact]
+    public async Task A_region_filters_the_whole_surface_then_masks_it_not_crop_then_filter()
+    {
+        // Run A: the full 32×32 filtered with the central 16×16 as the ROI (each ROI pixel filtered with its real
+        // neighbours). Run B: the same central 16×16 extracted into a standalone image and filtered whole (its border
+        // pixels reflect the CROP edge, not the real neighbours). The two must differ — proving filter-then-mask.
+        using var full = TiltPlusRipple(32, 32, 0.1);
+        using var crop = CentralCrop(full, 8, 8, 16, 16);
+
+        var masked = Assert.IsAssignableFrom<AnalysisArtifact>((await NewOperation().RunAsync(
+            new OperationInput(full, region: new RectangleRoi(8, 8, 16, 16)), Params(0.5), null, CancellationToken.None)).Artifact);
+        var cropped = await RunAsync(crop, 0.5);
+
+        Assert.NotEqual(cropped.Scalars["Sa"].Value, masked.Scalars["Sa"].Value, 6);
+    }
+
+    // Extracts a sub-block into a standalone image (same spacing/units) — a manual crop for the filter-context test.
+    private static ScanImageDataset CentralCrop(ScanImageDataset image, int left, int top, int w, int h)
+    {
+        var src = image.Data.Memory.Span;
+        int sw = image.X.Count;
+        var z = new float[w * h];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                z[(y * w) + x] = src[((top + y) * sw) + (left + x)];
+            }
+        }
+
+        return new ScanImageDataset(
+            DatasetId.New(), new DataSource("crop", null),
+            new Axis("X", image.X.Unit, 0.0, image.X.Step, w),
+            new Axis("Y", image.Y.Unit, 0.0, image.Y.Step, h),
+            image.Channel, ScanBuffer<float>.TakeOwnership(z, w, h), ScanMetadata.Unknown, ProvenanceRecord.Root);
     }
 
     [Fact]

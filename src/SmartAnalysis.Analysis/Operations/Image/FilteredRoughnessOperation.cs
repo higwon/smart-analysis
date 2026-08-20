@@ -1,6 +1,7 @@
 using SmartAnalysis.Analysis.Profiles;
 using SmartAnalysis.Analysis.Statistics;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Geometry;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
 
@@ -14,9 +15,11 @@ namespace SmartAnalysis.Analysis.Operations.Image;
 /// over the whole definition area, from the MV00-golden <see cref="SummaryStatistics"/> core. This is what separates
 /// it from A03 (which needs a prior flatten): the long-wavelength form/waviness no longer inflates the parameters.
 /// <para>
-/// Not a full ISO 25178 conformance claim: the S-filter (short-λ nesting index), the standard's edge-effect
-/// treatment, and region-of-interest support are follow-ups — hence the honest name "Areal Roughness (Gaussian λc)".
-/// A single non-finite pixel spreads through the convolution, so the parameters are non-finite then (warned).
+/// A region of interest (D02) restricts only the <b>evaluation</b> to its pixels: the Gaussian always filters the
+/// WHOLE surface (it needs each pixel's neighbourhood), then the parameters are computed over the masked pixels —
+/// filter-then-mask, never crop-then-filter. Not a full ISO 25178 conformance claim: the S-filter (short-λ nesting
+/// index) and the standard's edge-effect treatment are follow-ups — hence the honest name "Areal Roughness (Gaussian
+/// λc)". A single non-finite pixel spreads through the convolution, so the parameters are non-finite then (warned).
 /// </para>
 /// </summary>
 public sealed class FilteredRoughnessOperation : IAnalysisOperation
@@ -45,7 +48,8 @@ public sealed class FilteredRoughnessOperation : IAnalysisOperation
         ]),
         output: OutputKind.Artifact,
         isDeterministic: true,
-        tags: ["roughness", "filtered", "gaussian", "areal", "iso25178", "image"]);
+        tags: ["roughness", "filtered", "gaussian", "areal", "iso25178", "image"],
+        usesRegion: true);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {
@@ -125,14 +129,43 @@ public sealed class FilteredRoughnessOperation : IAnalysisOperation
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.5, "Computing roughness parameters."));
 
+        // The filter always runs over the WHOLE surface (the Gaussian needs each pixel's neighbourhood); a region of
+        // interest then restricts only the EVALUATION to its pixels — filter-then-mask, never crop-then-filter (which
+        // would corrupt the roughness near the border by reflecting the crop edge instead of the real neighbours).
+        var region = input.Region;
         var warnings = new List<OperationWarning>();
-        var values = new double[roughness.Length];
+        double[] values;
         bool hasNonFinite = false;
-        for (int i = 0; i < roughness.Length; i++)
+
+        if (region is null)
         {
-            double value = roughness[i];
-            values[i] = value;
-            hasNonFinite |= !double.IsFinite(value);
+            values = new double[roughness.Length];
+            for (int i = 0; i < roughness.Length; i++)
+            {
+                values[i] = roughness[i];
+                hasNonFinite |= !double.IsFinite(roughness[i]);
+            }
+        }
+        else
+        {
+            var mask = region.ToMask(image.X.Count, image.Y.Count);
+            var masked = new List<double>();
+            for (int i = 0; i < mask.Length; i++)
+            {
+                if (!mask[i])
+                {
+                    continue;
+                }
+
+                masked.Add(roughness[i]);
+                hasNonFinite |= !double.IsFinite(roughness[i]);
+            }
+
+            values = masked.ToArray();
+            if (values.Length == 0)
+            {
+                warnings.Add(new OperationWarning("filtered-roughness.empty-region", "The region contains no pixels; roughness parameters are undefined."));
+            }
         }
 
         if (hasNonFinite)
@@ -155,6 +188,19 @@ public sealed class FilteredRoughnessOperation : IAnalysisOperation
             ["Sku"] = new(stats.Kurtosis, StandardUnits.One),
         };
 
+        var stepParameters = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)
+        {
+            [CutoffParameter] = new(cutoff, image.X.Unit), // λc carries the image's length unit
+        };
+        if (region is { } roi)
+        {
+            // Record the region the same way every region-aware op does (shared shape + bounds projection).
+            foreach (var kv in RegionProvenance.Describe(roi))
+            {
+                stepParameters[kv.Key] = kv.Value;
+            }
+        }
+
         var artifactId = DatasetId.New();
         var step = new ProvenanceStep(
             stepId: Guid.NewGuid().ToString("D"),
@@ -164,10 +210,7 @@ public sealed class FilteredRoughnessOperation : IAnalysisOperation
             operationVersion: Descriptor.Version,
             order: 0,
             environment: _environment.Capture(),
-            parameters: new Dictionary<string, PhysicalValue>
-            {
-                [CutoffParameter] = new(cutoff, image.X.Unit), // λc carries the image's length unit
-            },
+            parameters: stepParameters,
             warnings: warnings,
             parentResultId: artifactId);
 
