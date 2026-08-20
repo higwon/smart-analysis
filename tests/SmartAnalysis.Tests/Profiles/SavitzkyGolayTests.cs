@@ -91,6 +91,24 @@ public sealed class SavitzkyGolayTests
         Assert.Equal(data.Length, smoothed.Length);
     }
 
+    [Fact]
+    public void The_edges_are_fully_fitted_not_left_original_for_a_valid_high_order_window()
+    {
+        // window=7, order=4 is a valid config (order < window). An alternating signal is nowhere a degree-4 poly,
+        // so every sample — including the first two, which a truncated-window scheme leaves unchanged because it
+        // has ≤ order points there — must actually move. This locks out the silent edge no-op.
+        var data = new float[20];
+        for (int i = 0; i < data.Length; i++)
+        {
+            data[i] = i % 2 == 0 ? 100f : -100f;
+        }
+
+        var smoothed = SavitzkyGolay.Smooth(data, window: 7, order: 4);
+
+        Assert.True(Math.Abs(smoothed[0] - data[0]) > 5.0, "the first edge sample is actually smoothed, not kept");
+        Assert.True(Math.Abs(smoothed[1] - data[1]) > 5.0, "the second edge sample is actually smoothed, not kept");
+    }
+
     [Theory]
     [InlineData(4, 2)]  // even window
     [InlineData(5, 5)]  // order == window

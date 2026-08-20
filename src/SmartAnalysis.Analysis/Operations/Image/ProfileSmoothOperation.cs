@@ -52,7 +52,7 @@ public sealed class ProfileSmoothOperation : IAnalysisOperation
             return schema;
         }
 
-        if (input.Primary is not LineProfileDataset)
+        if (input.Primary is not LineProfileDataset profile)
         {
             return ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(LineProfileDataset)} as its primary input.");
         }
@@ -64,9 +64,12 @@ public sealed class ProfileSmoothOperation : IAnalysisOperation
             return ValidationResult.Fail($"The smoothing window ({window}) must be odd.");
         }
 
-        if (order >= window)
+        // The fit needs more points than the polynomial degree. A profile shorter than the window is fitted as one
+        // window, so the effective point count is min(window, n) — the order must be below THAT, else no edge fits.
+        int effectiveWindow = Math.Min(window, profile.X.Count);
+        if (order >= effectiveWindow)
         {
-            return ValidationResult.Fail($"The order ({order}) must be smaller than the window ({window}).");
+            return ValidationResult.Fail($"The order ({order}) must be smaller than the effective window ({effectiveWindow}).");
         }
 
         return ValidationResult.Success;

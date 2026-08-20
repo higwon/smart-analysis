@@ -83,6 +83,17 @@ public sealed class ProfileSmoothOperationTests
     }
 
     [Fact]
+    public void Rejects_an_order_not_below_the_effective_window_for_a_short_profile()
+    {
+        using var profile = Sampled(5, i => i); // 5 samples, shorter than the window below
+
+        // window 9 > n, so the whole 5-sample profile is the window; order 5 is not < 5 → reject (would silently
+        // no-op the whole curve otherwise), while order 3 < the effective 5 is accepted.
+        Assert.False(NewOperation().Validate(new OperationInput(profile), Params(9, 5)).IsValid);
+        Assert.True(NewOperation().Validate(new OperationInput(profile), Params(9, 3)).IsValid);
+    }
+
+    [Fact]
     public async Task A_non_finite_sample_warns()
     {
         var z = new float[20];
