@@ -130,6 +130,29 @@ public sealed class FilteredRoughnessOperationTests
     }
 
     [Fact]
+    public async Task Two_polygons_with_the_same_bbox_differ_in_both_result_and_provenance()
+    {
+        using var image = TiltPlusRipple(32, 32, 0.1);
+
+        // Same bounding box (4,4,24,24) and both RoiKind.Polygon, but a near-rectangle vs a deep concave notch — so
+        // they mask different pixels (different Sa) and must be distinguishable in provenance (vertex sequence).
+        var rectLike = new PolygonRoi([new(4, 4), new(28, 4), new(28, 28), new(4, 28)]);
+        var concave = new PolygonRoi([new(4, 4), new(28, 4), new(16, 16), new(28, 28), new(4, 28)]);
+
+        var a = Assert.IsAssignableFrom<AnalysisArtifact>((await NewOperation().RunAsync(
+            new OperationInput(image, region: rectLike), Params(0.5), null, CancellationToken.None)).Artifact);
+        var b = Assert.IsAssignableFrom<AnalysisArtifact>((await NewOperation().RunAsync(
+            new OperationInput(image, region: concave), Params(0.5), null, CancellationToken.None)).Artifact);
+
+        Assert.NotEqual(a.Scalars["Sa"].Value, b.Scalars["Sa"].Value, 6); // different masks → different parameter
+
+        var pa = a.Provenance.Steps[^1].Parameters;
+        var pb = b.Provenance.Steps[^1].Parameters;
+        Assert.Equal(pa["regionWidth"].Value, pb["regionWidth"].Value, 12);                 // same bbox…
+        Assert.NotEqual(pa["regionVertexCount"].Value, pb["regionVertexCount"].Value, 12);  // …distinct vertices recorded
+    }
+
+    [Fact]
     public async Task An_empty_region_warns()
     {
         using var image = TiltPlusRipple(32, 32, 0.1);

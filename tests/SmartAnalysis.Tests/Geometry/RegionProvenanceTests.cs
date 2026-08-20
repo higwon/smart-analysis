@@ -54,6 +54,32 @@ public sealed class RegionProvenanceTests
     }
 
     [Fact]
+    public void A_polygon_also_records_its_ordered_vertices()
+    {
+        var poly = RegionProvenance.Describe(new PolygonRoi([new(0, 0), new(4, 0), new(2, 3)]));
+
+        Assert.Equal(3.0, poly[RegionProvenance.VertexCountKey].Value, 12);
+        Assert.Equal(0.0, poly[RegionProvenance.VertexXKey(0)].Value, 12);
+        Assert.Equal(4.0, poly[RegionProvenance.VertexXKey(1)].Value, 12);
+        Assert.Equal(2.0, poly[RegionProvenance.VertexXKey(2)].Value, 12);
+        Assert.Equal(3.0, poly[RegionProvenance.VertexYKey(2)].Value, 12);
+    }
+
+    [Fact]
+    public void Two_polygons_with_the_same_bbox_but_different_vertices_record_differently()
+    {
+        // Both span the box (0,0,20,20) and are RoiKind.Polygon, so shape + bounds alone can't tell them apart…
+        var nearRect = RegionProvenance.Describe(new PolygonRoi([new(0, 0), new(20, 0), new(20, 20), new(0, 20)]));
+        var concave = RegionProvenance.Describe(new PolygonRoi([new(0, 0), new(20, 0), new(10, 10), new(20, 20), new(0, 20)]));
+
+        Assert.Equal(nearRect[RegionProvenance.ShapeKey].Value, concave[RegionProvenance.ShapeKey].Value, 12);
+        Assert.Equal(nearRect[RegionProvenance.WidthKey].Value, concave[RegionProvenance.WidthKey].Value, 12);
+
+        // …but the recorded vertex sequences differ, so the actual measured region is identifiable in history.
+        Assert.NotEqual(nearRect[RegionProvenance.VertexCountKey].Value, concave[RegionProvenance.VertexCountKey].Value, 12);
+    }
+
+    [Fact]
     public void Shape_label_maps_the_code_to_the_kind_name()
     {
         Assert.Equal("Rectangle", RegionProvenance.ShapeLabel(0));
