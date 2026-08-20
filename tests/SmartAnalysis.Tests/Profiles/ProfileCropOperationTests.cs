@@ -114,6 +114,30 @@ public sealed class ProfileCropOperationTests
     }
 
     [Fact]
+    public void The_sample_range_has_no_arbitrary_upper_bound()
+    {
+        // The schema must not cap start/count — a profile has no fixed length limit, so only the operation's
+        // clamp-to-profile logic decides the effective range (else a > 1M-sample curve couldn't be cropped).
+        var schema = NewOperation().Descriptor.Parameters.Parameters;
+        Assert.Null(schema.Single(p => p.Name == "start").Max);
+        Assert.Null(schema.Single(p => p.Name == "count").Max);
+    }
+
+    [Fact]
+    public async Task Crops_a_profile_longer_than_the_old_one_million_cap()
+    {
+        using var profile = Profile(1_000_050, 0.5, StandardUnits.Micrometre);
+
+        // A start beyond the old 1,000,000 schema ceiling must validate and crop — not be rejected before running.
+        Assert.True(NewOperation().Validate(new OperationInput(profile), Params(1_000_010, 40)).IsValid);
+
+        var cropped = await RunAsync(profile, 1_000_010, 40);
+
+        Assert.Equal(40, cropped.X.Count);
+        Assert.Equal(profile.X.RawToReal(1_000_010), cropped.X.RawToReal(0), 9); // coordinate preserved at the high index
+    }
+
+    [Fact]
     public void Rejects_a_non_profile_input()
     {
         using var image = new ScanImageDataset(

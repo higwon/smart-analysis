@@ -33,8 +33,10 @@ public sealed class ProfileCropOperation : IAnalysisOperation
         acceptedInputs: [DataKind.LineProfile],
         parameters: new ParameterSchema(
         [
-            new ParameterDescriptor(StartParameter, typeof(int), defaultValue: 0, min: 0, max: 1000000, help: "First sample to keep (index from the start)."),
-            new ParameterDescriptor(CountParameter, typeof(int), defaultValue: 128, min: 1, max: 1000000, help: "Number of samples to keep (clamped to the profile)."),
+            // No upper bound: a profile has no fixed length cap, so the operation's own clamp-to-profile logic (not
+            // an arbitrary schema ceiling) decides the effective range — otherwise a > 1M-sample curve couldn't crop.
+            new ParameterDescriptor(StartParameter, typeof(int), defaultValue: 0, min: 0, max: null, help: "First sample to keep (index from the start)."),
+            new ParameterDescriptor(CountParameter, typeof(int), defaultValue: 128, min: 1, max: null, help: "Number of samples to keep (clamped to the profile)."),
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
