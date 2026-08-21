@@ -132,7 +132,7 @@ public sealed class PeakDetectionOperationTests
         var artifact = await RunAsync(profile, prominence: 0.1);
 
         Assert.NotNull(artifact.Table);
-        Assert.Equal(new[] { "Position", "Value", "Prominence", "Width" }, artifact.Table!.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "Position", "Value", "Prominence", "Width", "SNR" }, artifact.Table!.Columns.Select(c => c.Name));
         Assert.Equal(profile.X.Unit, artifact.Table.Columns[0].Unit);      // position column in the X unit
         Assert.Equal(profile.Channel.Unit, artifact.Table.Columns[1].Unit); // value column in the channel unit
         Assert.Equal(2, artifact.Table.RowCount);                          // one row per peak (bumps at 20 and 50)
@@ -155,6 +155,52 @@ public sealed class PeakDetectionOperationTests
         Assert.Equal("Width", artifact.Table!.Columns[3].Name);
         Assert.Equal(profile.X.Unit, artifact.Table.Columns[3].Unit);
         Assert.True(artifact.Table.Rows[0][3].Value > 0.0 && double.IsFinite(artifact.Table.Rows[0][3].Value));
+    }
+
+    [Fact]
+    public async Task Reports_a_finite_dominant_snr_when_the_signal_is_noisy()
+    {
+        // A small ±0.1 saw-tooth noise floor with a tall Gaussian bump (prominence ≫ noise) → a large, finite SNR.
+        const int n = 200;
+        var z = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            z[i] = (float)((i % 2 == 0 ? 0.1 : -0.1) + (10.0 * Math.Exp(-Math.Pow((i - 100) / 4.0, 2))));
+        }
+
+        using var profile = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Distance", StandardUnits.Micrometre, 0.0, 0.5, n),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(z, n, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var artifact = await RunAsync(profile, 0.1);
+
+        Assert.Equal(StandardUnits.One, artifact.Scalars["DominantSnr"].Unit); // dimensionless ratio
+        Assert.True(artifact.Scalars["DominantSnr"].Value > 5.0, $"SNR should be large for a clear peak: {artifact.Scalars["DominantSnr"].Value}");
+        Assert.True(double.IsFinite(artifact.Scalars["DominantSnr"].Value));
+
+        Assert.Equal("SNR", artifact.Table!.Columns[4].Name); // the 5th column
+        Assert.Equal(StandardUnits.One, artifact.Table.Columns[4].Unit);
+    }
+
+    [Fact]
+    public async Task A_noiseless_peak_has_infinite_snr()
+    {
+        // A flat baseline with a single triangle peak: most second differences are exactly 0 → median 0 → σ = 0.
+        // A real peak over zero noise is infinitely clean → SNR = +∞ (so it passes any finite Min-SNR filter).
+        var z = new float[40];
+        z[18] = 1; z[19] = 2; z[20] = 3; z[21] = 2; z[22] = 1; // a small triangle around index 20
+        using var profile = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Distance", StandardUnits.Micrometre, 0.0, 0.5, z.Length),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(z, z.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var artifact = await RunAsync(profile, 0.1);
+
+        Assert.True(double.IsPositiveInfinity(artifact.Scalars["DominantSnr"].Value));
+        Assert.True(double.IsPositiveInfinity(artifact.Table!.Rows[0][4].Value)); // the SNR column too
     }
 
     [Fact]
@@ -196,7 +242,7 @@ public sealed class PeakDetectionOperationTests
         var table = run.Measurement!.Table;
         Assert.NotNull(table);
         Assert.Empty(table!.Rows);
-        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)", "Width (um)" }, table.Columns); // units kept with no rows
+        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)", "Width (um)", "SNR" }, table.Columns); // units kept with no rows
     }
 
     [Fact]
@@ -213,7 +259,7 @@ public sealed class PeakDetectionOperationTests
 
         var table = run.Measurement!.Table;
         Assert.NotNull(table);
-        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)", "Width (um)" }, table!.Columns); // unit folded into the header
+        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)", "Width (um)", "SNR" }, table!.Columns); // unit folded into the header
         Assert.Equal(2, table.Rows.Count);
     }
 

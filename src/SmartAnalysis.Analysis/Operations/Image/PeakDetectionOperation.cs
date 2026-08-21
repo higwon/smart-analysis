@@ -9,8 +9,9 @@ namespace SmartAnalysis.Analysis.Operations.Image;
 /// Peak detection (A15) on the F04 contract: finds the significant peaks of a curve (a
 /// <see cref="LineProfileDataset"/> — a profile, cross-section, or PSD) by topographic prominence
 /// (<see cref="PeakDetection"/>) and emits a measurement summary — the <b>peak count</b> and the <b>dominant peak</b>
-/// (its position on the X axis, value, prominence, and <b>width at half-prominence</b> via <see cref="PeakWidths"/>,
-/// in the X unit) — plus the full peak list as a table (one row per peak: position/value/prominence/width). Works on
+/// (its position on the X axis, value, prominence, <b>width at half-prominence</b> via <see cref="PeakWidths"/> in
+/// the X unit, and <b>SNR</b> = prominence / the robust noise σ from <see cref="NoiseEstimator"/>) — plus the full
+/// peak list as a table (one row per peak: position/value/prominence/width/SNR). Works on
 /// any curve (a PSD's dominant peak is the characteristic spatial frequency); it reads positions/values generically,
 /// so no axis-dimension restriction. Schema = a single <c>prominence</c> threshold (a fraction of the value range).
 /// Parameter-only, so U08's generic form drives it. Deterministic; DI-only (ADR-005).
@@ -77,6 +78,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
         progress?.Report(new OperationProgress(0.0, "Detecting peaks."));
 
         var peaks = PeakDetection.Find(profile.Values.Memory.Span, prominence);
+        double noise = NoiseEstimator.Estimate(profile.Values.Memory.Span);
         cancellationToken.ThrowIfCancellationRequested();
 
         var warnings = new List<OperationWarning>();
@@ -105,6 +107,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             scalars["DominantValue"] = new(dominant.Value, yUnit);
             scalars["DominantProminence"] = new(dominant.Prominence, yUnit);
             scalars["DominantWidth"] = new(Width(profile, dominant), xUnit);
+            scalars["DominantSnr"] = new(Snr(dominant.Prominence, noise), StandardUnits.One);
         }
         else
         {
@@ -113,6 +116,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             scalars["DominantValue"] = new(double.NaN, yUnit);
             scalars["DominantProminence"] = new(double.NaN, yUnit);
             scalars["DominantWidth"] = new(double.NaN, xUnit);
+            scalars["DominantSnr"] = new(double.NaN, StandardUnits.One);
         }
 
         var artifactId = DatasetId.New();
@@ -141,6 +145,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
                 new(peak.Value, yUnit),
                 new(peak.Prominence, yUnit),
                 new(Width(profile, peak), xUnit),
+                new(Snr(peak.Prominence, noise), StandardUnits.One),
             });
         }
 
@@ -150,6 +155,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             new MeasurementColumn("Value", yUnit),
             new MeasurementColumn("Prominence", yUnit),
             new MeasurementColumn("Width", xUnit),
+            new MeasurementColumn("SNR", StandardUnits.One),
         };
         var table = new MeasurementTable(columns, rows);
 
@@ -170,4 +176,16 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
     private static double Width(LineProfileDataset profile, Peak peak)
         => PeakWidths.WidthAtHalfProminence(profile.Values.Memory.Span, peak.Index, peak.Value, peak.Prominence)
             * Math.Abs(profile.X.Step);
+
+    // Signal-to-noise ratio = prominence / estimated noise σ (dimensionless). A real peak on a noiseless curve
+    // (σ = 0, prominence > 0) is +∞ — an infinitely clean peak that passes any finite Min-SNR filter — not NaN.
+    private static double Snr(double prominence, double noise)
+    {
+        if (noise > 0.0)
+        {
+            return prominence / noise;
+        }
+
+        return prominence > 0.0 ? double.PositiveInfinity : double.NaN;
+    }
 }
