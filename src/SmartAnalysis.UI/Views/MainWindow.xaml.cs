@@ -438,7 +438,9 @@ public partial class MainWindow : Window
             BeforeImageView.Render(RenderInputFactory.ForImage(previewSource, colormap, _viewModel.EffectiveRange));
             if (_viewModel.FlattenPreviewInput is { } preview)
             {
-                AfterImageView.Render(preview);
+                // Re-style the (cached) preview with the CURRENT colormap/range so a live palette change keeps SOURCE
+                // and PREVIEW consistent — without re-running Flatten just because a colour changed.
+                AfterImageView.Render(preview.WithStyle(colormap, _viewModel.EffectiveRange));
             }
             else
             {

@@ -65,6 +65,15 @@ public sealed record ImageRenderInput
     public AxisView Y { get; }
 
     public string ChannelUnit { get; }
+
+    /// <summary>
+    /// Re-styles this image with a new <paramref name="colormap"/> and display range, reusing the same Z/axes/unit
+    /// and full <see cref="DataRange"/>. A <c>null</c> range means auto — the image's own data extent — so a preview
+    /// whose data range differs from the source stays legible. Used to keep two panes (source vs preview) on the
+    /// current palette without recomputing the underlying image.
+    /// </summary>
+    public ImageRenderInput WithStyle(Colormap colormap, ValueRange? range)
+        => new(Z, Width, Height, range ?? DataRange, colormap, X, Y, ChannelUnit, DataRange);
 }
 
 /// <summary>One labeled XY series (e.g. a profile or spectrum). Immutable; X and Y have equal length.</summary>
