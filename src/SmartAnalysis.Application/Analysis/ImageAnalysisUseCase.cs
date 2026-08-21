@@ -2,6 +2,7 @@ using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Analysis.Operations.Image;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Units;
 using SmartAnalysis.Visualization.Colormaps;
 using SmartAnalysis.Visualization.Rendering;
 using AnFlatten = SmartAnalysis.Analysis.Flattening;
@@ -19,6 +20,7 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
 {
     private const string FlattenId = "image.flatten";
     private const string StatisticsId = "image.statistics";
+    private const string RegionStatisticsId = "image.roi-statistics";
 
     // Preferred readouts (operation scalar key → friendly label), in display order.
     private static readonly (string Key, string Label)[] StatKeys =
@@ -206,6 +208,53 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
     /// </summary>
     public StatisticsResult? GetMeasurement(DatasetId artifactId)
         => _measurements.TryGet(artifactId, out var artifact) ? Map(artifact) : null;
+
+    /// <summary>
+    /// Reconstructs the drawn region of an attached <c>image.roi-statistics</c> measurement from its provenance
+    /// step (shape + bounds, in the source image's pixel grid), or <c>null</c> when the measurement is absent or is
+    /// not a region measurement the overlay can draw (only the rectangle/ellipse Region Statistics op is recognised).
+    /// </summary>
+    public MeasurementRegion? GetMeasurementRegion(DatasetId artifactId)
+    {
+        if (!_measurements.TryGet(artifactId, out var artifact))
+        {
+            return null;
+        }
+
+        var step = artifact.Provenance.Steps.FirstOrDefault(s => s.OperationId == RegionStatisticsId);
+        if (step is null)
+        {
+            return null;
+        }
+
+        var p = step.Parameters;
+        if (!TryReadInt(p, RoiStatisticsOperation.LeftParameter, out var left)
+            || !TryReadInt(p, RoiStatisticsOperation.TopParameter, out var top)
+            || !TryReadInt(p, RoiStatisticsOperation.WidthParameter, out var width)
+            || !TryReadInt(p, RoiStatisticsOperation.HeightParameter, out var height))
+        {
+            return null;
+        }
+
+        var shape = TryReadInt(p, RoiStatisticsOperation.ShapeParameter, out var code) && code == (int)RoiShape.Ellipse
+            ? RegionOverlayShape.Ellipse
+            : RegionOverlayShape.Rectangle;
+
+        return new MeasurementRegion(artifact.SourceId, shape, left, top, width, height);
+    }
+
+    // Reads a provenance parameter recorded as a whole number (the region bounds are integer pixel indices).
+    private static bool TryReadInt(IReadOnlyDictionary<string, PhysicalValue> parameters, string key, out int value)
+    {
+        value = 0;
+        if (!parameters.TryGetValue(key, out var pv) || !double.IsFinite(pv.Value) || pv.Value != Math.Floor(pv.Value))
+        {
+            return false;
+        }
+
+        value = (int)pv.Value;
+        return true;
+    }
 
     // Maps a stored artifact to the UI DTO. Projects EVERY scalar so any measurement (roughness, peaks, grains,
     // region statistics, …) re-reads its full result when its node is re-selected — the friendly Sq/Sa naming is

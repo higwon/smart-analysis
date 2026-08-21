@@ -47,6 +47,64 @@ public sealed class ShellMeasurementSelectTests
         Assert.Contains(vm.Statistics.Readouts, r => r.Name == "Sq");
     }
 
+    [Fact]
+    public void Selecting_a_region_measurement_offers_its_region_on_the_active_image()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        var analysis = new FakeImageAnalysis { Region = new MeasurementRegion(image.Id, RegionOverlayShape.Ellipse, 2, 3, 6, 4) };
+        var vm = NewShell(ws, analysis);
+
+        vm.SelectMeasurement(DatasetId.New());
+
+        Assert.NotNull(vm.SelectedRegion);            // the "this came from here" overlay is offered
+        Assert.Equal(RegionOverlayShape.Ellipse, vm.SelectedRegion!.Shape);
+        Assert.Equal((2, 3, 6, 4), (vm.SelectedRegion.Left, vm.SelectedRegion.Top, vm.SelectedRegion.Width, vm.SelectedRegion.Height));
+    }
+
+    [Fact]
+    public void A_region_measurement_for_another_image_offers_no_overlay()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        // The recorded region belongs to a DIFFERENT image than the active one → its pixel bounds don't map here.
+        var analysis = new FakeImageAnalysis { Region = new MeasurementRegion(DatasetId.New(), RegionOverlayShape.Rectangle, 2, 3, 6, 4) };
+        var vm = NewShell(ws, analysis);
+
+        vm.SelectMeasurement(DatasetId.New());
+
+        Assert.Null(vm.SelectedRegion);
+    }
+
+    [Fact]
+    public void Activating_a_dataset_clears_a_selected_region()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        var other = Image();
+        ws.Add(image);
+        ws.Add(other);
+        ws.SetActive(image.Id);
+
+        var analysis = new FakeImageAnalysis { Region = new MeasurementRegion(image.Id, RegionOverlayShape.Rectangle, 1, 1, 3, 3) };
+        var vm = NewShell(ws, analysis);
+        vm.SelectMeasurement(DatasetId.New());
+        Assert.NotNull(vm.SelectedRegion);
+
+        ws.SetActive(other.Id); // moving off the source image drops the overlay
+        Assert.Null(vm.SelectedRegion);
+    }
+
+    private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
+            new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
+
     private static ScanImageDataset Image()
         => new(
             DatasetId.New(), new DataSource("test", null),
@@ -59,6 +117,10 @@ public sealed class ShellMeasurementSelectTests
     // is covered by ImageAnalysisUseCaseTests.GetMeasurement_re_reads_a_non_statistics_measurement_in_full).
     private sealed class FakeImageAnalysis : IImageAnalysisUseCase
     {
+        public MeasurementRegion? Region { get; set; }
+
+        public MeasurementRegion? GetMeasurementRegion(DatasetId artifactId) => Region;
+
         public StatisticsResult? GetMeasurement(DatasetId artifactId)
             => new(true, "Cheese(1)", new[] { new StatisticsReadout("Sq", 1.0, "nm"), new StatisticsReadout("Pixel Count", 42, "1") }, Array.Empty<int>(), null);
 
