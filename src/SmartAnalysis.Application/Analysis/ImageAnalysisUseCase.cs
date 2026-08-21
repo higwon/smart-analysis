@@ -173,10 +173,17 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
     public StatisticsResult? GetMeasurement(DatasetId artifactId)
         => _measurements.TryGet(artifactId, out var artifact) ? Map(artifact) : null;
 
-    // Maps a stored artifact to the UI DTO (the scalar-key → label projection lives here, in Application).
+    // Maps a stored artifact to the UI DTO. Projects EVERY scalar so any measurement (roughness, peaks, grains,
+    // region statistics, …) re-reads its full result when its node is re-selected — the friendly Sq/Sa naming is
+    // used for the statistics keys, and every other key is humanized. The optional table (e.g. the peak list) is
+    // carried too. (Kept consistent with the launcher's generic projection so a measurement looks the same however
+    // it is viewed.)
     private StatisticsResult Map(AnalysisArtifact artifact)
     {
-        var readouts = new List<StatisticsReadout>();
+        var friendly = StatKeys.ToDictionary(k => k.Key, k => k.Label, StringComparer.Ordinal);
+        var readouts = new List<StatisticsReadout>(artifact.Scalars.Count);
+
+        // Statistics keys first, in their curated order + friendly labels …
         foreach (var (key, label) in StatKeys)
         {
             if (artifact.Scalars.TryGetValue(key, out var pv))
@@ -185,9 +192,62 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
             }
         }
 
+        // … then every remaining scalar, humanized (Sa/Sq/Sz/… are already display-ready; PeakCount → "Peak Count").
+        foreach (var (key, pv) in artifact.Scalars)
+        {
+            if (!friendly.ContainsKey(key))
+            {
+                readouts.Add(new StatisticsReadout(Humanize(key), pv.Value, pv.Unit.Symbol));
+            }
+        }
+
         var histogram = artifact.Histogram is { } h ? h.Counts.Select(c => (int)Math.Min(c, int.MaxValue)).ToArray() : [];
         var sourceLabel = _workspace.TryGet(artifact.SourceId, out var source) ? DatasetLabel(source) : null;
-        return new StatisticsResult(true, sourceLabel, readouts, histogram, null);
+        return new StatisticsResult(true, sourceLabel, readouts, histogram, null, ProjectTable(artifact.Table));
+    }
+
+    // A table's unit is folded into each column header (read from the column's own unit); cells carry the value.
+    private static MeasurementTableDto? ProjectTable(MeasurementTable? table)
+    {
+        if (table is null)
+        {
+            return null;
+        }
+
+        var headers = new string[table.ColumnCount];
+        for (int c = 0; c < table.ColumnCount; c++)
+        {
+            var unit = table.Columns[c].Unit.Symbol;
+            headers[c] = unit is "" or "1" ? table.Columns[c].Name : $"{table.Columns[c].Name} ({unit})";
+        }
+
+        var rows = table.Rows
+            .Select(r => (IReadOnlyList<string>)r.Select(cell => $"{cell.Value:G4}").ToArray())
+            .ToArray();
+        return new MeasurementTableDto(headers, rows);
+    }
+
+    // "meanAbsoluteDeviation" → "Mean Absolute Deviation"; "PeakCount" → "Peak Count". Best-effort camelCase label.
+    private static string Humanize(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return name;
+        }
+
+        var sb = new System.Text.StringBuilder(name.Length + 4);
+        sb.Append(char.ToUpperInvariant(name[0]));
+        for (int i = 1; i < name.Length; i++)
+        {
+            if (char.IsUpper(name[i]) && !char.IsUpper(name[i - 1]))
+            {
+                sb.Append(' ');
+            }
+
+            sb.Append(name[i]);
+        }
+
+        return sb.ToString();
     }
 
     private static string DatasetLabel(AfmDataset d)

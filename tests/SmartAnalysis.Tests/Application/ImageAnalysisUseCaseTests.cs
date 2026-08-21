@@ -4,6 +4,7 @@ using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
 using SmartAnalysis.Infrastructure.FileFormats.Tiff;
 using Xunit;
@@ -139,6 +140,32 @@ public sealed class ImageAnalysisUseCaseTests
         Assert.NotNull(reread);
         Assert.True(reread!.Success);
         Assert.NotEmpty(reread.Readouts);
+    }
+
+    [Fact]
+    public async Task GetMeasurement_re_reads_a_non_statistics_measurement_in_full()
+    {
+        var (ws, image, measurements, useCase) = await SetupAsync();
+
+        // A roughness-style measurement (keys the statistics projection doesn't know) + a table, attached as a node.
+        var nm = StandardUnits.Nanometre;
+        var um = StandardUnits.Micrometre;
+        var artifact = new AnalysisArtifact(
+            DatasetId.New(), image.Id, "image.roughness",
+            new Dictionary<string, PhysicalValue> { ["Sa"] = new(1.0, nm), ["Sq"] = new(2.0, nm) },
+            ProvenanceRecord.Root,
+            table: new MeasurementTable(
+                [new MeasurementColumn("Position", um)],
+                [new[] { new PhysicalValue(3.0, um) }]));
+        measurements.Attach(artifact);
+
+        var result = useCase.GetMeasurement(artifact.Id);
+
+        Assert.NotNull(result);
+        Assert.Contains(result!.Readouts, r => r.Name == "Sa"); // every scalar is projected, not just the stat keys
+        Assert.Contains(result.Readouts, r => r.Name == "Sq");
+        Assert.NotNull(result.Table);                            // the table (e.g. a peak list) survives re-selection
+        Assert.Equal("Position (um)", result.Table!.Columns[0]);
     }
 
     [Fact]
