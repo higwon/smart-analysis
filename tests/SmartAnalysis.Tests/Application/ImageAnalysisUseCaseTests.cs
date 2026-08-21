@@ -204,4 +204,69 @@ public sealed class ImageAnalysisUseCaseTests
 
         Assert.Null(useCase.GetMeasurement(DatasetId.New()));
     }
+
+    // --- GetMeasurementRegion: reconstruct where a region measurement was taken, for the read-only overlay ---
+
+    private static async Task<AnalysisArtifact> RunRegionStatisticsAsync(ScanImageDataset image, RoiShape shape, int left, int top, int width, int height)
+    {
+        var op = new RoiStatisticsOperation(new SystemExecutionEnvironmentProvider());
+        var parameters = new ParameterSet(new Dictionary<string, object?>
+        {
+            ["shape"] = shape,
+            ["left"] = left,
+            ["top"] = top,
+            ["width"] = width,
+            ["height"] = height,
+        });
+        var result = await op.RunAsync(new OperationInput(image), parameters, progress: null, CancellationToken.None);
+        return result.Artifact!;
+    }
+
+    [Fact]
+    public async Task GetMeasurementRegion_reconstructs_a_rectangle_regions_bounds_and_source()
+    {
+        var (_, image, measurements, useCase) = await SetupAsync();
+        var artifact = await RunRegionStatisticsAsync(image, RoiShape.Rectangle, left: 2, top: 3, width: 6, height: 4);
+        measurements.Attach(artifact);
+
+        var region = useCase.GetMeasurementRegion(artifact.Id);
+
+        Assert.NotNull(region);
+        Assert.Equal(RegionOverlayShape.Rectangle, region!.Shape);
+        Assert.Equal((2, 3, 6, 4), (region.Left, region.Top, region.Width, region.Height));
+        Assert.Equal(image.Id, region.SourceId); // points back at the image the overlay draws on
+    }
+
+    [Fact]
+    public async Task GetMeasurementRegion_reconstructs_the_ellipse_shape()
+    {
+        var (_, image, measurements, useCase) = await SetupAsync();
+        var artifact = await RunRegionStatisticsAsync(image, RoiShape.Ellipse, left: 1, top: 1, width: 8, height: 6);
+        measurements.Attach(artifact);
+
+        Assert.Equal(RegionOverlayShape.Ellipse, useCase.GetMeasurementRegion(artifact.Id)!.Shape);
+    }
+
+    [Fact]
+    public async Task GetMeasurementRegion_is_null_for_a_whole_image_measurement()
+    {
+        var (_, image, measurements, useCase) = await SetupAsync();
+
+        // A whole-image statistic records no region → nothing to overlay.
+        var artifact = new AnalysisArtifact(
+            DatasetId.New(), image.Id, "image.statistics",
+            new Dictionary<string, PhysicalValue> { ["rms"] = new(1.0, StandardUnits.Nanometre) },
+            ProvenanceRecord.Root);
+        measurements.Attach(artifact);
+
+        Assert.Null(useCase.GetMeasurementRegion(artifact.Id));
+    }
+
+    [Fact]
+    public async Task GetMeasurementRegion_is_null_for_an_unknown_id()
+    {
+        var (_, _, _, useCase) = await SetupAsync();
+
+        Assert.Null(useCase.GetMeasurementRegion(DatasetId.New()));
+    }
 }

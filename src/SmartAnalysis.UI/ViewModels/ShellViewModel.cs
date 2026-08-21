@@ -65,6 +65,7 @@ public sealed class ShellViewModel : ObservableObject
     private bool _isLauncherOpen;
     private object? _operationEditor;
     private StatisticsResultViewModel? _statistics;
+    private MeasurementRegion? _selectedRegion;
     private StatisticsResultViewModel? _liveMeasurements;
     private Task _liveMeasurementsTask = Task.CompletedTask;
     private bool _isOperationPreview;
@@ -750,7 +751,32 @@ public sealed class ShellViewModel : ObservableObject
         }
         else if (_workspace.Contains(node.Id))
         {
+            // Explorer selection is distinct from the active context. Selecting a dataset node is a transition OUT of
+            // a measurement selection, so drop its read-only overlay + Result card — even when the node is already
+            // active (SetActive is a no-op for the same id, so RefreshActiveState wouldn't fire to clear them).
+            bool alreadyActive = _workspace.Active.ActiveId == node.Id;
             _workspace.SetActive(node.Id);
+            if (alreadyActive)
+            {
+                SelectedRegion = null;
+                Statistics = null;
+                SelectedStep = null;
+                InspectorRole = InspectorRole.DatasetProperties;
+            }
+        }
+    }
+
+    /// <summary>The region a selected measurement was taken over — drawn read-only on the source image so the user
+    /// sees where the stat came from — or <c>null</c> when the selection has no drawable region on the active image.</summary>
+    public MeasurementRegion? SelectedRegion
+    {
+        get => _selectedRegion;
+        private set
+        {
+            if (SetProperty(ref _selectedRegion, value))
+            {
+                RoiChanged?.Invoke(this, EventArgs.Empty); // the view re-evaluates the region overlay
+            }
         }
     }
 
@@ -762,6 +788,10 @@ public sealed class ShellViewModel : ObservableObject
             Statistics = new StatisticsResultViewModel(result);
             SelectedStep = null;
             InspectorRole = InspectorRole.Result;
+
+            // If this measurement records a region on the currently active image, offer it as a read-only overlay.
+            var region = _imageAnalysis.GetMeasurementRegion(artifactId);
+            SelectedRegion = region is not null && region.SourceId == _workspace.Active.ActiveId ? region : null;
         }
     }
 
@@ -966,6 +996,7 @@ public sealed class ShellViewModel : ObservableObject
         // A new active dataset resets the Inspector to its properties (op editor / result / step are transient)
         // and re-populates the launcher from the registry for the new active dataset's kind.
         Statistics = null;
+        _selectedRegion = null; // cleared silently; the RoiChanged below already refreshes the overlay
         SelectedStep = null;
         OperationEditor = null;
         InspectorRole = InspectorRole.DatasetProperties;

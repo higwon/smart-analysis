@@ -111,6 +111,7 @@ public partial class MainWindow : Window
                 field.PropertyChanged += RegionField_PropertyChanged;
             }
 
+            SingleImage.IsRegionEditable = true; // a region form drives a draggable overlay
             UpdateRegionPreview();
         }
         else
@@ -299,19 +300,31 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!_viewModel.RoiEnabled || !_viewModel.CanUseRoi || _viewModel.ActiveImage is not { } image)
+        if (_viewModel.RoiEnabled && _viewModel.CanUseRoi && _viewModel.ActiveImage is { } image)
         {
-            SingleImage.RegionIsEllipse = false;
-            SingleImage.ClearRegionPreview();
-            _regionContext.Current = null; // no ROI → region-capable ops run whole-image
+            // Seed a centred default the first time the ROI is enabled.
+            _roiBbox ??= (image.X.Count / 4, image.Y.Count / 4, Math.Max(1, image.X.Count / 2), Math.Max(1, image.Y.Count / 2));
+            SingleImage.IsRegionEditable = true;
+            SingleImage.RegionIsEllipse = _viewModel.RoiIsEllipse;
+            SingleImage.SetRegionPreview(_roiBbox.Value.Left, _roiBbox.Value.Top, _roiBbox.Value.Width, _roiBbox.Value.Height);
+            CommitRoi();
             return;
         }
 
-        // Seed a centred default the first time the ROI is enabled.
-        _roiBbox ??= (image.X.Count / 4, image.Y.Count / 4, Math.Max(1, image.X.Count / 2), Math.Max(1, image.Y.Count / 2));
-        SingleImage.RegionIsEllipse = _viewModel.RoiIsEllipse;
-        SingleImage.SetRegionPreview(_roiBbox.Value.Left, _roiBbox.Value.Top, _roiBbox.Value.Width, _roiBbox.Value.Height);
-        CommitRoi();
+        // With no live ROI, a selected region measurement shows read-only where its stat was taken (2D image only).
+        if (_viewModel.SelectedRegion is { } r && !_viewModel.ShowSingle3D && _viewModel.ActiveImage is not null)
+        {
+            SingleImage.IsRegionEditable = false; // display only — not a draggable/live ROI
+            SingleImage.RegionIsEllipse = r.Shape == RegionOverlayShape.Ellipse;
+            SingleImage.SetRegionPreview(r.Left, r.Top, r.Width, r.Height);
+            _regionContext.Current = null; // a read-only display is not a live ROI for region-capable ops
+            return;
+        }
+
+        SingleImage.IsRegionEditable = false;
+        SingleImage.RegionIsEllipse = false;
+        SingleImage.ClearRegionPreview();
+        _regionContext.Current = null; // no ROI → region-capable ops run whole-image
     }
 
     private void UpdateRoi((int Left, int Top, int Width, int Height) r)
