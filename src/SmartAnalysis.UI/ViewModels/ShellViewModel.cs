@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 using System.Windows.Input;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.FileFormats;
@@ -69,7 +70,9 @@ public sealed class ShellViewModel : ObservableObject
     private bool _isOperationPreview;
     private ImageRenderInput? _operationPreviewInput;
     private Task _operationPreviewTask = Task.CompletedTask;
-    private Func<DatasetId, Task<ImageRenderInput?>>? _computePreview;
+    private Func<DatasetId, CancellationToken, Task<ImageRenderInput?>>? _computePreview;
+    private CancellationTokenSource? _previewCts;
+    private int _previewGeneration;
     private HistoryRowViewModel? _selectedStep;
     private Colormap _colormap = ColormapCatalog.Default.Map;
     private string _colormapName = ColormapCatalog.Default.Name;
@@ -230,9 +233,9 @@ public sealed class ShellViewModel : ObservableObject
         _computePreview = editor switch
         {
             FlattenPanelViewModel when HasActiveImage
-                => id => _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange),
+                => (id, ct) => _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange, ct),
             ParameterFormViewModel form when HasActiveImage && form.DerivesImage && !IsImageOverlayEditor(form)
-                => id => _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange),
+                => (id, ct) => _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange, ct),
             _ => null,
         };
 
@@ -262,6 +265,7 @@ public sealed class ShellViewModel : ObservableObject
         }
         else
         {
+            CancelOperationPreview(); // drop any in-flight preview so a late result can't paint the closed compare
             ImagesChanged?.Invoke(this, EventArgs.Empty); // back to the single view
         }
     }
@@ -269,20 +273,38 @@ public sealed class ShellViewModel : ObservableObject
     private FlattenOptions CurrentFlattenOptions()
         => new(FlattenPanel.Scope, FlattenPanel.Order, FlattenPanel.Orientation, FlattenPanel.Basement);
 
+    // Each refresh supersedes the last: a new generation + a fresh cancellation token. A rapid A→B parameter change
+    // cancels A's in-flight compute AND — even if A still completes — the generation guard drops its stale result, so
+    // a slower A can never overwrite a newer B (an ActiveId-only guard misses this: both A and B are the same image).
     private void RefreshOperationPreview()
     {
-        if (_computePreview is { } compute && _workspace.Active.ActiveId is { } id && HasActiveImage)
+        if (_computePreview is not { } compute || _workspace.Active.ActiveId is not { } id || !HasActiveImage)
         {
-            _operationPreviewTask = ComputeOperationPreviewAsync(compute, id);
+            return;
         }
+
+        CancelOperationPreview();
+        _previewCts = new CancellationTokenSource();
+        var generation = ++_previewGeneration;
+        _operationPreviewTask = ComputeOperationPreviewAsync(compute, id, generation, _previewCts.Token);
     }
 
-    private async Task ComputeOperationPreviewAsync(Func<DatasetId, Task<ImageRenderInput?>> compute, DatasetId id)
+    private void CancelOperationPreview()
+    {
+        _previewCts?.Cancel();
+        _previewCts?.Dispose();
+        _previewCts = null;
+    }
+
+    private async Task ComputeOperationPreviewAsync(Func<DatasetId, CancellationToken, Task<ImageRenderInput?>> compute, DatasetId id, int generation, CancellationToken cancellationToken)
     {
         try
         {
-            var input = await compute(id).ConfigureAwait(true);
-            if (_isOperationPreview && _workspace.Active.ActiveId == id) // still previewing this image
+            var input = await compute(id, cancellationToken).ConfigureAwait(true);
+
+            // Apply only if this is still the newest request for the still-previewed active image. The generation
+            // check is what defeats out-of-order completion; the ActiveId check drops a preview for a replaced image.
+            if (_isOperationPreview && generation == _previewGeneration && _workspace.Active.ActiveId == id)
             {
                 _operationPreviewInput = input;
                 OnPropertyChanged(nameof(OperationPreviewInput));
@@ -291,7 +313,7 @@ public sealed class ShellViewModel : ObservableObject
         }
         catch
         {
-            // Best-effort preview: a failure just shows no PREVIEW image, never an error banner.
+            // Best-effort preview: a cancellation or failure just shows no PREVIEW image, never an error banner.
         }
     }
 
