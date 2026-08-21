@@ -132,12 +132,45 @@ public sealed class PeakDetectionOperationTests
         var artifact = await RunAsync(profile, prominence: 0.1);
 
         Assert.NotNull(artifact.Table);
-        Assert.Equal(new[] { "Position", "Value", "Prominence" }, artifact.Table!.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "Position", "Value", "Prominence", "Width" }, artifact.Table!.Columns.Select(c => c.Name));
         Assert.Equal(profile.X.Unit, artifact.Table.Columns[0].Unit);      // position column in the X unit
         Assert.Equal(profile.Channel.Unit, artifact.Table.Columns[1].Unit); // value column in the channel unit
         Assert.Equal(2, artifact.Table.RowCount);                          // one row per peak (bumps at 20 and 50)
         Assert.Equal(20 * 0.5, artifact.Table.Rows[0][0].Value, 6);        // first peak position
         Assert.Equal(1.0, artifact.Table.Rows[0][1].Value, 3);             // its value
+    }
+
+    [Fact]
+    public async Task Reports_the_dominant_peak_width_in_the_x_unit()
+    {
+        using var profile = BumpProfile(step: 0.5); // a Gaussian bump (width param 3) at index 20
+
+        var artifact = await RunAsync(profile, prominence: 0.1);
+
+        // FWHM of exp(-((i-20)/3)²) = 2·3·√ln2 ≈ 4.996 samples · 0.5 µm/sample ≈ 2.5 µm.
+        Assert.Equal(profile.X.Unit, artifact.Scalars["DominantWidth"].Unit);
+        Assert.InRange(artifact.Scalars["DominantWidth"].Value, 2.0, 3.0);
+
+        // The table's Width column (4th) carries a finite width for each detected peak.
+        Assert.Equal("Width", artifact.Table!.Columns[3].Name);
+        Assert.Equal(profile.X.Unit, artifact.Table.Columns[3].Unit);
+        Assert.True(artifact.Table.Rows[0][3].Value > 0.0 && double.IsFinite(artifact.Table.Rows[0][3].Value));
+    }
+
+    [Fact]
+    public async Task No_peaks_reports_a_nan_dominant_width()
+    {
+        var flat = new float[64];
+        Array.Fill(flat, 2.0f);
+        using var profile = new LineProfileDataset(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Distance", StandardUnits.Micrometre, 0.0, 0.5, flat.Length),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(flat, flat.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var artifact = await RunAsync(profile, 0.1);
+
+        Assert.True(double.IsNaN(artifact.Scalars["DominantWidth"].Value));
     }
 
     [Fact]
@@ -163,7 +196,7 @@ public sealed class PeakDetectionOperationTests
         var table = run.Measurement!.Table;
         Assert.NotNull(table);
         Assert.Empty(table!.Rows);
-        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)" }, table.Columns); // units kept with no rows
+        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)", "Width (um)" }, table.Columns); // units kept with no rows
     }
 
     [Fact]
@@ -180,7 +213,7 @@ public sealed class PeakDetectionOperationTests
 
         var table = run.Measurement!.Table;
         Assert.NotNull(table);
-        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)" }, table!.Columns); // unit folded into the header
+        Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)", "Width (um)" }, table!.Columns); // unit folded into the header
         Assert.Equal(2, table.Rows.Count);
     }
 
