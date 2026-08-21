@@ -324,16 +324,16 @@
                                           Visibility="{Binding IsSingleCurve, Converter={StaticResource Bool2Vis}}"/>
                         <!-- Two equal panes; each frames its image exactly like the single stage (same Gap.2 margin
                              on the AfmImageView) so the before/after images and their fixed-width palettes line up. -->
-                        <Grid x:Name="CompareContent" Visibility="{Binding IsBeforeAfter, Converter={StaticResource Bool2Vis}}">
+                        <Grid x:Name="CompareContent" Visibility="{Binding ShowComparePanes, Converter={StaticResource Bool2Vis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <DockPanel Grid.Column="0">
-                                <TextBlock DockPanel.Dock="Top" Text="BEFORE" Margin="{DynamicResource SA.Pad.Bar}"
+                                <TextBlock DockPanel.Dock="Top" Text="{Binding CompareBeforeLabel}" Margin="{DynamicResource SA.Pad.Bar}"
                                            Foreground="{DynamicResource SA.Brush.Text.Tertiary}" Style="{StaticResource SA.Text.SectionLabel}"/>
                                 <ctl:AfmImageView x:Name="BeforeImageView" Margin="{DynamicResource SA.Gap.2}"/>
                             </DockPanel>
                             <Border Grid.Column="1" Background="{DynamicResource SA.Brush.Border.Default}"/>
                             <DockPanel Grid.Column="2">
-                                <TextBlock DockPanel.Dock="Top" Text="AFTER" Margin="{DynamicResource SA.Pad.Bar}"
+                                <TextBlock DockPanel.Dock="Top" Text="{Binding CompareAfterLabel}" Margin="{DynamicResource SA.Pad.Bar}"
                                            Foreground="{DynamicResource SA.Brush.Accent.OnSurface}" Style="{StaticResource SA.Text.SectionLabel}"/>
                                 <ctl:AfmImageView x:Name="AfterImageView" Margin="{DynamicResource SA.Gap.2}"/>
                             </DockPanel>

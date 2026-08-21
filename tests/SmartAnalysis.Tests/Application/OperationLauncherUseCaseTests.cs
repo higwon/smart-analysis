@@ -105,7 +105,7 @@ public sealed class OperationLauncherUseCaseTests
         Assert.Null(result.Measurement);
         Assert.Equal(2, ws.Count);
         Assert.Equal(result.DerivedId, ws.Active.ActiveId);       // derived is active
-        Assert.Contains(image.Id, ws.Active.Comparison);           // source → Before/After
+        Assert.Empty(ws.Active.Comparison);                        // apply no longer forces Before/After (preview-in-settings)
     }
 
     [Fact]

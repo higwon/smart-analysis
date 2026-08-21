@@ -138,7 +138,8 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
 
         if (result.DerivedDataset is { } derived)
         {
-            // Transform policy (doc 22 §5): derived becomes active; the source enters the comparison set.
+            // Transform policy: the derived dataset is added and becomes active. It is NOT forced into a Before/After
+            // comparison — comparing to the source is a live settings preview now, not a post-apply artifact split.
             // Ownership transfers to the workspace only on a successful Add; dispose on failure (W01).
             try
             {
@@ -151,7 +152,6 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
             }
 
             _workspace.SetActive(derived.Id);
-            _workspace.SetComparison([sourceId]);
             return OperationRunResult.Derived(derived.Id, warnings);
         }
 

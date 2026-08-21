@@ -80,6 +80,6 @@ public sealed class DeglitchOperationTests
         Assert.True(run.Success, run.Error);
         Assert.NotNull(run.DerivedId);
         Assert.Equal(run.DerivedId, ws.Active.ActiveId);   // derived is active
-        Assert.Contains(image.Id, ws.Active.Comparison);    // source → Before/After
+        Assert.Empty(ws.Active.Comparison);    // apply no longer forces Before/After (compared in the settings preview)
     }
 }

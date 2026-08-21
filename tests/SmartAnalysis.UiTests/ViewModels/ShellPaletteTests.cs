@@ -113,6 +113,9 @@ public sealed class ShellPaletteTests
         public Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken ct = default)
             => Task.FromException<FlattenOutcome>(new NotImplementedException());
 
+        public Task<ImageRenderInput?> PreviewFlattenAsync(DatasetId sourceId, FlattenOptions options, Colormap colormap, ValueRange? range, CancellationToken ct = default)
+            => Task.FromResult<ImageRenderInput?>(null);
+
         public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default)
             => Task.FromException<StatisticsResult>(new NotImplementedException());
 

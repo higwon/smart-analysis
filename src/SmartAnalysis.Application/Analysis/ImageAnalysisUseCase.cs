@@ -2,6 +2,8 @@ using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Analysis.Operations.Image;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Visualization.Colormaps;
+using SmartAnalysis.Visualization.Rendering;
 using AnFlatten = SmartAnalysis.Analysis.Flattening;
 
 namespace SmartAnalysis.Application.Analysis;
@@ -10,7 +12,8 @@ namespace SmartAnalysis.Application.Analysis;
 /// Runs image operations against the workspace on the UI's behalf (Application → Analysis is allowed;
 /// UI → Analysis is not — doc 11). Maps the UI-facing <see cref="FlattenOptions"/> onto the real
 /// <c>image.flatten</c> parameter set, runs it via the registry, and applies the transform workspace policy
-/// (add derived → active → comparison = [source]).
+/// (add derived → active). Comparing the result to the source is a live settings preview (PreviewFlattenAsync),
+/// not a post-apply Before/After split.
 /// </summary>
 public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
 {
@@ -39,20 +42,76 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        var (result, error) = await RunFlattenAsync(sourceId, options, cancellationToken).ConfigureAwait(false);
+        if (error is not null)
+        {
+            return FlattenOutcome.Failed(error);
+        }
+
+        if (result!.DerivedDataset is not ScanImageDataset derived)
+        {
+            return FlattenOutcome.Failed("Flatten produced no derived dataset.");
+        }
+
+        // Apply is now a plain transform: the derived dataset is added and becomes active. It is NOT forced into a
+        // Before/After comparison any more — comparing the result to the source happens live in the settings preview
+        // (PreviewFlattenAsync) before applying. Ownership transfers to the workspace only on a successful Add (W01).
+        try
+        {
+            _workspace.Add(derived);
+        }
+        catch
+        {
+            derived.Dispose();
+            throw;
+        }
+
+        _workspace.SetActive(derived.Id);
+
+        var warnings = result.Warnings.Select(w => w.Message).ToArray();
+        return new FlattenOutcome(true, derived.Id, warnings, null);
+    }
+
+    public async Task<ImageRenderInput?> PreviewFlattenAsync(DatasetId sourceId, FlattenOptions options, Colormap colormap, ValueRange? range, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(colormap);
+
+        var (result, error) = await RunFlattenAsync(sourceId, options, cancellationToken).ConfigureAwait(false);
+        if (error is not null || result!.DerivedDataset is not ScanImageDataset derived)
+        {
+            return null; // a preview is best-effort: a bad setting just shows nothing, never an error
+        }
+
+        // The derived is transient (never added to the workspace): project an OWNED render input, then dispose it.
+        try
+        {
+            return RenderInputFactory.ForImageOwned(derived, colormap, range);
+        }
+        finally
+        {
+            derived.Dispose();
+        }
+    }
+
+    // Validates the options + runs image.flatten WITHOUT committing anything to the workspace. On success the
+    // OperationResult carries the (uncommitted) derived dataset; on any expected failure it returns a typed message.
+    private async Task<(OperationResult? Result, string? Error)> RunFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken cancellationToken)
+    {
         // Public contract: reject out-of-range (cast) enum values rather than silently defaulting them.
         if (!Enum.IsDefined(options.Scope) || !Enum.IsDefined(options.Orientation) || !Enum.IsDefined(options.Basement))
         {
-            return FlattenOutcome.Failed("Flatten options contain an undefined scope/orientation/basement value.");
+            return (null, "Flatten options contain an undefined scope/orientation/basement value.");
         }
 
         if (!_workspace.TryGet(sourceId, out var dataset) || dataset is not ScanImageDataset image)
         {
-            return FlattenOutcome.Failed("The source is not an image dataset in the workspace.");
+            return (null, "The source is not an image dataset in the workspace.");
         }
 
         if (!_registry.TryGet(FlattenId, out var operation))
         {
-            return FlattenOutcome.Failed($"Operation '{FlattenId}' is not registered.");
+            return (null, $"Operation '{FlattenId}' is not registered.");
         }
 
         var parameters = new ParameterSet(new Dictionary<string, object?>
@@ -67,13 +126,13 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         var validation = operation.Validate(input, parameters);
         if (!validation.IsValid)
         {
-            return FlattenOutcome.Failed(string.Join("; ", validation.Errors));
+            return (null, string.Join("; ", validation.Errors));
         }
 
-        OperationResult result;
         try
         {
-            result = await operation.RunAsync(input, parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            var result = await operation.RunAsync(input, parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            return (result, null);
         }
         catch (OperationCanceledException)
         {
@@ -81,33 +140,8 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         }
         catch (Exception ex)
         {
-            return FlattenOutcome.Failed(ex.Message);
+            return (null, ex.Message);
         }
-
-        if (result.DerivedDataset is not { } derived)
-        {
-            return FlattenOutcome.Failed("Flatten produced no derived dataset.");
-        }
-
-        // Transform policy (doc 22 §5): derived becomes active; the source enters the comparison set.
-        // Ownership transfers to the workspace only on a successful Add (W01); if Add throws (e.g. a
-        // duplicate id / lineage-cycle guard), we still own the derived buffer and must dispose it.
-        try
-        {
-            _workspace.Add(derived);
-        }
-        catch
-        {
-            derived.Dispose();
-            throw;
-        }
-
-        // From here the workspace owns 'derived' — never dispose it on a later failure.
-        _workspace.SetActive(derived.Id);
-        _workspace.SetComparison([sourceId]);
-
-        var warnings = result.Warnings.Select(w => w.Message).ToArray();
-        return new FlattenOutcome(true, derived.Id, warnings, null);
     }
 
     public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken cancellationToken = default)

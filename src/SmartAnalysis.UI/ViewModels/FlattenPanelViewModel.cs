@@ -9,8 +9,8 @@ namespace SmartAnalysis.UI.ViewModels;
 /// The contextual Flatten parameter panel (U02, doc 24 §4): the real four-parameter <c>image.flatten</c>
 /// schema (scope · order 0–8 · orientation · basement). Apply runs the operation through the Application
 /// <see cref="IImageAnalysisUseCase"/> — the UI never touches the Analysis operation contract (doc 11).
-/// On success the derived dataset becomes active and Before/After is entered (the workspace drives the
-/// shell refresh); warnings/typed errors are surfaced here.
+/// While the panel is open the shell shows a live source-vs-preview compare (PreviewFlattenAsync); Apply then just
+/// materializes the derived dataset as the active image (no forced Before/After). Warnings/typed errors surface here.
 /// </summary>
 public sealed class FlattenPanelViewModel : ObservableObject
 {
