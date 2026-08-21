@@ -9,10 +9,11 @@ namespace SmartAnalysis.Analysis.Operations.Image;
 /// Peak detection (A15) on the F04 contract: finds the significant peaks of a curve (a
 /// <see cref="LineProfileDataset"/> — a profile, cross-section, or PSD) by topographic prominence
 /// (<see cref="PeakDetection"/>) and emits a measurement summary — the <b>peak count</b> and the <b>dominant peak</b>
-/// (its position on the X axis, its value, and its prominence). Works on any curve (a PSD's dominant peak is the
-/// characteristic spatial frequency); it reads positions/values generically, so no axis-dimension restriction.
-/// Schema = a single <c>prominence</c> threshold (a fraction of the value range). Parameter-only, so U08's generic
-/// form drives it. The full peak list (a table) is a follow-up. Deterministic; DI-only (ADR-005).
+/// (its position on the X axis, value, prominence, and <b>width at half-prominence</b> via <see cref="PeakWidths"/>,
+/// in the X unit) — plus the full peak list as a table (one row per peak: position/value/prominence/width). Works on
+/// any curve (a PSD's dominant peak is the characteristic spatial frequency); it reads positions/values generically,
+/// so no axis-dimension restriction. Schema = a single <c>prominence</c> threshold (a fraction of the value range).
+/// Parameter-only, so U08's generic form drives it. Deterministic; DI-only (ADR-005).
 /// </summary>
 public sealed class PeakDetectionOperation : IAnalysisOperation
 {
@@ -103,6 +104,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             scalars["DominantPosition"] = new(profile.X.RawToReal(dominant.Index), xUnit);
             scalars["DominantValue"] = new(dominant.Value, yUnit);
             scalars["DominantProminence"] = new(dominant.Prominence, yUnit);
+            scalars["DominantWidth"] = new(Width(profile, dominant), xUnit);
         }
         else
         {
@@ -110,6 +112,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             scalars["DominantPosition"] = new(double.NaN, xUnit);
             scalars["DominantValue"] = new(double.NaN, yUnit);
             scalars["DominantProminence"] = new(double.NaN, yUnit);
+            scalars["DominantWidth"] = new(double.NaN, xUnit);
         }
 
         var artifactId = DatasetId.New();
@@ -137,6 +140,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
                 new(profile.X.RawToReal(peak.Index), xUnit),
                 new(peak.Value, yUnit),
                 new(peak.Prominence, yUnit),
+                new(Width(profile, peak), xUnit),
             });
         }
 
@@ -145,6 +149,7 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             new MeasurementColumn("Position", xUnit),
             new MeasurementColumn("Value", yUnit),
             new MeasurementColumn("Prominence", yUnit),
+            new MeasurementColumn("Width", xUnit),
         };
         var table = new MeasurementTable(columns, rows);
 
@@ -159,4 +164,10 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
         progress?.Report(new OperationProgress(1.0, "Done."));
         return Task.FromResult(OperationResult.Measurement(artifact, warnings));
     }
+
+    // The peak's full width at half-prominence, converted from sample units to the X axis's physical unit (NaN when
+    // the width is undetermined — a peak cut off by an end). The axis step gives the physical spacing per sample.
+    private static double Width(LineProfileDataset profile, Peak peak)
+        => PeakWidths.WidthAtHalfProminence(profile.Values.Memory.Span, peak.Index, peak.Value, peak.Prominence)
+            * Math.Abs(profile.X.Step);
 }
