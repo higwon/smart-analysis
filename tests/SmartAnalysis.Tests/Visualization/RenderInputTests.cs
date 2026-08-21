@@ -112,6 +112,28 @@ public sealed class RenderInputTests
     }
 
     [Fact]
+    public void WithStyle_reskins_the_image_without_touching_its_data()
+    {
+        using var image = Image([0f, 1f, 2f, 3f], 2, 2);
+        var owned = RenderInputFactory.ForImageOwned(image, Colormap.AfmGold); // owned Z, data range 0..3
+
+        // A manual range → both the display range and the new colormap change; Z/dims/axes/data-range are preserved.
+        var manual = owned.WithStyle(Colormap.Grayscale, new ValueRange(1, 2));
+        Assert.Same(Colormap.Grayscale, manual.Colormap);
+        Assert.Equal(1.0, manual.Range.Min);
+        Assert.Equal(2.0, manual.Range.Max);
+        Assert.Equal(0.0, manual.DataRange.Min);      // the palette-bar axis stays the full extent
+        Assert.Equal(3.0, manual.DataRange.Max);
+        Assert.True(manual.Z.Span.SequenceEqual(owned.Z.Span)); // same data, no recompute
+        Assert.Equal(owned.Width, manual.Width);
+
+        // A null range → auto: the display range falls back to the image's own data extent (stays legible).
+        var auto = owned.WithStyle(Colormap.Grayscale, null);
+        Assert.Equal(0.0, auto.Range.Min);
+        Assert.Equal(3.0, auto.Range.Max);
+    }
+
+    [Fact]
     public void ForImage_honors_an_explicit_range()
     {
         using var image = Image([0f, 1f, 2f, 3f], 2, 2);

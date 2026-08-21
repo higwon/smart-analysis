@@ -7,6 +7,7 @@ using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
 using SmartAnalysis.Infrastructure.FileFormats.Tiff;
+using SmartAnalysis.Visualization.Colormaps;
 using Xunit;
 
 namespace SmartAnalysis.Tests.Application;
@@ -48,7 +49,7 @@ public sealed class ImageAnalysisUseCaseTests
         Assert.NotNull(outcome.DerivedId);
         Assert.Equal(2, ws.Count);
         Assert.Equal(outcome.DerivedId, ws.Active.ActiveId);            // derived is active
-        Assert.Contains(image.Id, ws.Active.Comparison);                // source is the comparison (Before/After)
+        Assert.Empty(ws.Active.Comparison);                             // apply no longer forces Before/After (preview-in-settings)
         Assert.Contains(outcome.DerivedId!.Value, ws.ChildrenOf(image.Id)); // lineage: derived under source
     }
 
@@ -109,6 +110,34 @@ public sealed class ImageAnalysisUseCaseTests
         // A measurement is not a dataset: the workspace and its active context are untouched.
         Assert.Equal(1, ws.Count);
         Assert.Equal(image.Id, ws.Active.ActiveId);
+    }
+
+    [Fact]
+    public async Task PreviewFlatten_returns_a_render_input_without_committing_anything()
+    {
+        var (ws, image, _, useCase) = await SetupAsync();
+        int countBefore = ws.Count;
+
+        var input = await useCase.PreviewFlattenAsync(image.Id, FlattenOptions.Default, ColormapCatalog.Default.Map, null);
+
+        Assert.NotNull(input);                          // an owned render input of the previewed result
+        Assert.Equal(image.X.Count, input!.Width);
+        Assert.Equal(countBefore, ws.Count);            // nothing added to the workspace
+        Assert.Equal(image.Id, ws.Active.ActiveId);     // active unchanged
+        Assert.Empty(ws.Active.Comparison);             // no Before/After forced
+    }
+
+    [Fact]
+    public async Task ApplyFlatten_adds_the_result_active_without_forcing_a_comparison()
+    {
+        var (ws, image, _, useCase) = await SetupAsync();
+
+        var outcome = await useCase.ApplyFlattenAsync(image.Id, FlattenOptions.Default);
+
+        Assert.True(outcome.Success, outcome.Error);
+        Assert.Equal(2, ws.Count);                      // the derived result was added
+        Assert.Equal(outcome.DerivedId, ws.Active.ActiveId); // and became active
+        Assert.Empty(ws.Active.Comparison);             // but NOT forced into Before/After
     }
 
     [Fact]

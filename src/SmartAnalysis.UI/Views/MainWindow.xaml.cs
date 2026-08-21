@@ -431,6 +431,26 @@ public partial class MainWindow : Window
         }
 
         SingleSurface.Clear();
+        if (_viewModel.IsFlattenPreview && _viewModel.ActiveImage is { } previewSource)
+        {
+            // Flatten settings preview: SOURCE (the active image) vs the uncommitted PREVIEW result, both with the
+            // same colormap/range so the comparison is fair. The preview input is owned (safe to render/hold).
+            BeforeImageView.Render(RenderInputFactory.ForImage(previewSource, colormap, _viewModel.EffectiveRange));
+            if (_viewModel.FlattenPreviewInput is { } preview)
+            {
+                // Re-style the (cached) preview with the CURRENT colormap/range so a live palette change keeps SOURCE
+                // and PREVIEW consistent — without re-running Flatten just because a colour changed.
+                AfterImageView.Render(preview.WithStyle(colormap, _viewModel.EffectiveRange));
+            }
+            else
+            {
+                AfterImageView.Clear();
+            }
+
+            SingleImage.Clear();
+            return;
+        }
+
         if (_viewModel.IsBeforeAfter && _viewModel.BeforeImage is { } before && _viewModel.ActiveImage is { } after)
         {
             // Both panes honour the SAME palette setting the main screen uses (EffectiveRange): a manual range set
