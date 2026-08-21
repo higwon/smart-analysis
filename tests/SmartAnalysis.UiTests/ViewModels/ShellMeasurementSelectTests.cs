@@ -101,6 +101,28 @@ public sealed class ShellMeasurementSelectTests
         Assert.Null(vm.SelectedRegion);
     }
 
+    [Fact]
+    public void Re_selecting_the_active_dataset_node_clears_a_selected_region()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        var analysis = new FakeImageAnalysis { Region = new MeasurementRegion(image.Id, RegionOverlayShape.Rectangle, 1, 1, 3, 3) };
+        var vm = NewShell(ws, analysis);
+        vm.SelectMeasurement(DatasetId.New());
+        Assert.NotNull(vm.SelectedRegion);
+
+        // Re-selecting the (already-active) source image node is a transition out of the measurement selection, so the
+        // overlay must drop even though the active dataset is unchanged (SetActive is a no-op for the same id).
+        var node = vm.ExplorerNodes.Single(n => n.Id == image.Id);
+        vm.Select(node);
+
+        Assert.Null(vm.SelectedRegion);
+        Assert.Equal(InspectorRole.DatasetProperties, vm.InspectorRole); // and the Result card yields back to properties
+    }
+
     private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
         => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
             new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());

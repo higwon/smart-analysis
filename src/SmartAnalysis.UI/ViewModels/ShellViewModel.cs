@@ -751,7 +751,18 @@ public sealed class ShellViewModel : ObservableObject
         }
         else if (_workspace.Contains(node.Id))
         {
+            // Explorer selection is distinct from the active context. Selecting a dataset node is a transition OUT of
+            // a measurement selection, so drop its read-only overlay + Result card — even when the node is already
+            // active (SetActive is a no-op for the same id, so RefreshActiveState wouldn't fire to clear them).
+            bool alreadyActive = _workspace.Active.ActiveId == node.Id;
             _workspace.SetActive(node.Id);
+            if (alreadyActive)
+            {
+                SelectedRegion = null;
+                Statistics = null;
+                SelectedStep = null;
+                InspectorRole = InspectorRole.DatasetProperties;
+            }
         }
     }
 
