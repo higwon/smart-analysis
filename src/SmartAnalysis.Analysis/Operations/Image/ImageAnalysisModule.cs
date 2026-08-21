@@ -37,6 +37,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<FilteredProfileRoughnessOperation>();
         services.AddAnalysisOperation<ProfileFilterOperation>();
         services.AddAnalysisOperation<PeakDetectionOperation>();
+        services.AddAnalysisOperation<ProfileRangeStatisticsOperation>();
         return services;
     }
 }
