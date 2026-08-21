@@ -47,6 +47,26 @@ public sealed class PeakDetectionOperationTests
         [PeakDetectionOperation.ProminenceParameter] = prominence,
     });
 
+    private static ParameterSet Params(double prominence, double minSnr, double minWidth) => new(new Dictionary<string, object?>
+    {
+        [PeakDetectionOperation.ProminenceParameter] = prominence,
+        [PeakDetectionOperation.MinSnrParameter] = minSnr,
+        [PeakDetectionOperation.MinWidthParameter] = minWidth,
+    });
+
+    private static LineProfileDataset Profile(float[] z, double step = 1.0)
+        => new(
+            DatasetId.New(), DataSource.Derived,
+            new Axis("Distance", StandardUnits.Micrometre, 0.0, step, z.Length),
+            new ChannelDescriptor("height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.TakeOwnership(z, z.Length, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+    private static async Task<AnalysisArtifact> RunAsync(LineProfileDataset profile, ParameterSet ps)
+    {
+        var result = await NewOperation().RunAsync(new OperationInput(profile), ps, null, CancellationToken.None);
+        return Assert.IsAssignableFrom<AnalysisArtifact>(result.Artifact);
+    }
+
     private static async Task<AnalysisArtifact> RunAsync(LineProfileDataset profile, double prominence)
     {
         var result = await NewOperation().RunAsync(new OperationInput(profile), Params(prominence), null, CancellationToken.None);
@@ -261,6 +281,67 @@ public sealed class PeakDetectionOperationTests
         Assert.NotNull(table);
         Assert.Equal(new[] { "Position (um)", "Value (nm)", "Prominence (nm)", "Width (um)", "SNR" }, table!.Columns); // unit folded into the header
         Assert.Equal(2, table.Rows.Count);
+    }
+
+    [Fact]
+    public async Task A_min_snr_filter_drops_low_snr_peaks()
+    {
+        // ±0.1 noise floor + a big (amp 20) and a small (amp 2) Gaussian → both detected, but only the big one
+        // clears a high SNR threshold. (Noiseless would give ∞ SNR for both, so the noise floor is essential here.)
+        const int n = 300;
+        var z = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            z[i] = (float)((i % 2 == 0 ? 0.1 : -0.1)
+                           + 20.0 * Math.Exp(-Math.Pow((i - 80) / 4.0, 2))
+                           + 2.0 * Math.Exp(-Math.Pow((i - 220) / 4.0, 2)));
+        }
+
+        using var profile = Profile(z);
+
+        var both = await RunAsync(profile, Params(0.05, minSnr: 0.0, minWidth: 0.0));
+        Assert.Equal(2.0, both.Scalars["PeakCount"].Value, 12);
+
+        var filtered = await RunAsync(profile, Params(0.05, minSnr: 20.0, minWidth: 0.0));
+        Assert.Equal(1.0, filtered.Scalars["PeakCount"].Value, 12);       // the small peak is dropped
+        Assert.Equal(80.0, filtered.Scalars["DominantPosition"].Value, 6); // the big peak survives
+    }
+
+    [Fact]
+    public async Task A_min_width_filter_drops_narrow_peaks()
+    {
+        // Same amplitude, different width: a wide (w=8) and a narrow (w=2) Gaussian. A min-width keeps the wide one.
+        const int n = 300;
+        var z = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            z[i] = (float)(10.0 * Math.Exp(-Math.Pow((i - 80) / 8.0, 2))
+                           + 10.0 * Math.Exp(-Math.Pow((i - 220) / 2.0, 2)));
+        }
+
+        using var profile = Profile(z);
+
+        var both = await RunAsync(profile, Params(0.1, 0.0, 0.0));
+        Assert.Equal(2.0, both.Scalars["PeakCount"].Value, 12);
+
+        // Wide FWHM ≈ 2·8·√ln2 ≈ 13.3; narrow ≈ 2·2·√ln2 ≈ 3.3. A min-width of 8 keeps only the wide one.
+        var filtered = await RunAsync(profile, Params(0.1, 0.0, minWidth: 8.0));
+        Assert.Equal(1.0, filtered.Scalars["PeakCount"].Value, 12);
+        Assert.Equal(80.0, filtered.Scalars["DominantPosition"].Value, 6); // the wide peak survives
+    }
+
+    [Fact]
+    public async Task Filtering_everything_out_reports_zero_and_warns()
+    {
+        using var profile = BumpProfile();
+
+        var result = await NewOperation().RunAsync(new OperationInput(profile), Params(0.1, minSnr: 1e9, minWidth: 0.0), null, CancellationToken.None);
+        var artifact = Assert.IsAssignableFrom<AnalysisArtifact>(result.Artifact);
+
+        Assert.Equal(0.0, artifact.Scalars["PeakCount"].Value, 12);
+        Assert.True(double.IsNaN(artifact.Scalars["DominantValue"].Value));
+        Assert.Contains(result.Warnings, w => w.Code == "peaks.none");
+        Assert.Empty(artifact.Table!.Rows); // the filtered table is empty
     }
 
     [Fact]
