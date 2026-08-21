@@ -35,6 +35,13 @@ public sealed class ShellLiveMeasurementsTests
         => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
+    private static ShellViewModel NewShell(Workspace ws, IOperationLauncher launcher)
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+               launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
+
+    private static ImageRenderInput MakeInput()
+        => RenderInputFactory.ForImage(Image(), Colormap.Grayscale, range: null);
+
     private static ScanImageDataset Image()
         => new(
             DatasetId.New(), new DataSource("test", null),
@@ -199,6 +206,36 @@ public sealed class ShellLiveMeasurementsTests
     }
 
     [Fact]
+    public async Task A_stale_preview_completing_late_does_not_overwrite_the_newest()
+    {
+        var ws = new Workspace();
+        var launcher = new QueuedPreviewLauncher();
+        var vm = NewShell(ws, launcher);
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "image.deglitch").LaunchCommand.Execute(null); // request #1 (open)
+        var firstSettle = vm.OperationPreviewSettled;
+
+        var form = Assert.IsType<ParameterFormViewModel>(vm.OperationEditor);
+        form.Fields.Single(f => f.Name == "threshold").Value = 5.0; // request #2 supersedes #1 (same active image)
+        var secondSettle = vm.OperationPreviewSettled;
+
+        Assert.Equal(2, launcher.Pending.Count);
+        var older = MakeInput();
+        var newer = MakeInput();
+
+        launcher.Pending[1].SetResult(newer); // the NEWEST request finishes first
+        await secondSettle;
+        Assert.Same(newer, vm.OperationPreviewInput);
+
+        launcher.Pending[0].SetResult(older); // the stale request finishes LATE
+        await firstSettle;
+        Assert.Same(newer, vm.OperationPreviewInput); // its result is dropped by the generation guard — newest stands
+    }
+
+    [Fact]
     public async Task Changing_a_generic_process_field_recomputes_the_preview()
     {
         var ws = new Workspace();
@@ -331,6 +368,30 @@ public sealed class ShellLiveMeasurementsTests
             => Task.FromResult<ImageRenderInput?>(operationId == "image.deglitch"
                 ? RenderInputFactory.ForImage(Image(), colormap, range)
                 : null);
+    }
+
+    // A launcher whose image→image preview completion is controlled by the test (to force out-of-order finishes).
+    private sealed class QueuedPreviewLauncher : IOperationLauncher
+    {
+        public List<TaskCompletionSource<ImageRenderInput?>> Pending { get; } = new();
+
+        public IReadOnlyList<OperationLauncherItem> ApplicableToActive() =>
+            [new OperationLauncherItem("image.deglitch", "Deglitch", "Remove spikes", OperationCategory.Process)];
+
+        public OperationForm? GetForm(string operationId) => operationId == "image.deglitch"
+            ? new OperationForm("image.deglitch", "Deglitch", "Remove spikes", OperationCategory.Process,
+                [new ParameterFieldDescriptor("threshold", "Threshold", ParameterFieldKind.Number, 1.0, 0.0, null, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesImage: true)
+            : null;
+
+        public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+            => Task.FromException<OperationRunResult>(new NotImplementedException());
+
+        public Task<ImageRenderInput?> PreviewAsync(string operationId, IReadOnlyDictionary<string, object?> values, Colormap colormap, ValueRange? range, CancellationToken ct = default)
+        {
+            var tcs = new TaskCompletionSource<ImageRenderInput?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Pending.Add(tcs);
+            return tcs.Task;
+        }
     }
 
     private sealed class FakeReader : IScanFileReader
