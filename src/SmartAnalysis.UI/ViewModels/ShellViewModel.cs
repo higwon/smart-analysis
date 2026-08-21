@@ -220,16 +220,18 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>Awaitable settle of the in-flight preview computation (deterministic tests).</summary>
     public Task OperationPreviewSettled => _operationPreviewTask;
 
-    // Resolves the preview strategy for the editor being shown: the semantic Flatten panel, or a generic Process
-    // form that derives an image (Measure forms and the overlay editors — crop/line, which have their own live
-    // preview — are excluded). A null strategy leaves the stage in its single view.
+    // Resolves the preview strategy for the editor being shown: the semantic Flatten panel, or a generic form that
+    // derives an IMAGE (image→image). An image→curve Process (e.g. Power Spectral Density) does NOT enter the
+    // compare mode — Process alone means "derives a dataset", not "derives an image", so the gate is form.DerivesImage,
+    // decided before running. Measure forms and the overlay editors (crop/line, own live preview) are excluded too.
+    // A null strategy leaves the stage in its single view.
     private void SetOperationPreview(object? editor)
     {
         _computePreview = editor switch
         {
             FlattenPanelViewModel when HasActiveImage
                 => id => _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange),
-            ParameterFormViewModel form when HasActiveImage && form.Category == OperationCategory.Process && !IsImageOverlayEditor(form)
+            ParameterFormViewModel form when HasActiveImage && form.DerivesImage && !IsImageOverlayEditor(form)
                 => id => _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange),
             _ => null,
         };

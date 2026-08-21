@@ -42,7 +42,7 @@ public sealed class ProfileBaselineOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["baseline", "als", "background", "profile", "line", "curve"]);
+        tags: ["baseline", "als", "background", "profile", "line", "curve"], derivedKind: DataKind.LineProfile);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

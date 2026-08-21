@@ -151,7 +151,8 @@ public sealed record OperationDescriptor
         OutputKind output,
         bool isDeterministic = true,
         IReadOnlyList<string>? tags = null,
-        bool usesRegion = false)
+        bool usesRegion = false,
+        DataKind? derivedKind = null)
     {
         Id = AnalysisGuard.Text(id, nameof(id));
         Version = AnalysisGuard.NonNegative(version, nameof(version));
@@ -161,6 +162,19 @@ public sealed record OperationDescriptor
         Output = AnalysisGuard.DefinedEnum(output, nameof(output));
         IsDeterministic = isDeterministic;
         UsesRegion = usesRegion;
+
+        // The derived kind is only meaningful for a dataset-deriving op — reject a kind on a measurement so the
+        // metadata can't lie about what a Measure produces.
+        if (derivedKind is { } dk)
+        {
+            AnalysisGuard.DefinedEnum(dk, nameof(derivedKind));
+            if (output != OutputKind.DerivedDataset)
+            {
+                throw new ArgumentException("Only a DerivedDataset operation may declare a derivedKind.", nameof(derivedKind));
+            }
+        }
+
+        DerivedKind = derivedKind;
 
         ArgumentNullException.ThrowIfNull(acceptedInputs);
         if (acceptedInputs.Count == 0)
@@ -198,6 +212,12 @@ public sealed record OperationDescriptor
     /// <summary>Whether the op restricts itself to <see cref="OperationInput.Region"/> when a region is active
     /// (the shell attaches the drawn ROI for such ops); a whole-dataset op leaves this false.</summary>
     public bool UsesRegion { get; }
+
+    /// <summary>The <see cref="DataKind"/> this operation derives, when <see cref="Output"/> is
+    /// <see cref="OutputKind.DerivedDataset"/>; <c>null</c> for a measurement or when unspecified. Lets a caller
+    /// tell an image→image transform (a live SOURCE/PREVIEW compare applies) from an image→curve one (it does not)
+    /// <b>before</b> running.</summary>
+    public DataKind? DerivedKind { get; }
 
     public bool Accepts(DataKind kind) => AcceptedInputs.Contains(kind);
 }

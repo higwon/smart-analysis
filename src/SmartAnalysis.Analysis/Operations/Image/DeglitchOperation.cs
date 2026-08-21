@@ -36,7 +36,7 @@ public sealed class DeglitchOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["deglitch", "despike", "clean", "image"]);
+        tags: ["deglitch", "despike", "clean", "image"], derivedKind: DataKind.ScanImage);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

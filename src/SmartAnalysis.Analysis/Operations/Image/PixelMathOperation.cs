@@ -38,7 +38,7 @@ public sealed class PixelMathOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["pixel", "arithmetic", "invert", "image"]);
+        tags: ["pixel", "arithmetic", "invert", "image"], derivedKind: DataKind.ScanImage);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

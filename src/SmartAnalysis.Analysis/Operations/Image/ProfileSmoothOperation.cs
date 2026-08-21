@@ -39,7 +39,7 @@ public sealed class ProfileSmoothOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["smooth", "savitzky-golay", "denoise", "profile", "line", "curve"]);
+        tags: ["smooth", "savitzky-golay", "denoise", "profile", "line", "curve"], derivedKind: DataKind.LineProfile);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

@@ -34,7 +34,7 @@ public sealed class OperationLauncherUseCaseTests
         ws.SetActive(image.Id);
 
         var env = new SystemExecutionEnvironmentProvider();
-        var registry = new OperationRegistry([new StatisticsOperation(env), new FlattenOperation(env)]);
+        var registry = new OperationRegistry([new StatisticsOperation(env), new FlattenOperation(env), new PowerSpectrumOperation(env)]);
         var measurements = new MeasurementStore();
         return (ws, image, measurements, new OperationLauncherUseCase(ws, registry, measurements));
     }
@@ -170,6 +170,28 @@ public sealed class OperationLauncherUseCaseTests
         Assert.Equal(image.Data.Height, preview.Height);
         Assert.Equal(1, ws.Count);                                 // preview committed nothing
         Assert.Equal(image.Id, ws.Active.ActiveId);                // active unchanged
+    }
+
+    [Fact]
+    public async Task GetForm_marks_only_an_image_deriving_op_as_DerivesImage()
+    {
+        var (_, _, _, launcher) = await SetupAsync();
+
+        Assert.True(launcher.GetForm("image.flatten")!.DerivesImage);    // image → image
+        Assert.False(launcher.GetForm("image.psd")!.DerivesImage);       // image → curve (Process, but not an image)
+        Assert.False(launcher.GetForm("image.statistics")!.DerivesImage); // a measurement derives nothing
+    }
+
+    [Fact]
+    public async Task PreviewAsync_image_to_curve_operation_has_no_image_preview()
+    {
+        var (ws, _, _, launcher) = await SetupAsync();
+
+        // Power Spectral Density is a Process op but derives a CURVE — there is no image to compare, so no preview.
+        var preview = await launcher.PreviewAsync("image.psd", new Dictionary<string, object?>(), Colormap.Grayscale, range: null);
+
+        Assert.Null(preview);
+        Assert.Equal(1, ws.Count); // and the transient curve was disposed, not committed
     }
 
     [Fact]

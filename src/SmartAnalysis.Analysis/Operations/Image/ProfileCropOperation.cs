@@ -40,7 +40,7 @@ public sealed class ProfileCropOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["crop", "range", "profile", "line", "curve"]);
+        tags: ["crop", "range", "profile", "line", "curve"], derivedKind: DataKind.LineProfile);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

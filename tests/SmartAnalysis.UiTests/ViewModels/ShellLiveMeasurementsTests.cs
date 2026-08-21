@@ -178,6 +178,27 @@ public sealed class ShellLiveMeasurementsTests
     }
 
     [Fact]
+    public async Task Opening_an_image_to_curve_process_form_stays_on_the_single_stage()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        // Power Spectral Density is a Process op (OutputKind.DerivedDataset) but derives a CURVE, not an image — so it
+        // must NOT enter the SOURCE/PREVIEW compare mode (that would open an empty PREVIEW pane). DerivesImage is false.
+        vm.LauncherItems.Single(i => i.Id == "image.psd").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+
+        Assert.False(vm.IsOperationPreview);        // Process ≠ derives-an-image
+        Assert.False(vm.ShowComparePanes);
+        Assert.True(vm.ShowSingle2D);               // the single image stage is retained
+        Assert.Equal(1, ws.Count);                  // workspace/active unchanged
+        Assert.Equal(image.Id, ws.Active.ActiveId);
+    }
+
+    [Fact]
     public async Task Changing_a_generic_process_field_recomputes_the_preview()
     {
         var ws = new Workspace();
@@ -285,13 +306,17 @@ public sealed class ShellLiveMeasurementsTests
             new OperationLauncherItem("image.flatten", "Flatten", "Level the surface", OperationCategory.Process),
             new OperationLauncherItem("image.deglitch", "Deglitch", "Remove spikes", OperationCategory.Process),
             new OperationLauncherItem("image.grains", "Grains", "Detect grains", OperationCategory.Measure),
+            new OperationLauncherItem("image.psd", "Power Spectral Density", "Image → curve", OperationCategory.Process),
         ];
 
-        // A generic Process form (one numeric field) and a generic Measure form; unknown ids have no form.
+        // A generic image→image Process form (DerivesImage), an image→curve Process form (Process but NOT DerivesImage),
+        // and a generic Measure form; unknown ids have no form.
         public OperationForm? GetForm(string operationId) => operationId switch
         {
             "image.deglitch" => new OperationForm("image.deglitch", "Deglitch", "Remove spikes", OperationCategory.Process,
-                [new ParameterFieldDescriptor("threshold", "Threshold", ParameterFieldKind.Number, 1.0, 0.0, null, Array.Empty<ParameterFieldOption>(), null, "help")]),
+                [new ParameterFieldDescriptor("threshold", "Threshold", ParameterFieldKind.Number, 1.0, 0.0, null, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesImage: true),
+            "image.psd" => new OperationForm("image.psd", "Power Spectral Density", "Image → curve", OperationCategory.Process,
+                [new ParameterFieldDescriptor("window", "Window", ParameterFieldKind.Number, 1.0, 0.0, null, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesImage: false),
             "image.grains" => new OperationForm("image.grains", "Grains", "Detect grains", OperationCategory.Measure,
                 [new ParameterFieldDescriptor("minArea", "Min Area", ParameterFieldKind.Number, 1.0, 0.0, null, Array.Empty<ParameterFieldOption>(), null, "help")]),
             _ => null,
@@ -300,7 +325,8 @@ public sealed class ShellLiveMeasurementsTests
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromException<OperationRunResult>(new NotImplementedException());
 
-        // A Process op previews a (fresh, canned) image; a Measure op derives no image → nothing to compare.
+        // An image→image Process op previews a (fresh, canned) image; an image→curve op or a Measure op derives no
+        // image → nothing to compare (the shell won't even call this for those, but mirror the real contract).
         public Task<ImageRenderInput?> PreviewAsync(string operationId, IReadOnlyDictionary<string, object?> values, Colormap colormap, ValueRange? range, CancellationToken ct = default)
             => Task.FromResult<ImageRenderInput?>(operationId == "image.deglitch"
                 ? RenderInputFactory.ForImage(Image(), colormap, range)

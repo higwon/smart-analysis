@@ -86,7 +86,10 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         }
 
         var fields = descriptor.Parameters.Parameters.Select(ToField).ToArray();
-        return new OperationForm(descriptor.Id, descriptor.DisplayName, descriptor.Summary, CategoryOf(descriptor.Output), fields);
+        // DerivesImage tells the shell an image→image transform (a live SOURCE/PREVIEW compare) apart from an
+        // image→curve one BEFORE running — Process alone means "derives a dataset", not "derives an image".
+        var derivesImage = descriptor.DerivedKind == DataKind.ScanImage;
+        return new OperationForm(descriptor.Id, descriptor.DisplayName, descriptor.Summary, CategoryOf(descriptor.Output), fields, derivesImage);
     }
 
     public async Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken cancellationToken = default)

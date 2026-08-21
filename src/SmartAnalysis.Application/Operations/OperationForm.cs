@@ -49,4 +49,5 @@ public sealed record OperationForm(
     string DisplayName,
     string Summary,
     OperationCategory Category,
-    IReadOnlyList<ParameterFieldDescriptor> Fields);
+    IReadOnlyList<ParameterFieldDescriptor> Fields,
+    bool DerivesImage = false);

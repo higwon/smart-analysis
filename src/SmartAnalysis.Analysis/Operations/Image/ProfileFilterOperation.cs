@@ -38,7 +38,7 @@ public sealed class ProfileFilterOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["profile", "filter", "gaussian", "roughness", "waviness", "curve"]);
+        tags: ["profile", "filter", "gaussian", "roughness", "waviness", "curve"], derivedKind: DataKind.LineProfile);
 
     // A wavelength filter only applies to a spatial profile (length X axis) — so the launcher doesn't offer it for
     // a PSD's frequency-axis curve. Validate() enforces the same rule for a direct run.

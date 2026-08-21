@@ -55,6 +55,10 @@ public sealed class ParameterFormViewModel : ObservableObject
     /// <summary>Whether this operation derives a new dataset (Process) or measures (Measure).</summary>
     public OperationCategory Category => _form.Category;
 
+    /// <summary>Whether this operation derives an <b>image</b> (image→image) — so a live SOURCE/PREVIEW compare
+    /// applies. False for a measurement or an image→curve transform (e.g. Power Spectral Density).</summary>
+    public bool DerivesImage => _form.DerivesImage;
+
     public IReadOnlyList<ParameterFieldViewModel> Fields { get; }
 
     public bool HasFields => Fields.Count > 0;
