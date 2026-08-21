@@ -7,6 +7,7 @@ using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Units;
 using SmartAnalysis.Infrastructure.FileFormats.Tiff;
+using SmartAnalysis.Visualization.Colormaps;
 using Xunit;
 
 namespace SmartAnalysis.Tests.Application;
@@ -33,7 +34,7 @@ public sealed class OperationLauncherUseCaseTests
         ws.SetActive(image.Id);
 
         var env = new SystemExecutionEnvironmentProvider();
-        var registry = new OperationRegistry([new StatisticsOperation(env), new FlattenOperation(env)]);
+        var registry = new OperationRegistry([new StatisticsOperation(env), new FlattenOperation(env), new PowerSpectrumOperation(env)]);
         var measurements = new MeasurementStore();
         return (ws, image, measurements, new OperationLauncherUseCase(ws, registry, measurements));
     }
@@ -146,5 +147,81 @@ public sealed class OperationLauncherUseCaseTests
 
         Assert.False(result.Success);
         Assert.NotNull(result.Error);
+    }
+
+    // --- PreviewAsync: the generic settings preview (image→image Process ops), the counterpart of the Flatten preview ---
+
+    [Fact]
+    public async Task PreviewAsync_derived_image_returns_a_preview_committing_nothing()
+    {
+        var (ws, image, _, launcher) = await SetupAsync();
+        var values = new Dictionary<string, object?>
+        {
+            ["scope"] = "Line",
+            ["order"] = 1,
+            ["orientation"] = "FastAxis",
+            ["basement"] = "RegressionToZero",
+        };
+
+        var preview = await launcher.PreviewAsync("image.flatten", values, Colormap.Grayscale, range: null);
+
+        Assert.NotNull(preview);
+        Assert.Equal(image.Data.Width, preview!.Width);            // the derived image projected to a render input
+        Assert.Equal(image.Data.Height, preview.Height);
+        Assert.Equal(1, ws.Count);                                 // preview committed nothing
+        Assert.Equal(image.Id, ws.Active.ActiveId);                // active unchanged
+    }
+
+    [Fact]
+    public async Task GetForm_marks_only_an_image_deriving_op_as_DerivesImage()
+    {
+        var (_, _, _, launcher) = await SetupAsync();
+
+        Assert.True(launcher.GetForm("image.flatten")!.DerivesImage);    // image → image
+        Assert.False(launcher.GetForm("image.psd")!.DerivesImage);       // image → curve (Process, but not an image)
+        Assert.False(launcher.GetForm("image.statistics")!.DerivesImage); // a measurement derives nothing
+    }
+
+    [Fact]
+    public async Task PreviewAsync_image_to_curve_operation_has_no_image_preview()
+    {
+        var (ws, _, _, launcher) = await SetupAsync();
+
+        // Power Spectral Density is a Process op but derives a CURVE — there is no image to compare, so no preview.
+        var preview = await launcher.PreviewAsync("image.psd", new Dictionary<string, object?>(), Colormap.Grayscale, range: null);
+
+        Assert.Null(preview);
+        Assert.Equal(1, ws.Count); // and the transient curve was disposed, not committed
+    }
+
+    [Fact]
+    public async Task PreviewAsync_measurement_operation_has_no_image_preview()
+    {
+        var (ws, image, measurements, launcher) = await SetupAsync();
+
+        var preview = await launcher.PreviewAsync("image.statistics", new Dictionary<string, object?>(), Colormap.Grayscale, range: null);
+
+        Assert.Null(preview);                                      // a measure op derives no image → nothing to compare
+        Assert.Empty(measurements.ForSource(image.Id));           // and a preview never attaches a measurement
+        Assert.Equal(1, ws.Count);
+    }
+
+    [Fact]
+    public async Task PreviewAsync_invalid_parameter_shows_nothing()
+    {
+        var (_, _, _, launcher) = await SetupAsync();
+
+        var values = new Dictionary<string, object?> { ["order"] = 99 }; // above schema max (8)
+        var preview = await launcher.PreviewAsync("image.flatten", values, Colormap.Grayscale, range: null);
+
+        Assert.Null(preview);                                      // best-effort: a bad setting shows no PREVIEW, not an error
+    }
+
+    [Fact]
+    public async Task PreviewAsync_unknown_operation_shows_nothing()
+    {
+        var (_, _, _, launcher) = await SetupAsync();
+
+        Assert.Null(await launcher.PreviewAsync("image.nope", new Dictionary<string, object?>(), Colormap.Grayscale, range: null));
     }
 }

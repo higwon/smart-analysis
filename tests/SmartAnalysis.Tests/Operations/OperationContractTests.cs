@@ -244,6 +244,21 @@ public sealed class OperationContractTests
     public void ApplicableTo_rejects_an_undefined_data_kind() =>
         Assert.Throws<ArgumentOutOfRangeException>(() => new OperationRegistry([]).ApplicableTo((DataKind)999));
 
+    [Fact]
+    public void Descriptor_rejects_a_derivedKind_on_a_measurement() =>
+        Assert.Throws<ArgumentException>(() => new OperationDescriptor(
+            "x", 1, "name", "summary", [DataKind.ScanImage], ParameterSchema.Empty, OutputKind.Artifact,
+            derivedKind: DataKind.ScanImage)); // a Measure derives nothing → declaring a kind is a contract lie
+
+    [Fact]
+    public void Descriptor_keeps_the_derivedKind_of_a_transform()
+    {
+        var descriptor = new OperationDescriptor(
+            "x", 1, "name", "summary", [DataKind.ScanImage], ParameterSchema.Empty, OutputKind.DerivedDataset,
+            derivedKind: DataKind.LineProfile);
+        Assert.Equal(DataKind.LineProfile, descriptor.DerivedKind);
+    }
+
     // --- ParameterDescriptor invariants: an inconsistent schema is unrepresentable ---
 
     [Fact]

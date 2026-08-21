@@ -40,7 +40,7 @@ public sealed class SpatialFilterOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["filter", "smoothing", "edge", "image"]);
+        tags: ["filter", "smoothing", "edge", "image"], derivedKind: DataKind.ScanImage);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

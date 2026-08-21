@@ -37,7 +37,7 @@ public sealed class ProfileFlattenOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["flatten", "detrend", "polynomial", "profile", "line", "curve"]);
+        tags: ["flatten", "detrend", "polynomial", "profile", "line", "curve"], derivedKind: DataKind.LineProfile);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

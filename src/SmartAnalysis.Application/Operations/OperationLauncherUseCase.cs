@@ -4,6 +4,8 @@ using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Visualization.Colormaps;
+using SmartAnalysis.Visualization.Rendering;
 
 namespace SmartAnalysis.Application.Operations;
 
@@ -84,46 +86,24 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         }
 
         var fields = descriptor.Parameters.Parameters.Select(ToField).ToArray();
-        return new OperationForm(descriptor.Id, descriptor.DisplayName, descriptor.Summary, CategoryOf(descriptor.Output), fields);
+        // DerivesImage tells the shell an image→image transform (a live SOURCE/PREVIEW compare) apart from an
+        // image→curve one BEFORE running — Process alone means "derives a dataset", not "derives an image".
+        var derivesImage = descriptor.DerivedKind == DataKind.ScanImage;
+        return new OperationForm(descriptor.Id, descriptor.DisplayName, descriptor.Summary, CategoryOf(descriptor.Output), fields, derivesImage);
     }
 
     public async Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(values);
-
-        if (_workspace.Active.ActiveId is not { } sourceId || !_workspace.TryGet(sourceId, out var source))
+        var prepared = Prepare(operationId, values);
+        if (prepared.Error is not null)
         {
-            return OperationRunResult.Failed("There is no active dataset to run the operation on.");
-        }
-
-        if (!_registry.TryGet(operationId, out var operation))
-        {
-            return OperationRunResult.Failed($"Operation '{operationId}' is not registered.");
-        }
-
-        ParameterSet parameters;
-        try
-        {
-            parameters = BuildParameters(operation.Descriptor.Parameters, values);
-        }
-        catch (Exception ex) when (ex is FormatException or InvalidCastException or ArgumentException or OverflowException)
-        {
-            return OperationRunResult.Failed($"A parameter value could not be interpreted: {ex.Message}");
-        }
-
-        // Attach the active ROI only for a region-capable op; a whole-dataset op never sees it.
-        var region = operation.Descriptor.UsesRegion ? _region.Current : null;
-        var input = new OperationInput(source, region: region);
-        var validation = operation.Validate(input, parameters);
-        if (!validation.IsValid)
-        {
-            return OperationRunResult.Failed(string.Join("; ", validation.Errors));
+            return OperationRunResult.Failed(prepared.Error);
         }
 
         OperationResult result;
         try
         {
-            result = await operation.RunAsync(input, parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -164,6 +144,91 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
 
         return OperationRunResult.Failed("The operation produced no output.");
     }
+
+    public async Task<ImageRenderInput?> PreviewAsync(string operationId, IReadOnlyDictionary<string, object?> values, Colormap colormap, ValueRange? range, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(colormap);
+
+        // Best-effort: the SAME prepare path as apply (params, ROI attach, validation), so the PREVIEW is exactly
+        // what Apply would derive — but any failure just shows no PREVIEW pane rather than an error.
+        var prepared = Prepare(operationId, values);
+        if (prepared.Error is not null)
+        {
+            return null;
+        }
+
+        OperationResult result;
+        try
+        {
+            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+
+        // The derived is transient (never added to the workspace): project an OWNED render input, then dispose it.
+        // A non-image derived (e.g. an image→curve op) has no image compare — dispose it and show nothing.
+        if (result.DerivedDataset is ScanImageDataset image)
+        {
+            try
+            {
+                return RenderInputFactory.ForImageOwned(image, colormap, range);
+            }
+            finally
+            {
+                image.Dispose();
+            }
+        }
+
+        result.DerivedDataset?.Dispose();
+        return null;
+    }
+
+    // Resolves the active source, coerces the parameters, attaches the ROI for a region-capable op, and validates —
+    // the shared front half of apply and preview, so the two never diverge on what they run. On any expected problem
+    // returns only an Error (a best-effort preview turns it into "no PREVIEW"; apply surfaces it as a typed failure).
+    private Prepared Prepare(string operationId, IReadOnlyDictionary<string, object?> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        if (_workspace.Active.ActiveId is not { } sourceId || !_workspace.TryGet(sourceId, out var source))
+        {
+            return new Prepared(null, null!, ParameterSet.Empty, "There is no active dataset to run the operation on.");
+        }
+
+        if (!_registry.TryGet(operationId, out var operation))
+        {
+            return new Prepared(null, null!, ParameterSet.Empty, $"Operation '{operationId}' is not registered.");
+        }
+
+        ParameterSet parameters;
+        try
+        {
+            parameters = BuildParameters(operation.Descriptor.Parameters, values);
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or ArgumentException or OverflowException)
+        {
+            return new Prepared(null, null!, ParameterSet.Empty, $"A parameter value could not be interpreted: {ex.Message}");
+        }
+
+        // Attach the active ROI only for a region-capable op; a whole-dataset op never sees it.
+        var region = operation.Descriptor.UsesRegion ? _region.Current : null;
+        var input = new OperationInput(source, region: region);
+        var validation = operation.Validate(input, parameters);
+        if (!validation.IsValid)
+        {
+            return new Prepared(null, null!, ParameterSet.Empty, string.Join("; ", validation.Errors));
+        }
+
+        return new Prepared(operation, input, parameters, null);
+    }
+
+    private readonly record struct Prepared(IAnalysisOperation? Operation, OperationInput Input, IParameterSet Parameters, string? Error);
 
     // Coerces the UI's value primitives back to the schema's real CLR types (enum names → enum members,
     // widened numerics). Omitted values fall through to the schema's defaults / missing-required checks.

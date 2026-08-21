@@ -431,12 +431,12 @@ public partial class MainWindow : Window
         }
 
         SingleSurface.Clear();
-        if (_viewModel.IsFlattenPreview && _viewModel.ActiveImage is { } previewSource)
+        if (_viewModel.IsOperationPreview && _viewModel.ActiveImage is { } previewSource)
         {
-            // Flatten settings preview: SOURCE (the active image) vs the uncommitted PREVIEW result, both with the
+            // Operation settings preview: SOURCE (the active image) vs the uncommitted PREVIEW result, both with the
             // same colormap/range so the comparison is fair. The preview input is owned (safe to render/hold).
             BeforeImageView.Render(RenderInputFactory.ForImage(previewSource, colormap, _viewModel.EffectiveRange));
-            if (_viewModel.FlattenPreviewInput is { } preview)
+            if (_viewModel.OperationPreviewInput is { } preview)
             {
                 // Re-style the (cached) preview with the CURRENT colormap/range so a live palette change keeps SOURCE
                 // and PREVIEW consistent — without re-running Flatten just because a colour changed.

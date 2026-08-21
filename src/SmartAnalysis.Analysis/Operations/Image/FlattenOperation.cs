@@ -39,7 +39,7 @@ public sealed class FlattenOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["flatten", "leveling", "image"]);
+        tags: ["flatten", "leveling", "image"], derivedKind: DataKind.ScanImage);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

@@ -43,7 +43,7 @@ public sealed class CropOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["crop", "region", "roi", "image"]);
+        tags: ["crop", "region", "roi", "image"], derivedKind: DataKind.ScanImage);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

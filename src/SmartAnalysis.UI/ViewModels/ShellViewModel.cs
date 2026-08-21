@@ -66,9 +66,10 @@ public sealed class ShellViewModel : ObservableObject
     private StatisticsResultViewModel? _statistics;
     private StatisticsResultViewModel? _liveMeasurements;
     private Task _liveMeasurementsTask = Task.CompletedTask;
-    private bool _isFlattenPreview;
-    private ImageRenderInput? _flattenPreviewInput;
-    private Task _flattenPreviewTask = Task.CompletedTask;
+    private bool _isOperationPreview;
+    private ImageRenderInput? _operationPreviewInput;
+    private Task _operationPreviewTask = Task.CompletedTask;
+    private Func<DatasetId, Task<ImageRenderInput?>>? _computePreview;
     private HistoryRowViewModel? _selectedStep;
     private Colormap _colormap = ColormapCatalog.Default.Map;
     private string _colormapName = ColormapCatalog.Default.Name;
@@ -93,11 +94,11 @@ public sealed class ShellViewModel : ObservableObject
         // While the Flatten editor is open, re-run the uncommitted preview whenever a setting changes.
         FlattenPanel.PropertyChanged += (_, e) =>
         {
-            if (_isFlattenPreview && e.PropertyName is nameof(FlattenPanelViewModel.Scope)
+            if (_isOperationPreview && e.PropertyName is nameof(FlattenPanelViewModel.Scope)
                 or nameof(FlattenPanelViewModel.Order) or nameof(FlattenPanelViewModel.Orientation)
                 or nameof(FlattenPanelViewModel.Basement))
             {
-                RefreshFlattenPreview();
+                RefreshOperationPreview();
             }
         };
 
@@ -199,46 +200,65 @@ public sealed class ShellViewModel : ObservableObject
             // shell seeds the overlay onto it (a seed onto a not-yet-rendered view would find no image).
             IsInteractiveImageEditing = IsImageOverlayEditor(value);
             SetProperty(ref _operationEditor, value);
-            SetFlattenPreview(value is FlattenPanelViewModel && HasActiveImage);
+            SetOperationPreview(value);
         }
     }
 
-    /// <summary>Whether the Flatten settings preview owns the stage (source-vs-preview split, uncommitted).</summary>
-    public bool IsFlattenPreview => _isFlattenPreview;
+    /// <summary>Whether an operation's settings preview owns the stage (source-vs-preview split, uncommitted).</summary>
+    public bool IsOperationPreview => _isOperationPreview;
 
-    /// <summary>The compare panes show for a real Before/After OR the Flatten settings preview.</summary>
-    public bool ShowComparePanes => IsBeforeAfter || _isFlattenPreview;
+    /// <summary>The compare panes show for a real Before/After OR an operation settings preview.</summary>
+    public bool ShowComparePanes => IsBeforeAfter || _isOperationPreview;
 
     /// <summary>Left/right pane captions: source-vs-preview while previewing, else the before/after comparison.</summary>
-    public string CompareBeforeLabel => _isFlattenPreview ? "SOURCE" : "BEFORE";
-    public string CompareAfterLabel => _isFlattenPreview ? "PREVIEW" : "AFTER";
+    public string CompareBeforeLabel => _isOperationPreview ? "SOURCE" : "BEFORE";
+    public string CompareAfterLabel => _isOperationPreview ? "PREVIEW" : "AFTER";
 
-    /// <summary>The owned render input of the live Flatten preview (the AFTER pane); null when not previewing.</summary>
-    public ImageRenderInput? FlattenPreviewInput => _flattenPreviewInput;
+    /// <summary>The owned render input of the live operation preview (the PREVIEW pane); null when not previewing.</summary>
+    public ImageRenderInput? OperationPreviewInput => _operationPreviewInput;
 
     /// <summary>Awaitable settle of the in-flight preview computation (deterministic tests).</summary>
-    public Task FlattenPreviewSettled => _flattenPreviewTask;
+    public Task OperationPreviewSettled => _operationPreviewTask;
 
-    private void SetFlattenPreview(bool on)
+    // Resolves the preview strategy for the editor being shown: the semantic Flatten panel, or a generic form that
+    // derives an IMAGE (image→image). An image→curve Process (e.g. Power Spectral Density) does NOT enter the
+    // compare mode — Process alone means "derives a dataset", not "derives an image", so the gate is form.DerivesImage,
+    // decided before running. Measure forms and the overlay editors (crop/line, own live preview) are excluded too.
+    // A null strategy leaves the stage in its single view.
+    private void SetOperationPreview(object? editor)
     {
-        if (_isFlattenPreview == on)
+        _computePreview = editor switch
+        {
+            FlattenPanelViewModel when HasActiveImage
+                => id => _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange),
+            ParameterFormViewModel form when HasActiveImage && form.DerivesImage && !IsImageOverlayEditor(form)
+                => id => _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange),
+            _ => null,
+        };
+
+        SetOperationPreview(_computePreview is not null);
+    }
+
+    private void SetOperationPreview(bool on)
+    {
+        if (_isOperationPreview == on)
         {
             return;
         }
 
-        _isFlattenPreview = on;
-        _flattenPreviewInput = null; // clear the old preview; a fresh one is computed below when turning on
-        OnPropertyChanged(nameof(IsFlattenPreview));
+        _isOperationPreview = on;
+        _operationPreviewInput = null; // clear the old preview; a fresh one is computed below when turning on
+        OnPropertyChanged(nameof(IsOperationPreview));
         OnPropertyChanged(nameof(ShowComparePanes));
         OnPropertyChanged(nameof(CompareBeforeLabel));
         OnPropertyChanged(nameof(CompareAfterLabel));
         OnPropertyChanged(nameof(ShowSingle2D));
         OnPropertyChanged(nameof(ShowSingle3D));
-        OnPropertyChanged(nameof(FlattenPreviewInput));
+        OnPropertyChanged(nameof(OperationPreviewInput));
 
         if (on)
         {
-            RefreshFlattenPreview();
+            RefreshOperationPreview();
         }
         else
         {
@@ -246,30 +266,32 @@ public sealed class ShellViewModel : ObservableObject
         }
     }
 
-    private void RefreshFlattenPreview()
+    private FlattenOptions CurrentFlattenOptions()
+        => new(FlattenPanel.Scope, FlattenPanel.Order, FlattenPanel.Orientation, FlattenPanel.Basement);
+
+    private void RefreshOperationPreview()
     {
-        if (_workspace.Active.ActiveId is { } id && HasActiveImage)
+        if (_computePreview is { } compute && _workspace.Active.ActiveId is { } id && HasActiveImage)
         {
-            _flattenPreviewTask = ComputeFlattenPreviewAsync(id);
+            _operationPreviewTask = ComputeOperationPreviewAsync(compute, id);
         }
     }
 
-    private async Task ComputeFlattenPreviewAsync(DatasetId id)
+    private async Task ComputeOperationPreviewAsync(Func<DatasetId, Task<ImageRenderInput?>> compute, DatasetId id)
     {
-        var options = new FlattenOptions(FlattenPanel.Scope, FlattenPanel.Order, FlattenPanel.Orientation, FlattenPanel.Basement);
         try
         {
-            var input = await _imageAnalysis.PreviewFlattenAsync(id, options, _colormap, EffectiveRange).ConfigureAwait(true);
-            if (_isFlattenPreview && _workspace.Active.ActiveId == id) // still previewing this image
+            var input = await compute(id).ConfigureAwait(true);
+            if (_isOperationPreview && _workspace.Active.ActiveId == id) // still previewing this image
             {
-                _flattenPreviewInput = input;
-                OnPropertyChanged(nameof(FlattenPreviewInput));
+                _operationPreviewInput = input;
+                OnPropertyChanged(nameof(OperationPreviewInput));
                 ImagesChanged?.Invoke(this, EventArgs.Empty);
             }
         }
         catch
         {
-            // Best-effort preview: a failure just shows no AFTER image, never an error banner.
+            // Best-effort preview: a failure just shows no PREVIEW image, never an error banner.
         }
     }
 
@@ -494,7 +516,16 @@ public sealed class ShellViewModel : ObservableObject
             default:
                 if (_launcher.GetForm(operationId) is { } form)
                 {
-                    OperationEditor = new ParameterFormViewModel(_launcher, form, OnGenericRunCompleted);
+                    var editor = new ParameterFormViewModel(_launcher, form, OnGenericRunCompleted);
+                    // While the form is open, re-run the uncommitted preview whenever a field changes.
+                    editor.ParametersChanged += (_, _) =>
+                    {
+                        if (_isOperationPreview)
+                        {
+                            RefreshOperationPreview();
+                        }
+                    };
+                    OperationEditor = editor;
                     InspectorRole = InspectorRole.Operation;
                 }
 
@@ -631,8 +662,8 @@ public sealed class ShellViewModel : ObservableObject
 
     // An overlay editor OR a drawn ROI forces 2D even when 3D is preferred (both live on the 2D view); turning
     // them off returns to the retained 3D preference.
-    public bool ShowSingle2D => IsSingleImage && !_isFlattenPreview && (!_is3D || _isInteractiveImageEditing || _roiEnabled);
-    public bool ShowSingle3D => IsSingleImage && !_isFlattenPreview && _is3D && !_isInteractiveImageEditing && !_roiEnabled;
+    public bool ShowSingle2D => IsSingleImage && !_isOperationPreview && (!_is3D || _isInteractiveImageEditing || _roiEnabled);
+    public bool ShowSingle3D => IsSingleImage && !_isOperationPreview && _is3D && !_isInteractiveImageEditing && !_roiEnabled;
 
     /// <summary>Whether the 3D toggle is offered — hidden while an overlay editor forces the 2D stage.</summary>
     public bool CanToggle3D => IsSingleImage && !_isInteractiveImageEditing && !_roiEnabled;

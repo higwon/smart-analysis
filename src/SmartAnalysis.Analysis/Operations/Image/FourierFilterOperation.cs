@@ -43,7 +43,7 @@ public sealed class FourierFilterOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["fourier", "fft", "frequency", "filter", "image"]);
+        tags: ["fourier", "fft", "frequency", "filter", "image"], derivedKind: DataKind.ScanImage);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

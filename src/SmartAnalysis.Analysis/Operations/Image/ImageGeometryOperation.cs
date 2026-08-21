@@ -38,7 +38,7 @@ public sealed class ImageGeometryOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["geometry", "rotate", "flip", "image"]);
+        tags: ["geometry", "rotate", "flip", "image"], derivedKind: DataKind.ScanImage);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

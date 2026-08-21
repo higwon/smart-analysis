@@ -48,7 +48,7 @@ public sealed class LineProfileOperation : IAnalysisOperation
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["profile", "cross-section", "line", "interpolated", "image"]);
+        tags: ["profile", "cross-section", "line", "interpolated", "image"], derivedKind: DataKind.LineProfile);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {

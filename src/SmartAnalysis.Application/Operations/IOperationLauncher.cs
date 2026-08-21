@@ -1,3 +1,6 @@
+using SmartAnalysis.Visualization.Colormaps;
+using SmartAnalysis.Visualization.Rendering;
+
 namespace SmartAnalysis.Application.Operations;
 
 /// <summary>
@@ -27,6 +30,17 @@ public interface IOperationLauncher
     /// parameters / a run failure come back as a typed <see cref="OperationRunResult.Error"/>.
     /// </summary>
     Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs <paramref name="operationId"/> on the active dataset with <paramref name="values"/> WITHOUT committing
+    /// anything to the workspace, and projects its (image) result to an <b>owned</b> <see cref="ImageRenderInput"/>
+    /// for a live settings preview — the generic counterpart of the semantic Flatten preview. Returns <c>null</c>
+    /// when there is nothing to show (no active image, unknown op, invalid parameters, a run failure, or a non-image
+    /// result): a preview is best-effort, so a bad setting shows no PREVIEW pane rather than an error. A default
+    /// no-op keeps non-registry implementations (test doubles) simple.
+    /// </summary>
+    Task<ImageRenderInput?> PreviewAsync(string operationId, IReadOnlyDictionary<string, object?> values, Colormap colormap, ValueRange? range, CancellationToken cancellationToken = default)
+        => Task.FromResult<ImageRenderInput?>(null);
 
     /// <summary>
     /// The display name of an <b>enum</b> parameter value for <paramref name="operationId"/> — e.g. "BandStop"

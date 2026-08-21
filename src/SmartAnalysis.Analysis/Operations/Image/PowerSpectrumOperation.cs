@@ -33,7 +33,7 @@ public sealed class PowerSpectrumOperation : IAnalysisOperation
         parameters: ParameterSchema.Empty,
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
-        tags: ["psd", "power-spectrum", "fourier", "frequency", "roughness", "image"]);
+        tags: ["psd", "power-spectrum", "fourier", "frequency", "roughness", "image"], derivedKind: DataKind.LineProfile);
 
     public ValidationResult Validate(OperationInput input, IParameterSet parameters)
     {
