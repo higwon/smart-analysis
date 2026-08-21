@@ -7,6 +7,7 @@ using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Units;
 using SmartAnalysis.Infrastructure.FileFormats.Tiff;
+using SmartAnalysis.Visualization.Colormaps;
 using Xunit;
 
 namespace SmartAnalysis.Tests.Application;
@@ -146,5 +147,59 @@ public sealed class OperationLauncherUseCaseTests
 
         Assert.False(result.Success);
         Assert.NotNull(result.Error);
+    }
+
+    // --- PreviewAsync: the generic settings preview (image→image Process ops), the counterpart of the Flatten preview ---
+
+    [Fact]
+    public async Task PreviewAsync_derived_image_returns_a_preview_committing_nothing()
+    {
+        var (ws, image, _, launcher) = await SetupAsync();
+        var values = new Dictionary<string, object?>
+        {
+            ["scope"] = "Line",
+            ["order"] = 1,
+            ["orientation"] = "FastAxis",
+            ["basement"] = "RegressionToZero",
+        };
+
+        var preview = await launcher.PreviewAsync("image.flatten", values, Colormap.Grayscale, range: null);
+
+        Assert.NotNull(preview);
+        Assert.Equal(image.Data.Width, preview!.Width);            // the derived image projected to a render input
+        Assert.Equal(image.Data.Height, preview.Height);
+        Assert.Equal(1, ws.Count);                                 // preview committed nothing
+        Assert.Equal(image.Id, ws.Active.ActiveId);                // active unchanged
+    }
+
+    [Fact]
+    public async Task PreviewAsync_measurement_operation_has_no_image_preview()
+    {
+        var (ws, image, measurements, launcher) = await SetupAsync();
+
+        var preview = await launcher.PreviewAsync("image.statistics", new Dictionary<string, object?>(), Colormap.Grayscale, range: null);
+
+        Assert.Null(preview);                                      // a measure op derives no image → nothing to compare
+        Assert.Empty(measurements.ForSource(image.Id));           // and a preview never attaches a measurement
+        Assert.Equal(1, ws.Count);
+    }
+
+    [Fact]
+    public async Task PreviewAsync_invalid_parameter_shows_nothing()
+    {
+        var (_, _, _, launcher) = await SetupAsync();
+
+        var values = new Dictionary<string, object?> { ["order"] = 99 }; // above schema max (8)
+        var preview = await launcher.PreviewAsync("image.flatten", values, Colormap.Grayscale, range: null);
+
+        Assert.Null(preview);                                      // best-effort: a bad setting shows no PREVIEW, not an error
+    }
+
+    [Fact]
+    public async Task PreviewAsync_unknown_operation_shows_nothing()
+    {
+        var (_, _, _, launcher) = await SetupAsync();
+
+        Assert.Null(await launcher.PreviewAsync("image.nope", new Dictionary<string, object?>(), Colormap.Grayscale, range: null));
     }
 }

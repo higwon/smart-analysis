@@ -28,8 +28,22 @@ public sealed class ParameterFormViewModel : ObservableObject
         _form = form ?? throw new ArgumentNullException(nameof(form));
         _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
         Fields = form.Fields.Select(f => new ParameterFieldViewModel(f)).ToArray();
+        foreach (var field in Fields)
+        {
+            field.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ParameterFieldViewModel.Value))
+                {
+                    ParametersChanged?.Invoke(this, EventArgs.Empty);
+                }
+            };
+        }
+
         ApplyCommand = new AsyncRelayCommand(ApplyAsync, onError: ex => ErrorMessage = ex.Message);
     }
+
+    /// <summary>Raised whenever a field value changes, so the shell can refresh a live settings preview.</summary>
+    public event EventHandler? ParametersChanged;
 
     /// <summary>The operation id this form edits (e.g. <c>image.crop</c>) — lets the shell add a semantic preview.</summary>
     public string Id => _form.Id;
@@ -38,9 +52,15 @@ public sealed class ParameterFormViewModel : ObservableObject
 
     public string Summary => _form.Summary;
 
+    /// <summary>Whether this operation derives a new dataset (Process) or measures (Measure).</summary>
+    public OperationCategory Category => _form.Category;
+
     public IReadOnlyList<ParameterFieldViewModel> Fields { get; }
 
     public bool HasFields => Fields.Count > 0;
+
+    /// <summary>The current field values as UI primitives (the Application coerces them to the schema's CLR types).</summary>
+    public IReadOnlyDictionary<string, object?> Values => Fields.ToDictionary(f => f.Name, f => f.Value);
 
     public ICommand ApplyCommand { get; }
 

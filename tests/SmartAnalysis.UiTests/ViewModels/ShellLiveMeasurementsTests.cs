@@ -108,12 +108,12 @@ public sealed class ShellLiveMeasurementsTests
         ws.SetActive(image.Id);
 
         vm.LauncherItems.Single(i => i.Id == "image.flatten").LaunchCommand.Execute(null); // open the Flatten editor
-        await vm.FlattenPreviewSettled;
+        await vm.OperationPreviewSettled;
 
-        Assert.True(vm.IsFlattenPreview);
+        Assert.True(vm.IsOperationPreview);
         Assert.True(vm.ShowComparePanes);
         Assert.False(vm.ShowSingle2D);              // the single stage yields to the preview split
-        Assert.NotNull(vm.FlattenPreviewInput);     // the uncommitted preview result (AFTER pane)
+        Assert.NotNull(vm.OperationPreviewInput);     // the uncommitted preview result (AFTER pane)
         Assert.Equal("SOURCE", vm.CompareBeforeLabel);
         Assert.Equal("PREVIEW", vm.CompareAfterLabel);
         Assert.Equal(1, ws.Count);                  // preview committed nothing
@@ -131,13 +131,71 @@ public sealed class ShellLiveMeasurementsTests
         ws.SetActive(a.Id);
 
         vm.LauncherItems.Single(i => i.Id == "image.flatten").LaunchCommand.Execute(null);
-        await vm.FlattenPreviewSettled;
-        Assert.True(vm.IsFlattenPreview);
+        await vm.OperationPreviewSettled;
+        Assert.True(vm.IsOperationPreview);
 
         ws.SetActive(b.Id); // a new active dataset closes the editor → back to the single stage
-        Assert.False(vm.IsFlattenPreview);
+        Assert.False(vm.IsOperationPreview);
         Assert.False(vm.ShowComparePanes);
-        Assert.Null(vm.FlattenPreviewInput);
+        Assert.Null(vm.OperationPreviewInput);
+    }
+
+    [Fact]
+    public async Task Opening_a_generic_process_form_enters_a_source_vs_preview_compare()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "image.deglitch").LaunchCommand.Execute(null); // a generic Process op
+        await vm.OperationPreviewSettled;
+
+        Assert.True(vm.IsOperationPreview);         // the preview extends beyond the semantic Flatten editor
+        Assert.True(vm.ShowComparePanes);
+        Assert.False(vm.ShowSingle2D);
+        Assert.NotNull(vm.OperationPreviewInput);
+        Assert.Equal("SOURCE", vm.CompareBeforeLabel);
+        Assert.Equal("PREVIEW", vm.CompareAfterLabel);
+        Assert.Equal(1, ws.Count);                  // preview committed nothing
+    }
+
+    [Fact]
+    public async Task Opening_a_generic_measure_form_stays_on_the_single_stage()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "image.grains").LaunchCommand.Execute(null); // a Measure op derives no image
+        await vm.OperationPreviewSettled;
+
+        Assert.False(vm.IsOperationPreview);        // no source-vs-preview compare for a measurement
+        Assert.False(vm.ShowComparePanes);
+    }
+
+    [Fact]
+    public async Task Changing_a_generic_process_field_recomputes_the_preview()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "image.deglitch").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+        var first = vm.OperationPreviewInput;
+
+        var form = Assert.IsType<ParameterFormViewModel>(vm.OperationEditor);
+        form.Fields.Single(f => f.Name == "threshold").Value = 5.0; // a setting change re-runs the uncommitted preview
+        await vm.OperationPreviewSettled;
+
+        Assert.NotNull(vm.OperationPreviewInput);
+        Assert.NotSame(first, vm.OperationPreviewInput); // a fresh preview was computed for the new setting
     }
 
     [Fact]
@@ -225,12 +283,28 @@ public sealed class ShellLiveMeasurementsTests
         [
             new OperationLauncherItem("image.statistics", "Statistics", "Basic stats", OperationCategory.Measure),
             new OperationLauncherItem("image.flatten", "Flatten", "Level the surface", OperationCategory.Process),
+            new OperationLauncherItem("image.deglitch", "Deglitch", "Remove spikes", OperationCategory.Process),
+            new OperationLauncherItem("image.grains", "Grains", "Detect grains", OperationCategory.Measure),
         ];
 
-        public OperationForm? GetForm(string operationId) => null;
+        // A generic Process form (one numeric field) and a generic Measure form; unknown ids have no form.
+        public OperationForm? GetForm(string operationId) => operationId switch
+        {
+            "image.deglitch" => new OperationForm("image.deglitch", "Deglitch", "Remove spikes", OperationCategory.Process,
+                [new ParameterFieldDescriptor("threshold", "Threshold", ParameterFieldKind.Number, 1.0, 0.0, null, Array.Empty<ParameterFieldOption>(), null, "help")]),
+            "image.grains" => new OperationForm("image.grains", "Grains", "Detect grains", OperationCategory.Measure,
+                [new ParameterFieldDescriptor("minArea", "Min Area", ParameterFieldKind.Number, 1.0, 0.0, null, Array.Empty<ParameterFieldOption>(), null, "help")]),
+            _ => null,
+        };
 
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromException<OperationRunResult>(new NotImplementedException());
+
+        // A Process op previews a (fresh, canned) image; a Measure op derives no image → nothing to compare.
+        public Task<ImageRenderInput?> PreviewAsync(string operationId, IReadOnlyDictionary<string, object?> values, Colormap colormap, ValueRange? range, CancellationToken ct = default)
+            => Task.FromResult<ImageRenderInput?>(operationId == "image.deglitch"
+                ? RenderInputFactory.ForImage(Image(), colormap, range)
+                : null);
     }
 
     private sealed class FakeReader : IScanFileReader
