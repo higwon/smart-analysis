@@ -466,7 +466,7 @@ public sealed class ShellViewModel : ObservableObject
     {
         try
         {
-            var result = await _imageAnalysis.ComputeStatisticsAsync(id).ConfigureAwait(true);
+            var result = await _imageAnalysis.ComputeStatisticsPreviewAsync(id).ConfigureAwait(true); // ephemeral: no saved node
             // Only touch the panel if THIS image is still active — otherwise a slow request (success OR failure)
             // for a since-replaced image must not clobber the current image's already-shown measurements.
             if (_workspace.Active.ActiveId == id && result.Success)

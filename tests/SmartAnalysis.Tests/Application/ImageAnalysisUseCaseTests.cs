@@ -111,6 +111,19 @@ public sealed class ImageAnalysisUseCaseTests
     }
 
     [Fact]
+    public async Task ComputeStatisticsPreview_returns_the_readouts_but_attaches_nothing()
+    {
+        var (ws, image, measurements, useCase) = await SetupAsync();
+
+        var result = await useCase.ComputeStatisticsPreviewAsync(image.Id);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotEmpty(result.Readouts);                 // same readouts as the attaching path …
+        Assert.Empty(measurements.ForSource(image.Id));   // … but no saved measurement node (ephemeral inline readout)
+        Assert.Equal(image.Id, ws.Active.ActiveId);
+    }
+
+    [Fact]
     public async Task Attached_measurement_survives_an_active_change_and_is_re_readable()
     {
         var (ws, image, measurements, useCase) = await SetupAsync();

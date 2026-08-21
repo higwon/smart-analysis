@@ -124,6 +124,9 @@ public sealed class ShellCurveRoutingTests
         public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default)
             => Task.FromException<StatisticsResult>(new NotImplementedException());
 
+        public Task<StatisticsResult> ComputeStatisticsPreviewAsync(DatasetId sourceId, CancellationToken ct = default)
+            => Task.FromException<StatisticsResult>(new NotImplementedException());
+
         public StatisticsResult? GetMeasurement(DatasetId artifactId) => null;
     }
 

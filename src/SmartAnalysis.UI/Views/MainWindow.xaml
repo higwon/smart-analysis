@@ -159,9 +159,8 @@
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <!-- Left inset 33 = button padding (9) + icon (16) + icon gap (8), so the group
-                                         label sits directly above the item labels; top gap separates the groups. -->
-                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SA.Text.SectionLabel}" Margin="33,8,0,4"/>
+                                    <!-- Indented (SA.Pad.LauncherGroup) so the group label sits above the item labels. -->
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Pad.LauncherGroup}"/>
                                 </DataTemplate>
                             </GroupStyle.HeaderTemplate>
                         </GroupStyle>

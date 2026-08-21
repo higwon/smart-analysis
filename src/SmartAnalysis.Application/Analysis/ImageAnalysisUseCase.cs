@@ -110,7 +110,13 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         return new FlattenOutcome(true, derived.Id, warnings, null);
     }
 
-    public async Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken cancellationToken = default)
+    public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken cancellationToken = default)
+        => ComputeStatisticsAsync(sourceId, attach: true, cancellationToken);
+
+    public Task<StatisticsResult> ComputeStatisticsPreviewAsync(DatasetId sourceId, CancellationToken cancellationToken = default)
+        => ComputeStatisticsAsync(sourceId, attach: false, cancellationToken);
+
+    private async Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, bool attach, CancellationToken cancellationToken)
     {
         if (!_workspace.TryGet(sourceId, out var dataset) || dataset is not ScanImageDataset image)
         {
@@ -150,8 +156,13 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
 
         // Preserve the real measurement entity (Id/SourceId/OperationId/Provenance) attached to its source;
         // the active dataset is deliberately unchanged (doc 22 §Measurement). The workspace/ActiveContext are
-        // NOT touched — a measurement is not a dataset — it lives in the parallel MeasurementStore.
-        _measurements.Attach(artifact);
+        // NOT touched — a measurement is not a dataset — it lives in the parallel MeasurementStore. A preview
+        // (inline Dataset readout) skips the attach so it never accumulates saved measurement nodes.
+        if (attach)
+        {
+            _measurements.Attach(artifact);
+        }
+
         return Map(artifact);
     }
 

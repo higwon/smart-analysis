@@ -134,12 +134,15 @@ public sealed class ShellLiveMeasurementsTests
 
         public void Fail(DatasetId id) => _pending[id].SetException(new InvalidOperationException("stale"));
 
-        public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default)
+        public Task<StatisticsResult> ComputeStatisticsPreviewAsync(DatasetId sourceId, CancellationToken ct = default)
         {
             var tcs = new TaskCompletionSource<StatisticsResult>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pending[sourceId] = tcs;
             return tcs.Task;
         }
+
+        public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default)
+            => ComputeStatisticsPreviewAsync(sourceId, ct);
 
         public Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken ct = default)
             => Task.FromException<FlattenOutcome>(new NotImplementedException());
@@ -153,7 +156,11 @@ public sealed class ShellLiveMeasurementsTests
         public Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken ct = default)
             => Task.FromException<FlattenOutcome>(new NotImplementedException());
 
-        public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default)
+        public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default) => Result();
+
+        public Task<StatisticsResult> ComputeStatisticsPreviewAsync(DatasetId sourceId, CancellationToken ct = default) => Result();
+
+        private static Task<StatisticsResult> Result()
             => Task.FromResult(new StatisticsResult(
                 true, "img",
                 new[] { new StatisticsReadout("Sq (RMS)", 1.23, "nm"), new StatisticsReadout("Sa", 0.98, "nm") },

@@ -43,7 +43,7 @@
                         Background="{Binding Path=(ds:ButtonChrome.HoverBackground), RelativeSource={RelativeSource TemplatedParent}}"/>
                 <Border x:Name="pressLayer" Opacity="0" CornerRadius="{DynamicResource SA.Radius.Sm}"
                         Background="{Binding Path=(ds:ButtonChrome.PressedBackground), RelativeSource={RelativeSource TemplatedParent}}"/>
-                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"
                                   Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
             </Grid>
         </Border>
@@ -67,6 +67,7 @@
     <!-- Base: shared metrics/typography + the neutral (secondary) fill + neutral hover/pressed. -->
     <Style x:Key="SA.Button.Base" TargetType="{x:Type ButtonBase}">
         <Setter Property="Height" Value="{DynamicResource SA.Size.Control.Md}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/><!-- default; the template honors overrides (e.g. launcher items = Left) -->
         <Setter Property="Padding" Value="{DynamicResource SA.Pad.Button}"/>
         <Setter Property="FontFamily" Value="{DynamicResource SA.Font.Family.Ui}"/>
         <Setter Property="FontSize" Value="{DynamicResource SA.Font.Size.Body}"/>

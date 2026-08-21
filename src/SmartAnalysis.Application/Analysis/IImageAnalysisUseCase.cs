@@ -26,6 +26,13 @@ public interface IImageAnalysisUseCase
     Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Computes the same whole-image statistics as <see cref="ComputeStatisticsAsync"/> but as an <b>ephemeral
+    /// preview</b>: it is <b>not</b> attached to the measurement store (no explorer node) and never changes active
+    /// state — for the inline readout shown on the Dataset inspector, which must not accumulate saved measurements.
+    /// </summary>
+    Task<StatisticsResult> ComputeStatisticsPreviewAsync(DatasetId sourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Re-reads an already-attached measurement by its artifact id into the UI DTO (e.g. when its explorer
     /// node is selected). Returns <c>null</c> when no such measurement is attached. Never changes active state.
     /// </summary>
