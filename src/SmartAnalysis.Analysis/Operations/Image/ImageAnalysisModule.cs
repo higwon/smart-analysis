@@ -32,6 +32,7 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<ProfileCropOperation>();
         services.AddAnalysisOperation<ProfileFlattenOperation>();
         services.AddAnalysisOperation<ProfileSmoothOperation>();
+        services.AddAnalysisOperation<ProfileBaselineOperation>();
         services.AddAnalysisOperation<ProfileRoughnessOperation>();
         services.AddAnalysisOperation<FilteredProfileRoughnessOperation>();
         services.AddAnalysisOperation<ProfileFilterOperation>();
