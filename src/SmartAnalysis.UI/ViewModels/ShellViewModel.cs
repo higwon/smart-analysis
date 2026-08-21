@@ -456,6 +456,10 @@ public sealed class ShellViewModel : ObservableObject
         {
             _liveMeasurementsTask = ComputeLiveMeasurementsAsync(id);
         }
+        else
+        {
+            _liveMeasurementsTask = Task.CompletedTask; // no in-flight refresh once the active dataset isn't an image
+        }
     }
 
     private async Task ComputeLiveMeasurementsAsync(DatasetId id)
@@ -463,14 +467,20 @@ public sealed class ShellViewModel : ObservableObject
         try
         {
             var result = await _imageAnalysis.ComputeStatisticsAsync(id).ConfigureAwait(true);
-            if (_workspace.Active.ActiveId == id && result.Success) // still the active image → show it
+            // Only touch the panel if THIS image is still active — otherwise a slow request (success OR failure)
+            // for a since-replaced image must not clobber the current image's already-shown measurements.
+            if (_workspace.Active.ActiveId == id && result.Success)
             {
                 LiveMeasurements = new StatisticsResultViewModel(result);
             }
         }
+        catch when (_workspace.Active.ActiveId == id)
+        {
+            LiveMeasurements = null; // a passive readout must never surface an error banner (only for the active image)
+        }
         catch
         {
-            LiveMeasurements = null; // a passive readout must never surface an error banner
+            // A stale image's failure — leave the current image's measurements untouched.
         }
     }
 

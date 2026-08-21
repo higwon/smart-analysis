@@ -27,7 +27,10 @@ namespace SmartAnalysis.UiTests.ViewModels;
 public sealed class ShellLiveMeasurementsTests
 {
     private static ShellViewModel NewShell(Workspace ws)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => NewShell(ws, new FakeImageAnalysis());
+
+    private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ScanImageDataset Image()
@@ -91,6 +94,57 @@ public sealed class ShellLiveMeasurementsTests
         ws.SetActive(curve.Id); // a curve is not an image → the inline measurements clear
         await vm.LiveMeasurementsSettled;
         Assert.False(vm.HasLiveMeasurements);
+    }
+
+    [Fact]
+    public async Task A_late_failure_for_a_replaced_image_does_not_clear_the_current_measurements()
+    {
+        var ws = new Workspace();
+        var analysis = new ControlledImageAnalysis();
+        var vm = NewShell(ws, analysis);
+        var a = Image();
+        var b = Image();
+        ws.Add(a);
+        ws.Add(b);
+
+        ws.SetActive(a.Id);            // starts A's (still-pending) computation
+        var taskA = vm.LiveMeasurementsSettled;
+        ws.SetActive(b.Id);            // clears the panel, starts B's computation
+        var taskB = vm.LiveMeasurementsSettled;
+
+        analysis.Succeed(b.Id, "B-stat"); // B (the current image) completes first → shown
+        await taskB;
+        Assert.True(vm.HasLiveMeasurements);
+        Assert.Contains(vm.LiveMeasurements!.Readouts, r => r.Name == "B-stat");
+
+        analysis.Fail(a.Id);          // A (a since-replaced image) fails late
+        await taskA;
+
+        Assert.True(vm.HasLiveMeasurements); // B's measurements survive — the stale failure must not clear them
+        Assert.Contains(vm.LiveMeasurements!.Readouts, r => r.Name == "B-stat");
+    }
+
+    // A per-id, test-controlled statistics use case: each request stays pending until Succeed/Fail is called.
+    private sealed class ControlledImageAnalysis : IImageAnalysisUseCase
+    {
+        private readonly Dictionary<DatasetId, TaskCompletionSource<StatisticsResult>> _pending = new();
+
+        public void Succeed(DatasetId id, string readoutName)
+            => _pending[id].SetResult(new StatisticsResult(true, "img", new[] { new StatisticsReadout(readoutName, 1.0, "nm") }, Array.Empty<int>(), null));
+
+        public void Fail(DatasetId id) => _pending[id].SetException(new InvalidOperationException("stale"));
+
+        public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default)
+        {
+            var tcs = new TaskCompletionSource<StatisticsResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pending[sourceId] = tcs;
+            return tcs.Task;
+        }
+
+        public Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken ct = default)
+            => Task.FromException<FlattenOutcome>(new NotImplementedException());
+
+        public StatisticsResult? GetMeasurement(DatasetId artifactId) => null;
     }
 
     // ---- fakes ----
