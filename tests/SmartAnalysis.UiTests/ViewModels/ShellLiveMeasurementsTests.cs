@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using SmartAnalysis.Application.Analysis;
+using SmartAnalysis.Visualization.Colormaps;
+using SmartAnalysis.Visualization.Rendering;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Application.Workspaces;
@@ -97,6 +99,48 @@ public sealed class ShellLiveMeasurementsTests
     }
 
     [Fact]
+    public async Task Opening_the_flatten_editor_enters_a_source_vs_preview_compare()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "image.flatten").LaunchCommand.Execute(null); // open the Flatten editor
+        await vm.FlattenPreviewSettled;
+
+        Assert.True(vm.IsFlattenPreview);
+        Assert.True(vm.ShowComparePanes);
+        Assert.False(vm.ShowSingle2D);              // the single stage yields to the preview split
+        Assert.NotNull(vm.FlattenPreviewInput);     // the uncommitted preview result (AFTER pane)
+        Assert.Equal("SOURCE", vm.CompareBeforeLabel);
+        Assert.Equal("PREVIEW", vm.CompareAfterLabel);
+        Assert.Equal(1, ws.Count);                  // preview committed nothing
+    }
+
+    [Fact]
+    public async Task Leaving_the_flatten_editor_returns_to_the_single_stage()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var a = Image();
+        var b = Image();
+        ws.Add(a);
+        ws.Add(b);
+        ws.SetActive(a.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "image.flatten").LaunchCommand.Execute(null);
+        await vm.FlattenPreviewSettled;
+        Assert.True(vm.IsFlattenPreview);
+
+        ws.SetActive(b.Id); // a new active dataset closes the editor → back to the single stage
+        Assert.False(vm.IsFlattenPreview);
+        Assert.False(vm.ShowComparePanes);
+        Assert.Null(vm.FlattenPreviewInput);
+    }
+
+    [Fact]
     public async Task A_late_failure_for_a_replaced_image_does_not_clear_the_current_measurements()
     {
         var ws = new Workspace();
@@ -147,6 +191,9 @@ public sealed class ShellLiveMeasurementsTests
         public Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken ct = default)
             => Task.FromException<FlattenOutcome>(new NotImplementedException());
 
+        public Task<ImageRenderInput?> PreviewFlattenAsync(DatasetId sourceId, FlattenOptions options, Colormap colormap, ValueRange? range, CancellationToken ct = default)
+            => Task.FromResult<ImageRenderInput?>(null);
+
         public StatisticsResult? GetMeasurement(DatasetId artifactId) => null;
     }
 
@@ -155,6 +202,9 @@ public sealed class ShellLiveMeasurementsTests
     {
         public Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken ct = default)
             => Task.FromException<FlattenOutcome>(new NotImplementedException());
+
+        public Task<ImageRenderInput?> PreviewFlattenAsync(DatasetId sourceId, FlattenOptions options, Colormap colormap, ValueRange? range, CancellationToken ct = default)
+            => Task.FromResult<ImageRenderInput?>(RenderInputFactory.ForImage(Image(), colormap, range)); // a canned preview
 
         public Task<StatisticsResult> ComputeStatisticsAsync(DatasetId sourceId, CancellationToken ct = default) => Result();
 

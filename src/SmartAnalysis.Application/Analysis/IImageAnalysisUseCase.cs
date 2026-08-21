@@ -1,4 +1,6 @@
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Visualization.Colormaps;
+using SmartAnalysis.Visualization.Rendering;
 
 namespace SmartAnalysis.Application.Analysis;
 
@@ -16,6 +18,15 @@ public interface IImageAnalysisUseCase
     /// Invalid parameters / a non-image source / a run failure come back as a typed <see cref="FlattenOutcome.Error"/>.
     /// </summary>
     Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Computes an <b>uncommitted preview</b> of Flatten for the settings panel: runs the operation on a transient
+    /// copy (never added to the workspace, no provenance, active state untouched) and returns an <b>owned</b> image
+    /// render input for the result — rendered with the caller's <paramref name="colormap"/>/<paramref name="range"/>
+    /// so the settings panel can show source-vs-preview live. Returns <c>null</c> for a non-image source, invalid
+    /// options, or a run failure. Applying (<see cref="ApplyFlattenAsync"/>) is what materializes the dataset.
+    /// </summary>
+    Task<ImageRenderInput?> PreviewFlattenAsync(DatasetId sourceId, FlattenOptions options, Colormap colormap, ValueRange? range, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Computes whole-image summary statistics for the image identified by <paramref name="sourceId"/>.

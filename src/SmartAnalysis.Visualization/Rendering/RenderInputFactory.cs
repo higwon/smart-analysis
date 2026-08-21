@@ -31,6 +31,31 @@ public static class RenderInputFactory
             dataRange);
     }
 
+    /// <summary>
+    /// Like <see cref="ForImage"/> but <b>copies</b> the Z buffer so the input owns its data — for a transient/preview
+    /// dataset that is disposed right after (e.g. the Flatten settings preview), where borrowing the pooled buffer
+    /// would dangle once it is recycled.
+    /// </summary>
+    public static ImageRenderInput ForImageOwned(ScanImageDataset image, Colormap colormap, ValueRange? range = null)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(colormap);
+
+        var z = image.Data.Memory.ToArray();               // owned copy — safe after the source dataset is disposed
+        var dataRange = ValueRange.FromData(z);
+        var effectiveRange = range ?? dataRange;
+        return new ImageRenderInput(
+            z,
+            image.X.Count,
+            image.Y.Count,
+            effectiveRange,
+            colormap,
+            AxisView.FromAxis(image.X),
+            AxisView.FromAxis(image.Y),
+            image.Channel.Unit.Symbol,
+            dataRange);
+    }
+
     /// <summary>Builds a single-series curve render input from a line profile (x = axis positions, y = values).</summary>
     public static CurveRenderInput ForLineProfile(LineProfileDataset profile, string? seriesName = null)
     {
