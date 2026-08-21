@@ -185,9 +185,10 @@ public sealed class PeakDetectionOperationTests
     }
 
     [Fact]
-    public async Task A_noiseless_peak_has_an_undefined_snr()
+    public async Task A_noiseless_peak_has_infinite_snr()
     {
         // A flat baseline with a single triangle peak: most second differences are exactly 0 → median 0 → σ = 0.
+        // A real peak over zero noise is infinitely clean → SNR = +∞ (so it passes any finite Min-SNR filter).
         var z = new float[40];
         z[18] = 1; z[19] = 2; z[20] = 3; z[21] = 2; z[22] = 1; // a small triangle around index 20
         using var profile = new LineProfileDataset(
@@ -198,7 +199,8 @@ public sealed class PeakDetectionOperationTests
 
         var artifact = await RunAsync(profile, 0.1);
 
-        Assert.True(double.IsNaN(artifact.Scalars["DominantSnr"].Value)); // SNR undefined when σ = 0
+        Assert.True(double.IsPositiveInfinity(artifact.Scalars["DominantSnr"].Value));
+        Assert.True(double.IsPositiveInfinity(artifact.Table!.Rows[0][4].Value)); // the SNR column too
     }
 
     [Fact]

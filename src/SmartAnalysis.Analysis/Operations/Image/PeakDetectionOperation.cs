@@ -177,7 +177,15 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
         => PeakWidths.WidthAtHalfProminence(profile.Values.Memory.Span, peak.Index, peak.Value, peak.Prominence)
             * Math.Abs(profile.X.Step);
 
-    // Signal-to-noise ratio = prominence / estimated noise σ (dimensionless); NaN when the noise is not measurable.
+    // Signal-to-noise ratio = prominence / estimated noise σ (dimensionless). A real peak on a noiseless curve
+    // (σ = 0, prominence > 0) is +∞ — an infinitely clean peak that passes any finite Min-SNR filter — not NaN.
     private static double Snr(double prominence, double noise)
-        => noise > 0.0 ? prominence / noise : double.NaN;
+    {
+        if (noise > 0.0)
+        {
+            return prominence / noise;
+        }
+
+        return prominence > 0.0 ? double.PositiveInfinity : double.NaN;
+    }
 }

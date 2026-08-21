@@ -3,8 +3,9 @@ namespace SmartAnalysis.Analysis.Profiles;
 /// <summary>
 /// Clean-room <b>robust noise estimate</b> for a curve — the standard deviation of the high-frequency noise,
 /// estimated from the <b>second differences</b> <c>2·yᵢ − yᵢ₋₁ − yᵢ₊₁</c> via their median absolute value (the
-/// DER_SNR estimator). The median is robust, so a few sharp peaks or a smooth trend don't inflate the estimate:
-/// their second differences are large but rare, and the median reflects the flat, noisy bulk. For white noise the
+/// DER_SNR estimator). A linear trend cancels exactly in the second difference, and a few sharp peaks are rare, so
+/// the median reflects the flat, noisy bulk rather than them (a strongly-curved trend does leak in — the estimator is
+/// robust to a linear / low-curvature background, not an arbitrary one). For white noise the
 /// second difference has variance <c>6σ²</c> and <c>median|x| ≈ 0.6745·σₓ</c>, giving
 /// <c>σ = 1.482602·median|2yᵢ−yᵢ₋₁−yᵢ₊₁| / √6</c>. Non-finite triples are skipped; a flat or too-short curve
 /// estimates zero noise. Pure, deterministic, domain-free.
