@@ -402,9 +402,30 @@
                                 <TextBlock Grid.Column="0" Text="Instrument" Style="{StaticResource SA.Text.Caption}"/>
                                 <TextBlock Grid.Column="1" Text="{Binding ActiveMeta}" Style="{StaticResource SA.Text.Numeric}"/>
                             </Grid>
+                            <!-- Simple measurements, read directly here (no Analyze needed) -->
+                            <StackPanel Visibility="{Binding HasLiveMeasurements, Converter={StaticResource Bool2Vis}}"
+                                        DataContext="{Binding LiveMeasurements}">
+                                <TextBlock Text="MEASUREMENTS" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                                <ItemsControl ItemsSource="{Binding Readouts}" Margin="{DynamicResource SA.Gap.Top1}"/>
+                                <StackPanel Visibility="{Binding HasHistogram, Converter={StaticResource Bool2Vis}}">
+                                    <ItemsControl ItemsSource="{Binding HistogramBars}" Height="52" Margin="{DynamicResource SA.Gap.Top2}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Width="7" Margin="{DynamicResource SA.Gap.BarX}" VerticalAlignment="Bottom"
+                                                        Background="{DynamicResource SA.Brush.Accent.Primary}"
+                                                        Height="{Binding Converter={StaticResource Ratio2H}, ConverterParameter=48}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="Height histogram · golden-verified (MV00)" Style="{StaticResource SA.Text.Micro}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                                </StackPanel>
+                            </StackPanel>
                             <Border Style="{StaticResource SA.Card}" Background="{DynamicResource SA.Brush.Surface.Sunken}"
                                     Margin="{DynamicResource SA.Gap.Top2}">
-                                <TextBlock Text="Run an operation from Analyze ▾ — Process · Measure · View."
+                                <TextBlock Text="Process · derive · view from Analyze ▾. Simple measurements show above."
                                            TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
                             </Border>
                         </StackPanel>

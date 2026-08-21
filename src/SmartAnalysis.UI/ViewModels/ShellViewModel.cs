@@ -64,6 +64,8 @@ public sealed class ShellViewModel : ObservableObject
     private bool _isLauncherOpen;
     private object? _operationEditor;
     private StatisticsResultViewModel? _statistics;
+    private StatisticsResultViewModel? _liveMeasurements;
+    private Task _liveMeasurementsTask = Task.CompletedTask;
     private HistoryRowViewModel? _selectedStep;
     private Colormap _colormap = ColormapCatalog.Default.Map;
     private string _colormapName = ColormapCatalog.Default.Name;
@@ -250,6 +252,28 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>The current measurement result card (Result role); null otherwise.</summary>
     public StatisticsResultViewModel? Statistics { get => _statistics; private set => SetProperty(ref _statistics, value); }
 
+    /// <summary>
+    /// The basic statistics of the active image, shown <b>inline</b> on the default Inspector (Dataset role) — a
+    /// simple measurement is read directly on the main screen, not run from Analyze. Null when no image is active.
+    /// </summary>
+    public StatisticsResultViewModel? LiveMeasurements
+    {
+        get => _liveMeasurements;
+        private set
+        {
+            if (SetProperty(ref _liveMeasurements, value))
+            {
+                OnPropertyChanged(nameof(HasLiveMeasurements));
+            }
+        }
+    }
+
+    /// <summary>Whether inline basic measurements are available for the active image.</summary>
+    public bool HasLiveMeasurements => _liveMeasurements is not null;
+
+    /// <summary>The in-flight (or completed) inline-measurement computation — awaitable for deterministic refresh.</summary>
+    public Task LiveMeasurementsSettled => _liveMeasurementsTask;
+
     /// <summary>The selected provenance step (Step role); null otherwise.</summary>
     public HistoryRowViewModel? SelectedStep { get => _selectedStep; private set => SetProperty(ref _selectedStep, value); }
 
@@ -411,8 +435,52 @@ public sealed class ShellViewModel : ObservableObject
         LauncherItems.Clear();
         foreach (var item in _launcher.ApplicableToActive())
         {
+            // Basic statistics is a simple measurement shown inline on the main screen (LiveMeasurements),
+            // so it is not offered as an Analyze action — Analyze is for parameter-setting/derived operations.
+            if (item.Id == StatisticsId)
+            {
+                continue;
+            }
+
             var id = item.Id;
             LauncherItems.Add(new OperationLauncherItemViewModel(item, () => LaunchOperation(id)));
+        }
+    }
+
+    // Auto-computes the active image's basic statistics for the inline panel (fire-and-forget; failures are silent
+    // since this is a passive readout). Guards against a stale result if the active dataset changed meanwhile.
+    private void RefreshLiveMeasurements()
+    {
+        LiveMeasurements = null; // clear the previous image's readouts up front so stale stats never show
+        if (_workspace.Active.ActiveId is { } id && HasActiveImage)
+        {
+            _liveMeasurementsTask = ComputeLiveMeasurementsAsync(id);
+        }
+        else
+        {
+            _liveMeasurementsTask = Task.CompletedTask; // no in-flight refresh once the active dataset isn't an image
+        }
+    }
+
+    private async Task ComputeLiveMeasurementsAsync(DatasetId id)
+    {
+        try
+        {
+            var result = await _imageAnalysis.ComputeStatisticsAsync(id).ConfigureAwait(true);
+            // Only touch the panel if THIS image is still active — otherwise a slow request (success OR failure)
+            // for a since-replaced image must not clobber the current image's already-shown measurements.
+            if (_workspace.Active.ActiveId == id && result.Success)
+            {
+                LiveMeasurements = new StatisticsResultViewModel(result);
+            }
+        }
+        catch when (_workspace.Active.ActiveId == id)
+        {
+            LiveMeasurements = null; // a passive readout must never surface an error banner (only for the active image)
+        }
+        catch
+        {
+            // A stale image's failure — leave the current image's measurements untouched.
         }
     }
 
@@ -766,6 +834,7 @@ public sealed class ShellViewModel : ObservableObject
         InspectorRole = InspectorRole.DatasetProperties;
         IsLauncherOpen = false;
         RebuildLauncherItems();
+        RefreshLiveMeasurements(); // inline basic measurements for the new active image (Dataset role)
 
         OnPropertyChanged(nameof(HasActiveImage));
         OnPropertyChanged(nameof(IsBeforeAfter));
