@@ -19,6 +19,8 @@ namespace SmartAnalysis.Analysis.Operations.Image;
 public sealed class PeakDetectionOperation : IAnalysisOperation
 {
     public const string ProminenceParameter = "prominence";
+    public const string MinSnrParameter = "minSnr";
+    public const string MinWidthParameter = "minWidth";
     private const double DefaultProminence = 0.1;
 
     private readonly IExecutionEnvironmentProvider _environment;
@@ -30,11 +32,13 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
         id: "curve.peaks",
         version: 1,
         displayName: "Peak Detection",
-        summary: "Counts significant curve peaks (by prominence) and reports the dominant peak.",
+        summary: "Counts significant curve peaks (by prominence, optionally filtered by SNR / width) and reports the dominant peak.",
         acceptedInputs: [DataKind.LineProfile],
         parameters: new ParameterSchema(
         [
             new ParameterDescriptor(ProminenceParameter, typeof(double), defaultValue: DefaultProminence, min: 0.0, max: 1.0, help: "Minimum peak prominence as a fraction of the value range (0–1). Higher = fewer, stronger peaks."),
+            new ParameterDescriptor(MinSnrParameter, typeof(double), defaultValue: 0.0, min: 0.0, max: null, help: "Minimum signal-to-noise ratio to keep a peak (0 = no SNR filter)."),
+            new ParameterDescriptor(MinWidthParameter, typeof(double), defaultValue: 0.0, min: 0.0, max: null, help: "Minimum width at half-prominence to keep a peak, in the X unit (0 = no width filter)."),
         ]),
         output: OutputKind.Artifact,
         isDeterministic: true,
@@ -73,13 +77,23 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
 
         var profile = (LineProfileDataset)input.Primary;
         double prominence = parameters.TryGet<double>(ProminenceParameter, out var p) ? p : DefaultProminence;
+        double minSnr = parameters.TryGet<double>(MinSnrParameter, out var ms) ? ms : 0.0;
+        double minWidth = parameters.TryGet<double>(MinWidthParameter, out var mw) ? mw : 0.0;
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Detecting peaks."));
 
-        var peaks = PeakDetection.Find(profile.Values.Memory.Span, prominence);
+        var detected = PeakDetection.Find(profile.Values.Memory.Span, prominence);
         double noise = NoiseEstimator.Estimate(profile.Values.Memory.Span);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Characterise every detected peak once (width + SNR), then apply the peak-filtering thresholds. A peak is
+        // dropped only when a MEASURED value is below the threshold: an undetermined width (a peak cut off by an end,
+        // NaN) never disqualifies, and a noiseless peak's +∞ SNR always passes. Defaults (0) filter nothing.
+        var peaks = detected
+            .Select(pk => new Detected(pk, Width(profile, pk), Snr(pk.Prominence, noise)))
+            .Where(e => e.Snr >= minSnr && (double.IsNaN(e.Width) || e.Width >= minWidth))
+            .ToList();
 
         var warnings = new List<OperationWarning>();
         var xUnit = profile.X.Unit;
@@ -97,21 +111,21 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             var dominant = peaks[0];
             for (int i = 1; i < peaks.Count; i++)
             {
-                if (peaks[i].Prominence > dominant.Prominence)
+                if (peaks[i].Peak.Prominence > dominant.Peak.Prominence)
                 {
                     dominant = peaks[i];
                 }
             }
 
-            scalars["DominantPosition"] = new(profile.X.RawToReal(dominant.Index), xUnit);
-            scalars["DominantValue"] = new(dominant.Value, yUnit);
-            scalars["DominantProminence"] = new(dominant.Prominence, yUnit);
-            scalars["DominantWidth"] = new(Width(profile, dominant), xUnit);
-            scalars["DominantSnr"] = new(Snr(dominant.Prominence, noise), StandardUnits.One);
+            scalars["DominantPosition"] = new(profile.X.RawToReal(dominant.Peak.Index), xUnit);
+            scalars["DominantValue"] = new(dominant.Peak.Value, yUnit);
+            scalars["DominantProminence"] = new(dominant.Peak.Prominence, yUnit);
+            scalars["DominantWidth"] = new(dominant.Width, xUnit);
+            scalars["DominantSnr"] = new(dominant.Snr, StandardUnits.One);
         }
         else
         {
-            warnings.Add(new OperationWarning("peaks.none", "No peaks met the prominence threshold."));
+            warnings.Add(new OperationWarning("peaks.none", "No peaks met the prominence and SNR/width thresholds."));
             scalars["DominantPosition"] = new(double.NaN, xUnit);
             scalars["DominantValue"] = new(double.NaN, yUnit);
             scalars["DominantProminence"] = new(double.NaN, yUnit);
@@ -131,21 +145,23 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
             parameters: new Dictionary<string, PhysicalValue>
             {
                 [ProminenceParameter] = new(prominence, StandardUnits.One),
+                [MinSnrParameter] = new(minSnr, StandardUnits.One),
+                [MinWidthParameter] = new(minWidth, xUnit),
             },
             warnings: warnings,
             parentResultId: artifactId);
 
-        // The full peak list (one row per peak) beside the scalar summary.
+        // The full (filtered) peak list (one row per peak) beside the scalar summary.
         var rows = new List<IReadOnlyList<PhysicalValue>>(peaks.Count);
-        foreach (var peak in peaks)
+        foreach (var e in peaks)
         {
             rows.Add(new PhysicalValue[]
             {
-                new(profile.X.RawToReal(peak.Index), xUnit),
-                new(peak.Value, yUnit),
-                new(peak.Prominence, yUnit),
-                new(Width(profile, peak), xUnit),
-                new(Snr(peak.Prominence, noise), StandardUnits.One),
+                new(profile.X.RawToReal(e.Peak.Index), xUnit),
+                new(e.Peak.Value, yUnit),
+                new(e.Peak.Prominence, yUnit),
+                new(e.Width, xUnit),
+                new(e.Snr, StandardUnits.One),
             });
         }
 
@@ -170,6 +186,9 @@ public sealed class PeakDetectionOperation : IAnalysisOperation
         progress?.Report(new OperationProgress(1.0, "Done."));
         return Task.FromResult(OperationResult.Measurement(artifact, warnings));
     }
+
+    // A detected peak with its characterisation (width in the X unit, SNR) — computed once, then filtered.
+    private readonly record struct Detected(Peak Peak, double Width, double Snr);
 
     // The peak's full width at half-prominence, converted from sample units to the X axis's physical unit (NaN when
     // the width is undetermined — a peak cut off by an end). The axis step gives the physical spacing per sample.
