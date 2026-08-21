@@ -433,12 +433,14 @@ public partial class MainWindow : Window
         SingleSurface.Clear();
         if (_viewModel.IsBeforeAfter && _viewModel.BeforeImage is { } before && _viewModel.ActiveImage is { } after)
         {
-            // Each pane uses its OWN data range so both stay legible: a transform like Flatten removes the
-            // Z offset, so a union range would wash the source to one extreme and the result to the other —
-            // hiding the very texture/tilt the comparison exists to show. (A shared-range toggle is a later
-            // refinement.) The axes are identical (same X/Y), which the BEFORE/AFTER labels make explicit.
-            BeforeImageView.Render(RenderInputFactory.ForImage(before, colormap));
-            AfterImageView.Render(RenderInputFactory.ForImage(after, colormap));
+            // Both panes honour the SAME palette setting the main screen uses (EffectiveRange): a manual range set
+            // on the toolbar carries into compare so the two palettes share one scale and are directly comparable,
+            // and the AFTER pane (the active image) matches its single-view palette exactly. In auto mode
+            // (EffectiveRange is null) each pane still falls back to its own data min/max so both stay legible —
+            // a Flatten result that removed the Z offset isn't washed to one extreme. Axes are identical (same X/Y).
+            var range = _viewModel.EffectiveRange;
+            BeforeImageView.Render(RenderInputFactory.ForImage(before, colormap, range));
+            AfterImageView.Render(RenderInputFactory.ForImage(after, colormap, range));
             SingleImage.Clear();
         }
         else if (_viewModel.ActiveImage is { } image)

@@ -46,6 +46,9 @@
     <Thickness x:Key="SA.Pad.Chip">10,0,10,0</Thickness>
     <Thickness x:Key="SA.Pad.Banner">12,8,12,8</Thickness>
     <Thickness x:Key="SA.Pad.Bar">12,0,12,0</Thickness>
+    <!-- Launcher group label: left inset = item button padding (9) + icon (16) + icon gap (8) so it sits above the
+         item labels; top gap separates the groups. -->
+    <Thickness x:Key="SA.Pad.LauncherGroup">33,8,0,4</Thickness>
     <!-- Uniform gap Thicknesses for view layout (screens use tokens, not literal Margin/Padding). -->
     <Thickness x:Key="SA.Gap.1">4</Thickness>
     <Thickness x:Key="SA.Gap.2">8</Thickness>
