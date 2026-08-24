@@ -30,7 +30,10 @@ namespace SmartAnalysis.UiTests.ViewModels;
 public sealed class ShellCurveRoutingTests
 {
     private static ShellViewModel NewShell(Workspace ws)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => NewShell(ws, new FakeImageAnalysis());
+
+    private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ScanImageDataset Image()
@@ -104,6 +107,63 @@ public sealed class ShellCurveRoutingTests
         Assert.True(vm.IsSingleCurve);
     }
 
+    [Fact]
+    public void A_line_profile_curve_pairs_with_its_source_image_and_line()
+    {
+        var ws = new Workspace();
+        var source = Image();
+        var curve = Curve();
+        ws.Add(source);
+        ws.Add(curve);
+
+        var analysis = new FakeImageAnalysis { Line = new MeasurementLine(source.Id, 0, 2, 3, 2) };
+        var vm = NewShell(ws, analysis);
+        ws.SetActive(curve.Id);
+
+        Assert.True(vm.ShowCurveSourceImage);          // the stage pairs the source image with the curve
+        Assert.False(vm.IsSingleCurve);                // so the full-screen curve view yields
+        Assert.True(vm.ShowSourceImagePane);           // the image control is shown (as the source pane)
+        Assert.Same(source, vm.CurveSourceImage);      // and it renders the curve's source image
+        Assert.NotNull(vm.CurveSourceLine);
+    }
+
+    [Fact]
+    public void A_curve_with_no_source_line_stays_full_screen()
+    {
+        var ws = new Workspace();
+        var curve = Curve();
+        ws.Add(curve);
+
+        var analysis = new FakeImageAnalysis { Line = null }; // e.g. a PSD — nothing to draw on an image
+        var vm = NewShell(ws, analysis);
+        ws.SetActive(curve.Id);
+
+        Assert.True(vm.IsSingleCurve);
+        Assert.False(vm.ShowCurveSourceImage);
+        Assert.Null(vm.CurveSourceImage);
+    }
+
+    [Fact]
+    public void Leaving_a_paired_curve_for_an_image_clears_the_source_pairing()
+    {
+        var ws = new Workspace();
+        var source = Image();
+        var curve = Curve();
+        ws.Add(source);
+        ws.Add(curve);
+
+        var analysis = new FakeImageAnalysis { Line = new MeasurementLine(source.Id, 0, 2, 3, 2) };
+        var vm = NewShell(ws, analysis);
+        ws.SetActive(curve.Id);
+        Assert.True(vm.ShowCurveSourceImage);
+
+        ws.SetActive(source.Id); // back to an image → no curve pairing
+        Assert.False(vm.ShowCurveSourceImage);
+        Assert.Null(vm.CurveSourceLine);
+        Assert.Null(vm.CurveSourceImage);
+        Assert.True(vm.IsSingleImage);
+    }
+
     // ---- minimal fakes (construction only) ----
     private sealed class FakeReader : IScanFileReader
     {
@@ -120,6 +180,10 @@ public sealed class ShellCurveRoutingTests
 
     private sealed class FakeImageAnalysis : IImageAnalysisUseCase
     {
+        public MeasurementLine? Line { get; set; }
+
+        public MeasurementLine? GetCurveSourceLine(DatasetId curveId) => Line;
+
         public Task<FlattenOutcome> ApplyFlattenAsync(DatasetId sourceId, FlattenOptions options, CancellationToken ct = default)
             => Task.FromException<FlattenOutcome>(new NotImplementedException());
 

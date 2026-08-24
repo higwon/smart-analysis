@@ -56,4 +56,13 @@ public interface IImageAnalysisUseCase
     /// overlay can't draw). Never changes active state.
     /// </summary>
     MeasurementRegion? GetMeasurementRegion(DatasetId artifactId) => null;
+
+    /// <summary>
+    /// Reconstructs, from a line-profile dataset's provenance, the line it was sampled along — so the shell can draw a
+    /// read-only line back on the source image beside the curve. Handles both the row/column cross-section (converted
+    /// to a full-width/height line using the source image's size) and the free line (its endpoints). Returns
+    /// <c>null</c> when <paramref name="curveId"/> is not a line-profile curve, records no line, or its source image
+    /// is no longer in the workspace. Never changes active state.
+    /// </summary>
+    MeasurementLine? GetCurveSourceLine(DatasetId curveId) => null;
 }

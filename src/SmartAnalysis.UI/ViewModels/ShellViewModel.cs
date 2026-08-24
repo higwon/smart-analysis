@@ -66,6 +66,8 @@ public sealed class ShellViewModel : ObservableObject
     private object? _operationEditor;
     private StatisticsResultViewModel? _statistics;
     private MeasurementRegion? _selectedRegion;
+    private MeasurementLine? _curveSourceLine;
+    private ScanImageDataset? _curveSourceImage;
     private StatisticsResultViewModel? _liveMeasurements;
     private Task _liveMeasurementsTask = Task.CompletedTask;
     private bool _isOperationPreview;
@@ -673,10 +675,39 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>The active dataset when it is a 1D curve (profile/spectrum, e.g. a PSD); drives the curve view.</summary>
     public LineProfileDataset? ActiveCurve { get => _activeCurve; private set => SetProperty(ref _activeCurve, value); }
 
+    /// <summary>The source image an active line-profile curve was sampled from (to render beside the curve with the
+    /// read-only line), or <c>null</c> when there is none / it is no longer in the workspace.</summary>
+    public ScanImageDataset? CurveSourceImage { get => _curveSourceImage; private set => SetProperty(ref _curveSourceImage, value); }
+
+    /// <summary>Where the active line-profile curve was sampled on its source image (for the read-only line beside
+    /// the curve), or <c>null</c> when the active curve has no reconstructable source line (e.g. a PSD).</summary>
+    public MeasurementLine? CurveSourceLine
+    {
+        get => _curveSourceLine;
+        private set
+        {
+            if (SetProperty(ref _curveSourceLine, value))
+            {
+                OnPropertyChanged(nameof(ShowCurveSourceImage));
+                OnPropertyChanged(nameof(ShowSourceImagePane));
+                OnPropertyChanged(nameof(IsSingleCurve));
+            }
+        }
+    }
+
     public bool HasActiveImage => _activeImage is not null;
     public bool IsBeforeAfter => _activeImage is not null && _beforeImage is not null;
     public bool IsSingleImage => _activeImage is not null && _beforeImage is null;
-    public bool IsSingleCurve => _activeCurve is not null;
+
+    /// <summary>A line-profile curve whose sampling line can be shown back on its source image: the stage pairs the
+    /// source image (with a read-only line) above the profile curve, instead of the full-screen curve.</summary>
+    public bool ShowCurveSourceImage => _activeCurve is not null && _curveSourceLine is not null;
+
+    /// <summary>The full-screen curve view — a curve with no reconstructable source line (e.g. a PSD frequency curve).</summary>
+    public bool IsSingleCurve => _activeCurve is not null && _curveSourceLine is null;
+
+    /// <summary>Whether the 2D image control is shown — for an active image, or as the source pane beside a curve.</summary>
+    public bool ShowSourceImagePane => ShowSingle2D || ShowCurveSourceImage;
 
     /// <summary>Whether the single image is shown as a 3D surface (V04) rather than the 2D view. Persists across
     /// active-image changes so the chosen view mode sticks; ignored for Before/After and curves.</summary>
@@ -999,6 +1030,10 @@ public sealed class ShellViewModel : ObservableObject
             ActiveImage = dataset as ScanImageDataset;
             ActiveCurve = dataset as LineProfileDataset;
             BeforeImage = FirstComparisonImage(active);
+            // A line-profile curve pairs with its source image + a read-only sampling line (when the source is still
+            // in the workspace); any other curve (e.g. a PSD) has none and stays full-screen.
+            CurveSourceLine = ActiveCurve is not null ? _imageAnalysis.GetCurveSourceLine(activeId) : null;
+            CurveSourceImage = CurveSourceLine is { } line && _workspace.TryGet(line.SourceId, out var src) ? src as ScanImageDataset : null;
         }
         else
         {
@@ -1010,6 +1045,8 @@ public sealed class ShellViewModel : ObservableObject
             ActiveImage = null;
             ActiveCurve = null;
             BeforeImage = null;
+            CurveSourceLine = null;
+            CurveSourceImage = null;
         }
 
         // A new active dataset resets the Inspector to its properties (op editor / result / step are transient)
@@ -1028,6 +1065,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowComparePanes));
         OnPropertyChanged(nameof(IsSingleImage));
         OnPropertyChanged(nameof(IsSingleCurve));
+        OnPropertyChanged(nameof(ShowCurveSourceImage));
+        OnPropertyChanged(nameof(ShowSourceImagePane));
         OnPropertyChanged(nameof(ShowSingle2D));
         OnPropertyChanged(nameof(ShowSingle3D));
         OnPropertyChanged(nameof(CanToggle3D));
