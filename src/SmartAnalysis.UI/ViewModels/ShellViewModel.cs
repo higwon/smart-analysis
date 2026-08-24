@@ -248,7 +248,7 @@ public sealed class ShellViewModel : ObservableObject
                 => async (id, ct) => new PreviewOutput(await _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange, ct).ConfigureAwait(true), null),
             ParameterFormViewModel form when HasActiveImage && form.DerivesImage && !IsImageOverlayEditor(form)
                 => async (id, ct) => new PreviewOutput(await _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange, ct).ConfigureAwait(true), null),
-            ParameterFormViewModel form when _activeCurve is not null && form.DerivesCurve && !IsImageOverlayEditor(form)
+            ParameterFormViewModel form when _activeCurve is not null && form.DerivesCurve && !IsImageOverlayEditor(form) && !IsProfileRangeEditor(form)
                 => async (id, ct) => new PreviewOutput(null, await _launcher.PreviewCurveAsync(form.Id, form.Values, ct).ConfigureAwait(true)),
             _ => null,
         };
@@ -386,6 +386,13 @@ public sealed class ShellViewModel : ObservableObject
         bool Has(params string[] names) => Array.TrueForAll(names, n => form.Fields.Any(f => f.Name == n));
         return Has("left", "top", "width", "height") || Has("x0", "y0", "x1", "y1");
     }
+
+    // A profile-range editor (Crop Profile) is recognized by its start/count fields: instead of a source-vs-preview
+    // overlay it draws the kept [start, count) range as vertical markers on the source curve (the view handles it).
+    private static bool IsProfileRangeEditor(object? editor)
+        => editor is ParameterFormViewModel form
+            && form.Fields.Any(f => f.Name == "start")
+            && form.Fields.Any(f => f.Name == "count");
 
     /// <summary>Which role the Inspector shows (doc 26 §13).</summary>
     public InspectorRole InspectorRole

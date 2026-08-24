@@ -84,12 +84,48 @@ public partial class MainWindow : Window
     private static readonly string[] LineFieldNames = ["x0", "y0", "x1", "y1"];
     private readonly List<ParameterFieldViewModel> _lineFields = new();
 
+    // ---- Crop-range preview: mirror a curve op's start/count as vertical markers on the profile curve ----
+    private static readonly string[] RangeFieldNames = ["start", "count"];
+    private readonly List<ParameterFieldViewModel> _rangeFields = new();
+
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ShellViewModel.OperationEditor))
         {
             WireRegionPreview();
             WireLinePreview();
+            WireRangePreview();
+        }
+    }
+
+    // A curve op with start/count fields (Crop Profile) drives vertical range markers on the profile curve; a field
+    // change re-renders the markers. No overlay control — the markers are drawn by RenderCurve from these fields.
+    private void WireRangePreview()
+    {
+        foreach (var field in _rangeFields)
+        {
+            field.PropertyChanged -= RangeField_PropertyChanged;
+        }
+
+        _rangeFields.Clear();
+
+        if (_viewModel.OperationEditor is ParameterFormViewModel form && RangeFieldNames.All(name => form.Fields.Any(f => f.Name == name)))
+        {
+            foreach (var field in form.Fields)
+            {
+                _rangeFields.Add(field);
+                field.PropertyChanged += RangeField_PropertyChanged;
+            }
+        }
+
+        RenderImages(); // draw (or clear) the range markers for the new editor state
+    }
+
+    private void RangeField_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ParameterFieldViewModel.Value))
+        {
+            RenderImages(); // move the markers live as the range changes
         }
     }
 
@@ -422,15 +458,40 @@ public partial class MainWindow : Window
     // (profile flatten/crop/…), so the before/after shape is compared on one set of axes. Otherwise the plain curve.
     private void RenderCurve(AfmCurveView target, LineProfileDataset curve)
     {
+        // A value-transform op (flatten/baseline/smooth): show the PREVIEW result ALONE, auto-scaled to itself, so its
+        // shape is readable even when the op removed the offset (overlaying it on the source would crush both to flat).
         if (_viewModel.IsOperationPreview && _viewModel.OperationPreviewCurve is { } preview && preview.Series.Count > 0)
         {
-            var sourceInput = RenderInputFactory.ForLineProfile(curve, "SOURCE");
-            target.Render(new CurveRenderInput([sourceInput.Series[0], preview.Series[0]], sourceInput.X, sourceInput.Y));
+            target.Render(preview);
+            return;
         }
-        else
+
+        // A crop (range) form open: the source curve with the kept [start, count) range drawn as vertical markers.
+        if (TryCropRangeMarkers(curve, out var markers))
         {
-            target.Render(RenderInputFactory.ForLineProfile(curve));
+            var src = RenderInputFactory.ForLineProfile(curve);
+            target.Render(new CurveRenderInput(src.Series, src.X, src.Y, markers));
+            return;
         }
+
+        target.Render(RenderInputFactory.ForLineProfile(curve));
+    }
+
+    // The vertical marker X positions (axis units) for a crop form's kept range on the source curve, clamped the same
+    // way the crop op clamps (start ∈ [0, n-1], count ∈ [1, n-start]). False when no crop form is open.
+    private bool TryCropRangeMarkers(LineProfileDataset curve, out double[] markers)
+    {
+        markers = Array.Empty<double>();
+        int n = curve.X.Count;
+        if (_rangeFields.Count == 0 || n <= 0)
+        {
+            return false;
+        }
+
+        int start = Math.Clamp(AsInt(_rangeFields.FirstOrDefault(f => f.Name == "start")?.Value), 0, n - 1);
+        int count = Math.Clamp(AsInt(_rangeFields.FirstOrDefault(f => f.Name == "count")?.Value), 1, n - start);
+        markers = new[] { curve.X.RawToReal(start), curve.X.RawToReal(start + count - 1) };
+        return true;
     }
 
     // Build transient render inputs and render them; retain nothing borrowed (V02 / ADR-011).

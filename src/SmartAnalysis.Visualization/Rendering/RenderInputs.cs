@@ -101,7 +101,7 @@ public sealed record XySeries
 /// <summary>An XY plot to render: one or more <see cref="XySeries"/> with X/Y axis views. Immutable.</summary>
 public sealed record CurveRenderInput
 {
-    public CurveRenderInput(IReadOnlyList<XySeries> series, AxisView x, AxisView y)
+    public CurveRenderInput(IReadOnlyList<XySeries> series, AxisView x, AxisView y, IReadOnlyList<double>? verticalMarkers = null)
     {
         ArgumentNullException.ThrowIfNull(series);
         var copy = new XySeries[series.Count];
@@ -113,9 +113,27 @@ public sealed record CurveRenderInput
         Series = Array.AsReadOnly(copy);
         X = x ?? throw new ArgumentNullException(nameof(x));
         Y = y ?? throw new ArgumentNullException(nameof(y));
+        if (verticalMarkers is null)
+        {
+            VerticalMarkers = [];
+        }
+        else
+        {
+            var marks = new double[verticalMarkers.Count];
+            for (int i = 0; i < marks.Length; i++)
+            {
+                marks[i] = verticalMarkers[i];
+            }
+
+            VerticalMarkers = Array.AsReadOnly(marks);
+        }
     }
 
     public IReadOnlyList<XySeries> Series { get; }
+
+    /// <summary>X positions (axis units) at which to draw vertical reference lines — e.g. a crop range's boundaries on
+    /// the source curve. Empty for a plain plot.</summary>
+    public IReadOnlyList<double> VerticalMarkers { get; }
 
     public AxisView X { get; }
 

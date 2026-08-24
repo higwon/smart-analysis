@@ -122,6 +122,39 @@ public sealed class AfmImageViewTests
     }
 
     [Fact]
+    public void The_line_has_a_wide_hit_area_when_editable_and_none_when_read_only()
+    {
+        // The visible line is only 2px; a wide transparent sibling receives the mouse so the line is easy to grab and
+        // drag. A read-only line (a paired curve's sampling line) must NOT be grab-able.
+        var (editableHittable, editableThick, readOnlyHidden) = WpfTestHost.Invoke(() =>
+        {
+            var view = new AfmImageView { IsLineEditable = true };
+            var host = new Border { Width = 320, Height = 240, Child = view };
+            host.Measure(new Size(320, 240));
+            host.Arrange(new Rect(0, 0, 320, 240));
+            host.UpdateLayout();
+
+            view.Render(SolidInput(64, 64));
+            view.SetLinePreview(0, 32, 63, 32);
+            host.UpdateLayout();
+
+            var hit = (Line)view.FindName("LineHitArea");
+            bool hittable = hit.IsHitTestVisible && hit.Visibility == Visibility.Visible;
+            bool thick = hit.StrokeThickness >= 8; // a forgiving grab target, not the 2px visible line
+
+            view.IsLineEditable = false; // becomes a read-only display line
+            host.UpdateLayout();
+            bool hidden = hit.Visibility == Visibility.Collapsed;
+
+            return (hittable, thick, hidden);
+        });
+
+        Assert.True(editableHittable, "the hit area must receive the mouse so the line can be dragged");
+        Assert.True(editableThick);
+        Assert.True(readOnlyHidden, "a read-only line must not be grab-able");
+    }
+
+    [Fact]
     public void A_cleared_line_does_not_reappear_on_the_next_image()
     {
         // Regression: a paired line-profile curve draws a read-only line; leaving it for a normal image must clear

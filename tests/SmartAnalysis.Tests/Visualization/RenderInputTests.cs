@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using SmartAnalysis.Domain.Axes;
 using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
@@ -164,6 +165,21 @@ public sealed class RenderInputTests
         Assert.Equal("nm", input.Y.Unit);
         Assert.Equal(10.0, input.Y.Start, 10);
         Assert.Equal(30.0, input.Y.End, 10);
+    }
+
+    [Fact]
+    public void CurveRenderInput_defaults_to_no_vertical_markers_and_copies_supplied_ones()
+    {
+        var x = new AxisView("X", "um", 0, 3, 4);
+        var y = new AxisView("Y", "nm", 0, 1, 4);
+        var series = new[] { new XySeries("s", new double[] { 0, 1 }, new double[] { 0, 1 }) };
+
+        Assert.Empty(new CurveRenderInput(series, x, y).VerticalMarkers);
+
+        var source = new List<double> { 0.5, 2.5 };
+        var input = new CurveRenderInput(series, x, y, source);
+        source.Add(9.0); // mutating the caller's list must not affect the input (defensive copy)
+        Assert.Equal([0.5, 2.5], input.VerticalMarkers);
     }
 
     [Fact]

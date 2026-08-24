@@ -227,6 +227,24 @@ public sealed class ShellCurveRoutingTests
         Assert.Equal("profile.smooth", vm.OperationPreviewCurve!.Series[0].Name);
     }
 
+    [Fact]
+    public async Task Opening_a_crop_profile_form_does_not_enter_the_curve_preview()
+    {
+        var ws = new Workspace();
+        var curve = Curve();
+        ws.Add(curve);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(curve.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "profile.crop").LaunchCommand.Execute(null); // a range op (start/count)
+        await vm.OperationPreviewSettled;
+
+        // Crop shows its range as vertical markers on the source curve (view-side), not a source-vs-preview overlay.
+        Assert.False(vm.IsOperationPreview);
+        Assert.Null(vm.OperationPreviewCurve);
+    }
+
     // A launcher offering two curve→curve Process ops; each previews a curve whose series is NAMED by its op id, so a
     // test can tell which op's preview is showing.
     private sealed class CurvePreviewLauncher : IOperationLauncher
@@ -235,12 +253,21 @@ public sealed class ShellCurveRoutingTests
         [
             new OperationLauncherItem("profile.flatten", "Flatten", "Detrend the profile", OperationCategory.Process),
             new OperationLauncherItem("profile.smooth", "Smooth", "Smooth the profile", OperationCategory.Process),
+            new OperationLauncherItem("profile.crop", "Crop", "Crop the profile", OperationCategory.Process),
         ];
 
-        public OperationForm? GetForm(string operationId) => operationId is "profile.flatten" or "profile.smooth"
-            ? new OperationForm(operationId, operationId, "curve op", OperationCategory.Process,
-                [new ParameterFieldDescriptor("order", "Order", ParameterFieldKind.Integer, 1, 0, 8, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesCurve: true)
-            : null;
+        public OperationForm? GetForm(string operationId) => operationId switch
+        {
+            "profile.flatten" or "profile.smooth" => new OperationForm(operationId, operationId, "curve op", OperationCategory.Process,
+                [new ParameterFieldDescriptor("order", "Order", ParameterFieldKind.Integer, 1, 0, 8, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesCurve: true),
+            // Crop derives a curve too, but its start/count fields make it a range editor (markers), not a preview overlay.
+            "profile.crop" => new OperationForm("profile.crop", "Crop", "Crop the profile", OperationCategory.Process,
+            [
+                new ParameterFieldDescriptor("start", "Start", ParameterFieldKind.Integer, 0, 0, null, Array.Empty<ParameterFieldOption>(), null, "help"),
+                new ParameterFieldDescriptor("count", "Count", ParameterFieldKind.Integer, 4, 1, null, Array.Empty<ParameterFieldOption>(), null, "help"),
+            ], DerivesCurve: true),
+            _ => null,
+        };
 
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromException<OperationRunResult>(new NotImplementedException());
