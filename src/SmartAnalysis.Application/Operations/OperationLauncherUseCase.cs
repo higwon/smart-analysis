@@ -139,7 +139,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         {
             // Measurement: preserve the real entity attached to its source; active unchanged (doc 22).
             _measurements.Attach(artifact);
-            return OperationRunResult.Measured(ProjectMeasurement(artifact), warnings);
+            return OperationRunResult.Measured(ProjectMeasurement(artifact), warnings, artifact.Id);
         }
 
         return OperationRunResult.Failed("The operation produced no output.");

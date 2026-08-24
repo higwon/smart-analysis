@@ -48,4 +48,12 @@ public interface IImageAnalysisUseCase
     /// node is selected). Returns <c>null</c> when no such measurement is attached. Never changes active state.
     /// </summary>
     StatisticsResult? GetMeasurement(DatasetId artifactId);
+
+    /// <summary>
+    /// Reconstructs, from an attached measurement's provenance, the region it was taken over — so the shell can
+    /// overlay "this came from here" on the source image when the measurement is selected. Returns <c>null</c> when
+    /// the measurement is not attached or carries no drawable region (e.g. a whole-image statistic, or a shape the
+    /// overlay can't draw). Never changes active state.
+    /// </summary>
+    MeasurementRegion? GetMeasurementRegion(DatasetId artifactId) => null;
 }

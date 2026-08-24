@@ -13,13 +13,16 @@ public sealed record OperationRunResult(
     DatasetId? DerivedId,
     StatisticsResult? Measurement,
     IReadOnlyList<string> Warnings,
-    string? Error)
+    string? Error,
+    DatasetId? MeasurementId = null)
 {
     public static OperationRunResult Failed(string error) => new(false, null, null, [], error);
 
     public static OperationRunResult Derived(DatasetId derivedId, IReadOnlyList<string> warnings)
         => new(true, derivedId, null, warnings, null);
 
-    public static OperationRunResult Measured(StatisticsResult measurement, IReadOnlyList<string> warnings)
-        => new(true, null, measurement, warnings, null);
+    /// <summary><paramref name="measurementId"/> is the attached artifact's id, so the shell can re-read it (e.g. to
+    /// show where a region measurement was taken) without a separate lookup.</summary>
+    public static OperationRunResult Measured(StatisticsResult measurement, IReadOnlyList<string> warnings, DatasetId measurementId)
+        => new(true, null, measurement, warnings, null, measurementId);
 }
