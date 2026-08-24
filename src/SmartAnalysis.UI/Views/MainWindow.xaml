@@ -317,7 +317,7 @@
                         <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <Grid Grid.Row="0">
                         <ctl:AfmImageView x:Name="SingleImage" Margin="{DynamicResource SA.Gap.2}" IsRangeEditable="True"
-                                          Visibility="{Binding ShowSingle2D, Converter={StaticResource Bool2Vis}}"/>
+                                          Visibility="{Binding ShowSourceImagePane, Converter={StaticResource Bool2Vis}}"/>
                         <ctl:AfmSurfaceView x:Name="SingleSurface" Margin="{DynamicResource SA.Gap.2}"
                                             Visibility="{Binding ShowSingle3D, Converter={StaticResource Bool2Vis}}"/>
                         <ctl:AfmCurveView x:Name="SingleCurve" Margin="{DynamicResource SA.Gap.2}"

@@ -1,5 +1,6 @@
 using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Analysis.Operations.Image;
+using SmartAnalysis.Analysis.Profiles;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Workspaces;
@@ -268,5 +269,103 @@ public sealed class ImageAnalysisUseCaseTests
         var (_, _, _, useCase) = await SetupAsync();
 
         Assert.Null(useCase.GetMeasurementRegion(DatasetId.New()));
+    }
+
+    // --- GetCurveSourceLine: reconstruct where a line-profile curve was sampled, for the read-only line beside it ---
+
+    private static async Task<LineProfileDataset> RunAndAddAsync(Workspace ws, IAnalysisOperation op, ScanImageDataset image, IParameterSet parameters)
+    {
+        var result = await op.RunAsync(new OperationInput(image), parameters, progress: null, CancellationToken.None);
+        var curve = Assert.IsType<LineProfileDataset>(result.DerivedDataset);
+        ws.Add(curve);
+        return curve;
+    }
+
+    [Fact]
+    public async Task GetCurveSourceLine_reconstructs_a_free_lines_endpoints()
+    {
+        var (ws, image, _, useCase) = await SetupAsync();
+        var op = new LineProfileOperation(new SystemExecutionEnvironmentProvider());
+        var parameters = new ParameterSet(new Dictionary<string, object?>
+        {
+            ["x0"] = 1.0, ["y0"] = 2.0, ["x1"] = 10.0, ["y1"] = 8.0, ["samples"] = 32,
+        });
+        var curve = await RunAndAddAsync(ws, op, image, parameters);
+
+        var line = useCase.GetCurveSourceLine(curve.Id);
+
+        Assert.NotNull(line);
+        Assert.Equal(image.Id, line!.SourceId);
+        Assert.Equal((1.0, 2.0, 10.0, 8.0), (line.X0, line.Y0, line.X1, line.Y1));
+    }
+
+    [Fact]
+    public async Task GetCurveSourceLine_spans_a_row_across_the_full_width()
+    {
+        var (ws, image, _, useCase) = await SetupAsync();
+        var op = new ProfileOperation(new SystemExecutionEnvironmentProvider());
+        var parameters = new ParameterSet(new Dictionary<string, object?>
+        {
+            ["orientation"] = ProfileOrientation.Row, ["index"] = 5,
+        });
+        var curve = await RunAndAddAsync(ws, op, image, parameters);
+
+        var line = useCase.GetCurveSourceLine(curve.Id);
+
+        Assert.NotNull(line);
+        Assert.Equal((0.0, 5.0, image.Data.Width - 1.0, 5.0), (line!.X0, line.Y0, line.X1, line.Y1)); // horizontal at y=5
+    }
+
+    [Fact]
+    public async Task GetCurveSourceLine_spans_a_column_down_the_full_height()
+    {
+        var (ws, image, _, useCase) = await SetupAsync();
+        var op = new ProfileOperation(new SystemExecutionEnvironmentProvider());
+        var parameters = new ParameterSet(new Dictionary<string, object?>
+        {
+            ["orientation"] = ProfileOrientation.Column, ["index"] = 4,
+        });
+        var curve = await RunAndAddAsync(ws, op, image, parameters);
+
+        var line = useCase.GetCurveSourceLine(curve.Id);
+
+        Assert.Equal((4.0, 0.0, 4.0, image.Data.Height - 1.0), (line!.X0, line.Y0, line.X1, line.Y1)); // vertical at x=4
+    }
+
+    [Fact]
+    public async Task GetCurveSourceLine_is_null_when_the_source_image_is_not_in_the_workspace()
+    {
+        var (_, image, _, _) = await SetupAsync();
+        var op = new ProfileOperation(new SystemExecutionEnvironmentProvider());
+        var result = await op.RunAsync(
+            new OperationInput(image),
+            new ParameterSet(new Dictionary<string, object?> { ["orientation"] = ProfileOrientation.Row, ["index"] = 3 }),
+            progress: null, CancellationToken.None);
+        var curve = Assert.IsType<LineProfileDataset>(result.DerivedDataset);
+
+        // A workspace holding the curve but NOT its source image (e.g. reopened without the parent): nothing to draw on.
+        var lonely = new Workspace();
+        lonely.Add(curve);
+        var useCase = new ImageAnalysisUseCase(lonely, new OperationRegistry([]), new MeasurementStore());
+
+        Assert.Null(useCase.GetCurveSourceLine(curve.Id));
+    }
+
+    [Fact]
+    public async Task GetCurveSourceLine_is_null_for_a_curve_that_is_not_a_line_profile()
+    {
+        var (ws, image, _, useCase) = await SetupAsync();
+        var op = new PowerSpectrumOperation(new SystemExecutionEnvironmentProvider());
+        var curve = await RunAndAddAsync(ws, op, image, ParameterSet.Empty); // a PSD frequency curve, not a spatial line
+
+        Assert.Null(useCase.GetCurveSourceLine(curve.Id)); // no image.profile/line-profile step → no line to draw
+    }
+
+    [Fact]
+    public async Task GetCurveSourceLine_is_null_for_an_unknown_id()
+    {
+        var (_, _, _, useCase) = await SetupAsync();
+
+        Assert.Null(useCase.GetCurveSourceLine(DatasetId.New()));
     }
 }

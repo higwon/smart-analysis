@@ -1,5 +1,6 @@
 using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Analysis.Operations.Image;
+using SmartAnalysis.Analysis.Profiles;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Units;
@@ -21,6 +22,8 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
     private const string FlattenId = "image.flatten";
     private const string StatisticsId = "image.statistics";
     private const string RegionStatisticsId = "image.roi-statistics";
+    private const string LineProfileId = "image.line-profile";
+    private const string ProfileId = "image.profile";
 
     // Preferred readouts (operation scalar key → friendly label), in display order.
     private static readonly (string Key, string Label)[] StatKeys =
@@ -243,6 +246,52 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         return new MeasurementRegion(artifact.SourceId, shape, left, top, width, height);
     }
 
+    /// <summary>
+    /// Reconstructs the sampling line of a line-profile dataset from its provenance: the free line's endpoints
+    /// (<c>image.line-profile</c>), or the row/column cross-section (<c>image.profile</c>) converted to a full
+    /// width/height line using the source image's size. Returns <c>null</c> when the dataset is not a line profile,
+    /// records no line, or its source image is not in the workspace.
+    /// </summary>
+    public MeasurementLine? GetCurveSourceLine(DatasetId curveId)
+    {
+        if (!_workspace.TryGet(curveId, out var dataset) || dataset is not LineProfileDataset curve)
+        {
+            return null;
+        }
+
+        var step = curve.Provenance.Steps.FirstOrDefault(s => s.OperationId is LineProfileId or ProfileId);
+        if (step is null || !_workspace.TryGet(step.InputDatasetId, out var input) || input is not ScanImageDataset source)
+        {
+            return null;
+        }
+
+        var p = step.Parameters;
+        if (step.OperationId == LineProfileId)
+        {
+            // Free line: the endpoints are recorded directly (already clamped to the image at run time).
+            if (!TryReadDouble(p, LineProfileOperation.X0Parameter, out var x0)
+                || !TryReadDouble(p, LineProfileOperation.Y0Parameter, out var y0)
+                || !TryReadDouble(p, LineProfileOperation.X1Parameter, out var x1)
+                || !TryReadDouble(p, LineProfileOperation.Y1Parameter, out var y1))
+            {
+                return null;
+            }
+
+            return new MeasurementLine(source.Id, x0, y0, x1, y1);
+        }
+
+        // Row/column cross-section: convert the index to a line spanning the full width (row) or height (column).
+        if (!TryReadInt(p, ProfileOperation.IndexParameter, out var index)
+            || !TryReadInt(p, ProfileOperation.OrientationParameter, out var orientation))
+        {
+            return null;
+        }
+
+        return orientation == (int)ProfileOrientation.Row
+            ? new MeasurementLine(source.Id, 0, index, source.Data.Width - 1, index)
+            : new MeasurementLine(source.Id, index, 0, index, source.Data.Height - 1);
+    }
+
     // Reads a provenance parameter recorded as a whole number (the region bounds are integer pixel indices).
     private static bool TryReadInt(IReadOnlyDictionary<string, PhysicalValue> parameters, string key, out int value)
     {
@@ -253,6 +302,19 @@ public sealed class ImageAnalysisUseCase : IImageAnalysisUseCase
         }
 
         value = (int)pv.Value;
+        return true;
+    }
+
+    // Reads a finite provenance parameter (the free line's endpoints are real pixel coordinates).
+    private static bool TryReadDouble(IReadOnlyDictionary<string, PhysicalValue> parameters, string key, out double value)
+    {
+        value = 0.0;
+        if (!parameters.TryGetValue(key, out var pv) || !double.IsFinite(pv.Value))
+        {
+            return false;
+        }
+
+        value = pv.Value;
         return true;
     }
 

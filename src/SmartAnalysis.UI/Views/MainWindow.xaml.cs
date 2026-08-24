@@ -179,6 +179,7 @@ public partial class MainWindow : Window
                 field.PropertyChanged += LineField_PropertyChanged;
             }
 
+            SingleImage.IsLineEditable = true; // a line-profile form drives a draggable line
             SeedDefaultLineIfEmpty();
             LineProfilePanel.Visibility = Visibility.Visible; // dock the live chart
             UpdateLinePreview();
@@ -420,14 +421,39 @@ public partial class MainWindow : Window
     private void RenderImages()
     {
         var colormap = _viewModel.Colormap;
+
+        // The docked profile panel belongs to a line-profile editor (WireLinePreview) or a committed curve paired with
+        // its source (below). When neither applies, collapse a panel left over from a previous curve view.
+        if (_lineFields.Count == 0 && !_viewModel.ShowCurveSourceImage)
+        {
+            LineProfilePanel.Visibility = Visibility.Collapsed;
+            ProfileChart.Clear();
+        }
+
         if (_viewModel.ActiveCurve is { } curve)
         {
-            // The first curve-producing op (A08 PSD): route the active line profile to the curve view.
-            SingleCurve.Render(RenderInputFactory.ForLineProfile(curve));
-            SingleImage.Clear();
             SingleSurface.Clear();
             BeforeImageView.Clear();
             AfterImageView.Clear();
+
+            if (_viewModel.ShowCurveSourceImage && _viewModel.CurveSourceLine is { } line && _viewModel.CurveSourceImage is { } source)
+            {
+                // Pair the source image (with a read-only sampling line) above the profile curve, so the user sees
+                // WHERE on the image the profile runs. The line is display-only (not a draggable editor).
+                SingleImage.Render(RenderInputFactory.ForImage(source, colormap, _viewModel.EffectiveRange));
+                SingleImage.IsLineEditable = false;
+                SingleImage.SetLinePreview(line.X0, line.Y0, line.X1, line.Y1);
+                ProfileChart.Render(RenderInputFactory.ForLineProfile(curve));
+                LineProfilePanel.Visibility = Visibility.Visible;
+                SingleCurve.Clear();
+            }
+            else
+            {
+                // A curve with no reconstructable source line (e.g. a PSD): full-screen curve view.
+                SingleCurve.Render(RenderInputFactory.ForLineProfile(curve));
+                SingleImage.Clear();
+            }
+
             return;
         }
 
