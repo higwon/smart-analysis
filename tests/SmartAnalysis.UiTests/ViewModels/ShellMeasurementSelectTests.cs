@@ -123,6 +123,48 @@ public sealed class ShellMeasurementSelectTests
         Assert.Equal(InspectorRole.DatasetProperties, vm.InspectorRole); // and the Result card yields back to properties
     }
 
+    [Fact]
+    public void Selecting_a_region_measurement_from_another_image_switches_to_its_source()
+    {
+        var ws = new Workspace();
+        var source = Image();
+        var other = Image();
+        ws.Add(source);
+        ws.Add(other);
+        ws.SetActive(other.Id); // active is NOT the measurement's source
+
+        var analysis = new FakeImageAnalysis { Region = new MeasurementRegion(source.Id, RegionOverlayShape.Rectangle, 2, 3, 6, 4) };
+        var vm = NewShell(ws, analysis);
+
+        vm.SelectMeasurement(DatasetId.New());
+
+        Assert.Equal(source.Id, ws.Active.ActiveId); // switched to the image the region belongs to, so it can be drawn
+        Assert.NotNull(vm.SelectedRegion);           // and the overlay now shows (source is active)
+        Assert.True(vm.RoleIsResult);                // still showing the measurement result
+    }
+
+    [Fact]
+    public void Running_a_measure_form_closes_it_and_shows_its_region()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        var launcher = new MeasureRunLauncher();
+        var analysis = new FakeImageAnalysis { Region = new MeasurementRegion(image.Id, RegionOverlayShape.Rectangle, 1, 1, 4, 4) };
+        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
+            launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
+
+        vm.LauncherItems.Single(i => i.Id == "image.grains").LaunchCommand.Execute(null);
+        var form = Assert.IsType<ParameterFormViewModel>(vm.OperationEditor);
+        form.ApplyCommand.Execute(null); // a completed fake run continues synchronously → OnGenericRunCompleted
+
+        Assert.Null(vm.OperationEditor);   // the Measure form closes so its draggable region overlay can't linger
+        Assert.True(vm.RoleIsResult);
+        Assert.NotNull(vm.SelectedRegion); // and the just-run measurement's region shows on the active image
+    }
+
     private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
         => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
             new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
@@ -171,6 +213,22 @@ public sealed class ShellMeasurementSelectTests
         public OperationForm? GetForm(string operationId) => null;
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromException<OperationRunResult>(new NotImplementedException());
+    }
+
+    // A launcher offering one generic Measure op whose run completes synchronously with an attached measurement id.
+    private sealed class MeasureRunLauncher : IOperationLauncher
+    {
+        public IReadOnlyList<OperationLauncherItem> ApplicableToActive() =>
+            [new OperationLauncherItem("image.grains", "Grains", "Detect grains", OperationCategory.Measure)];
+
+        public OperationForm? GetForm(string operationId) => operationId == "image.grains"
+            ? new OperationForm("image.grains", "Grains", "Detect grains", OperationCategory.Measure, Array.Empty<ParameterFieldDescriptor>())
+            : null;
+
+        public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+            => Task.FromResult(OperationRunResult.Measured(
+                new StatisticsResult(true, "img", new[] { new StatisticsReadout("Count", 1, "1") }, Array.Empty<int>(), null),
+                Array.Empty<string>(), DatasetId.New()));
     }
 
     private sealed class FakePersistence : IWorkspacePersistence

@@ -562,8 +562,19 @@ public sealed class ShellViewModel : ObservableObject
     {
         if (result.Measurement is { } measurement)
         {
+            // A measurement leaves active unchanged, so (unlike a transform) nothing else closes the parameter form.
+            // Close it here so its draggable region overlay doesn't linger as an editable region over the result.
+            OperationEditor = null;
+
             Statistics = new StatisticsResultViewModel(measurement);
             InspectorRole = InspectorRole.Result;
+
+            // Show where the just-run measurement was taken (a region on the active image), same as re-selecting it.
+            SelectedRegion = result.MeasurementId is { } id
+                && _imageAnalysis.GetMeasurementRegion(id) is { } region
+                && region.SourceId == _workspace.Active.ActiveId
+                    ? region
+                    : null;
         }
     }
 
@@ -783,16 +794,24 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>Shows an attached measurement in the Inspector's Result role; the active dataset is unchanged.</summary>
     public void SelectMeasurement(DatasetId artifactId)
     {
-        if (_imageAnalysis.GetMeasurement(artifactId) is { } result)
+        if (_imageAnalysis.GetMeasurement(artifactId) is not { } result)
         {
-            Statistics = new StatisticsResultViewModel(result);
-            SelectedStep = null;
-            InspectorRole = InspectorRole.Result;
-
-            // If this measurement records a region on the currently active image, offer it as a read-only overlay.
-            var region = _imageAnalysis.GetMeasurementRegion(artifactId);
-            SelectedRegion = region is not null && region.SourceId == _workspace.Active.ActiveId ? region : null;
+            return;
         }
+
+        // A region measurement can only be drawn on its own source image (its bounds are that image's pixels). If the
+        // source isn't the active dataset but is still in the workspace, switch to it so "this came from here" shows
+        // wherever the measurement is selected from — not only when its source already happens to be active.
+        var region = _imageAnalysis.GetMeasurementRegion(artifactId);
+        if (region is not null && region.SourceId != _workspace.Active.ActiveId && _workspace.Contains(region.SourceId))
+        {
+            _workspace.SetActive(region.SourceId); // resets the Inspector via RefreshActiveState; re-shown below
+        }
+
+        Statistics = new StatisticsResultViewModel(result);
+        SelectedStep = null;
+        InspectorRole = InspectorRole.Result;
+        SelectedRegion = region is not null && region.SourceId == _workspace.Active.ActiveId ? region : null;
     }
 
     private async Task ImportAsync()
