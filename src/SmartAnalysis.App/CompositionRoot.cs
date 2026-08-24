@@ -29,6 +29,7 @@ public static class CompositionRoot
         services.AddWorkspaceStore();   // IWorkspaceStore  -> DirectoryWorkspaceStore (+ IUnitRegistry)
         services.AddPsiaTiffReader();   // IScanFileReader  -> PsiaTiffReader
         services.AddPsiaTiffWriter();   // IScanFileWriter  -> PsiaTiffWriter
+        services.AddDataExport();       // IDataExporter    -> CsvDataExporter (+ IExportUseCase)
 
         // Analysis operations (explicit per-module registration, ADR-005) + the registry over them.
         services.AddImageAnalysis();    // Statistics + Flatten (+ IExecutionEnvironmentProvider)

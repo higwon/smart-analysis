@@ -9,6 +9,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using SmartAnalysis.Application.Analysis;
+using SmartAnalysis.Application.Export;
 using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.UI.Controls;
@@ -36,13 +37,15 @@ public partial class MainWindow : Window
     private readonly ThemeManager _theme;
     private readonly ILineProfilePreview _lineProfilePreview;
     private readonly RegionContext _regionContext;
+    private readonly IExportUseCase _export;
 
-    public MainWindow(ShellViewModel viewModel, ThemeManager theme, ILineProfilePreview lineProfilePreview, RegionContext regionContext)
+    public MainWindow(ShellViewModel viewModel, ThemeManager theme, ILineProfilePreview lineProfilePreview, RegionContext regionContext, IExportUseCase export)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _lineProfilePreview = lineProfilePreview ?? throw new ArgumentNullException(nameof(lineProfilePreview));
         _regionContext = regionContext ?? throw new ArgumentNullException(nameof(regionContext));
+        _export = export ?? throw new ArgumentNullException(nameof(export));
         InitializeComponent();
         DataContext = viewModel;
 
@@ -418,25 +421,61 @@ public partial class MainWindow : Window
     // Fit the active single-image viewer to the stage (toolbar Fit action).
     private void Fit_Click(object sender, RoutedEventArgs e) => SingleImage.Fit();
 
-    // Export the active view as a PNG. Persistence/export UI is a later task (P01); this is a lightweight
-    // stage capture so the toolbar affordance is real rather than a placeholder.
+    // Export (V05): the picture the user is looking at (PNG of the view) OR the numbers behind it (data file). The
+    // file-type chosen in the save dialog decides which — a selected measurement exports its readouts + table, else
+    // the active dataset's samples/grid.
     private void Export_Click(object sender, RoutedEventArgs e)
     {
-        if (!_viewModel.HasActiveImage)
+        var data = _viewModel.SelectedMeasurementId is { } measurementId
+            ? _export.DescribeMeasurement(measurementId)
+            : _export.DescribeActive();
+        bool canPicture = _viewModel.HasActiveImage;
+        if (data is null && !canPicture)
         {
             return;
         }
 
+        var ext = _export.Extension;
+        var filters = new List<string>();
+        if (canPicture)
+        {
+            filters.Add("View as a picture (*.png)|*.png");
+        }
+
+        if (data is not null)
+        {
+            filters.Add($"{data.Label} (*.{ext})|*.{ext}");
+        }
+
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "PNG image (*.png)|*.png",
-            FileName = $"{_viewModel.ActiveTitle ?? "export"}.png",
+            Filter = string.Join("|", filters),
+            FileName = data is not null && !canPicture ? $"{data.SuggestedName}.{ext}" : $"{_viewModel.ActiveTitle ?? "export"}.png",
         };
         if (dialog.ShowDialog(this) != true)
         {
             return;
         }
 
+        // FilterIndex is 1-based over the filters we offered; picture is first whenever it is available.
+        bool wantsPicture = canPicture && dialog.FilterIndex == 1;
+        if (wantsPicture)
+        {
+            ExportPicture(dialog.FileName);
+            return;
+        }
+
+        var outcome = _viewModel.SelectedMeasurementId is { } id
+            ? _export.ExportMeasurement(id, dialog.FileName)
+            : _export.ExportActive(dialog.FileName);
+        if (!outcome.Success)
+        {
+            _viewModel.ShowStatus(outcome.Error ?? "The export failed.");
+        }
+    }
+
+    private void ExportPicture(string path)
+    {
         // ShowSingle3D (not raw Is3D) so an overlay editor that forces the 2D stage exports the visible 2D view.
         var target = ChooseExportTarget(_viewModel.IsBeforeAfter, _viewModel.ShowSingle3D, CompareContent, SingleSurface, SingleImage);
         var bitmap = new RenderTargetBitmap(
@@ -447,7 +486,7 @@ public partial class MainWindow : Window
 
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        using var stream = File.Create(dialog.FileName);
+        using var stream = File.Create(path);
         encoder.Save(stream);
     }
 

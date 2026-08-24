@@ -48,6 +48,26 @@ public sealed class ShellMeasurementSelectTests
     }
 
     [Fact]
+    public void Selecting_a_measurement_tracks_it_for_export_and_re_selecting_the_dataset_clears_it()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        var vm = NewShell(ws, new FakeImageAnalysis());
+        var artifactId = DatasetId.New();
+        vm.SelectMeasurement(artifactId);
+
+        Assert.Equal(artifactId, vm.SelectedMeasurementId); // so Export can offer "this measurement"
+        Assert.True(vm.HasSelectedMeasurement);
+
+        vm.Select(vm.ExplorerNodes.Single(n => n.Id == image.Id)); // back to the dataset → no measurement selected
+        Assert.Null(vm.SelectedMeasurementId);
+        Assert.False(vm.HasSelectedMeasurement);
+    }
+
+    [Fact]
     public void Selecting_a_region_measurement_offers_its_region_on_the_active_image()
     {
         var ws = new Workspace();
