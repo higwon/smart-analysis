@@ -1,4 +1,3 @@
-using System.Linq;
 using SmartAnalysis.Visualization.Rendering;
 
 namespace SmartAnalysis.UI.Controls;
@@ -25,14 +24,6 @@ public static class CurvePlotBuilder
         ArgumentNullException.ThrowIfNull(input);
 
         plot.Clear();
-
-        // Clear() drops plottables but NOT axes added via AddRightAxis(), so on a reused plot they accumulate every
-        // render (one extra right axis per refresh). Remove any non-default Y axis before rebuilding.
-        foreach (var extra in plot.Axes.GetYAxes().Where(a => a != plot.Axes.Left).ToList())
-        {
-            plot.Axes.Remove(extra);
-        }
-
         plot.FigureBackground.Color = theme.Figure;
         plot.DataBackground.Color = theme.DataArea;
         plot.Grid.MajorLineColor = theme.Grid;
@@ -42,31 +33,15 @@ public static class CurvePlotBuilder
         plot.YLabel($"{input.Y.Title} ({input.Y.Unit})");
 
         var palette = theme.Series is { Length: > 0 } ? theme.Series : [new ScottPlot.Color(37, 99, 235)];
-        ScottPlot.IYAxis? rightAxis = null;
         for (int i = 0; i < input.Series.Count; i++)
         {
             var s = input.Series[i];
-            var color = palette[i % palette.Length];
             // ToArray copies the borrowed ReadOnlyMemory — ScottPlot owns the copy; we retain nothing (V02/ADR-011).
             var line = plot.Add.SignalXY(s.X.ToArray(), s.Y.ToArray());
             line.LegendText = s.Name;
-            line.Color = color;
+            line.Color = palette[i % palette.Length];
             line.LineWidth = 1.5f;
-
-            // A secondary-axis series (e.g. a mean-removed PREVIEW next to its SOURCE) gets its own right Y axis,
-            // auto-scaled to its own values, so both curves' shapes read clearly instead of one crushing the other.
-            if (s.OnSecondaryAxis)
-            {
-                rightAxis ??= plot.Axes.AddRightAxis();
-                line.Axes.YAxis = rightAxis;
-                rightAxis.Label.Text = s.Name; // name the right scale (e.g. "PREVIEW")
-            }
         }
-
-        // Colour every axis with the theme AFTER adding the right axis (AddRightAxis happens post the initial
-        // Axes.Color, so its ticks/label/frame would otherwise keep ScottPlot's default dark colour — invisible on the
-        // dark chart). This re-applies the theme axis colour to all axes, the new right one included.
-        plot.Axes.Color(theme.Axis);
 
         if (input.Series.Count > 1)
         {

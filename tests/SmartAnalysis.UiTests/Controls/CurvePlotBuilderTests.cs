@@ -58,39 +58,17 @@ public sealed class CurvePlotBuilderTests
     }
 
     [Fact]
-    public void Configure_puts_a_secondary_axis_series_on_its_own_right_y_axis()
+    public void Configure_puts_both_series_on_the_same_shared_y_axis()
     {
         var plot = new ScottPlot.Plot();
-        var x = new double[] { 0, 1, 2, 3 };
-        var input = new CurveRenderInput(
-            [
-                new XySeries("SOURCE", x, new double[] { 0.24, 0.24, 0.24, 0.24 }),
-                new XySeries("PREVIEW", x, new double[] { 0, 0, 0, 0 }, onSecondaryAxis: true),
-            ],
-            new AxisView("Position", "nm", 0, 3, 4), new AxisView("Height", "nm", 0, 1, 4));
 
-        CurvePlotBuilder.Configure(plot, input, Theme());
+        CurvePlotBuilder.Configure(plot, Input(2), Theme()); // SOURCE + PREVIEW overlay
 
-        Assert.True(plot.Axes.GetYAxes().Count() >= 2); // a left (source) + a right (preview) Y axis, each auto-scaled
-    }
-
-    [Fact]
-    public void Configure_does_not_accumulate_right_axes_across_reconfigures()
-    {
-        var plot = new ScottPlot.Plot();
-        var x = new double[] { 0, 1, 2, 3 };
-        CurveRenderInput WithSecondary() => new(
-            [
-                new XySeries("SOURCE", x, new double[] { 0.24, 0.24, 0.24, 0.24 }),
-                new XySeries("PREVIEW", x, new double[] { 0, 0, 0, 0 }, onSecondaryAxis: true),
-            ],
-            new AxisView("Position", "nm", 0, 3, 4), new AxisView("Height", "nm", 0, 1, 4));
-
-        CurvePlotBuilder.Configure(plot, WithSecondary(), Theme());
-        CurvePlotBuilder.Configure(plot, WithSecondary(), Theme()); // a live param change re-renders on the same plot
-        CurvePlotBuilder.Configure(plot, WithSecondary(), Theme());
-
-        Assert.Equal(2, plot.Axes.GetYAxes().Count()); // one left + exactly one right — not a new right axis each render
+        // Both series must share ONE Y axis (the left) — a truthful before/after amplitude comparison. (Independent
+        // per-curve axes would make a small-amplitude result look the same height as a large-amplitude source.)
+        var signals = plot.GetPlottables<ScottPlot.Plottables.SignalXY>().ToList();
+        Assert.Equal(2, signals.Count);
+        Assert.All(signals, s => Assert.Same(plot.Axes.Left, s.Axes.YAxis));
     }
 
     [Fact]

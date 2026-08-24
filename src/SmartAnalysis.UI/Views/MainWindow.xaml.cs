@@ -464,19 +464,17 @@ public partial class MainWindow : Window
     // (profile flatten/crop/…), so the before/after shape is compared on one set of axes. Otherwise the plain curve.
     private void RenderCurve(AfmCurveView target, LineProfileDataset curve)
     {
-        // A value-transform op (flatten/baseline/smooth) is being previewed: overlay SOURCE and PREVIEW, with PREVIEW on
-        // its own right Y axis so a mean-removed result (near 0) stays readable next to the source's offset (a shared
-        // axis would crush both to flat lines). When the current parameters yield NO preview (e.g. an even
-        // Savitzky-Golay window is rejected), keep SOURCE alone — labelled "SOURCE" — so the view stays in preview
-        // framing instead of reverting to the plain curve.
+        // A value-transform op (flatten/baseline/smooth) is being previewed: overlay SOURCE and PREVIEW on the SAME Y
+        // axis (combined auto-scale) so amplitude, offset, and smoothing are compared truthfully — independent per-curve
+        // scales would make a 10-amplitude result look the same height as a 100-amplitude source. When the current
+        // parameters yield NO preview (e.g. an even Savitzky-Golay window is rejected), keep SOURCE alone — labelled
+        // "SOURCE" — so the view stays in preview framing instead of reverting to the plain curve.
         if (_viewModel.IsOperationPreview)
         {
             var sourceInput = RenderInputFactory.ForLineProfile(curve, "SOURCE");
             if (_viewModel.OperationPreviewCurve is { } preview && preview.Series.Count > 0)
             {
-                var previewSeries = preview.Series[0];
-                var previewOnRight = new XySeries("PREVIEW", previewSeries.X, previewSeries.Y, onSecondaryAxis: true);
-                target.Render(new CurveRenderInput([sourceInput.Series[0], previewOnRight], sourceInput.X, sourceInput.Y));
+                target.Render(new CurveRenderInput([sourceInput.Series[0], preview.Series[0]], sourceInput.X, sourceInput.Y));
             }
             else
             {

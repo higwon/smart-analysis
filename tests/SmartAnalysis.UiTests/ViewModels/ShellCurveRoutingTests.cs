@@ -240,7 +240,9 @@ public sealed class ShellCurveRoutingTests
         vm.LauncherItems.Single(i => i.Id == "profile.crop").LaunchCommand.Execute(null); // a range op (start/count)
         await vm.OperationPreviewSettled;
 
-        // Crop shows its range as vertical markers on the source curve (view-side), not a source-vs-preview overlay.
+        // Crop derives a curve, but its start/count shape makes it a RANGE editor: the shell excludes it from the
+        // preview strategy (IsProfileRangeEditor), so IsOperationPreview stays false — which is exactly what lets
+        // RenderCurve fall through the preview branch to the vertical-marker branch (the markers are a live path).
         Assert.False(vm.IsOperationPreview);
         Assert.Null(vm.OperationPreviewCurve);
     }
