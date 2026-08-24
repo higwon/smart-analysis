@@ -58,6 +58,23 @@ public sealed class CurvePlotBuilderTests
     }
 
     [Fact]
+    public void Configure_puts_a_secondary_axis_series_on_its_own_right_y_axis()
+    {
+        var plot = new ScottPlot.Plot();
+        var x = new double[] { 0, 1, 2, 3 };
+        var input = new CurveRenderInput(
+            [
+                new XySeries("SOURCE", x, new double[] { 0.24, 0.24, 0.24, 0.24 }),
+                new XySeries("PREVIEW", x, new double[] { 0, 0, 0, 0 }, onSecondaryAxis: true),
+            ],
+            new AxisView("Position", "nm", 0, 3, 4), new AxisView("Height", "nm", 0, 1, 4));
+
+        CurvePlotBuilder.Configure(plot, input, Theme());
+
+        Assert.True(plot.Axes.GetYAxes().Count() >= 2); // a left (source) + a right (preview) Y axis, each auto-scaled
+    }
+
+    [Fact]
     public void Configure_clears_previous_series_on_reconfigure()
     {
         var plot = new ScottPlot.Plot();

@@ -244,7 +244,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        WriteLineFields((0, (image.Y.Count - 1) / 2.0, image.X.Count - 1, (image.Y.Count - 1) / 2.0));
+        // Seed a horizontal mid-line inset from the left/right edges (not the full width), so the body can be dragged
+        // left/right from the start — a full-width line is pinned to both edges and can only move vertically. Endpoints
+        // can still extend it to the full width.
+        double maxX = image.X.Count - 1;
+        double mid = (image.Y.Count - 1) / 2.0;
+        double inset = Math.Round(maxX * 0.15);
+        WriteLineFields((inset, mid, maxX - inset, mid));
     }
 
     private static bool HasLineFields(ParameterFormViewModel form)
@@ -458,11 +464,15 @@ public partial class MainWindow : Window
     // (profile flatten/crop/…), so the before/after shape is compared on one set of axes. Otherwise the plain curve.
     private void RenderCurve(AfmCurveView target, LineProfileDataset curve)
     {
-        // A value-transform op (flatten/baseline/smooth): show the PREVIEW result ALONE, auto-scaled to itself, so its
-        // shape is readable even when the op removed the offset (overlaying it on the source would crush both to flat).
+        // A value-transform op (flatten/baseline/smooth): overlay SOURCE and PREVIEW, but put PREVIEW on its own right
+        // Y axis so a mean-removed result (near 0) stays readable next to the source (its offset) instead of both
+        // crushing to flat lines on one shared scale.
         if (_viewModel.IsOperationPreview && _viewModel.OperationPreviewCurve is { } preview && preview.Series.Count > 0)
         {
-            target.Render(preview);
+            var sourceInput = RenderInputFactory.ForLineProfile(curve, "SOURCE");
+            var previewSeries = preview.Series[0];
+            var previewOnRight = new XySeries("PREVIEW", previewSeries.X, previewSeries.Y, onSecondaryAxis: true);
+            target.Render(new CurveRenderInput([sourceInput.Series[0], previewOnRight], sourceInput.X, sourceInput.Y));
             return;
         }
 

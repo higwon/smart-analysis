@@ -33,14 +33,27 @@ public static class CurvePlotBuilder
         plot.YLabel($"{input.Y.Title} ({input.Y.Unit})");
 
         var palette = theme.Series is { Length: > 0 } ? theme.Series : [new ScottPlot.Color(37, 99, 235)];
+        ScottPlot.IYAxis? rightAxis = null;
         for (int i = 0; i < input.Series.Count; i++)
         {
             var s = input.Series[i];
+            var color = palette[i % palette.Length];
             // ToArray copies the borrowed ReadOnlyMemory — ScottPlot owns the copy; we retain nothing (V02/ADR-011).
             var line = plot.Add.SignalXY(s.X.ToArray(), s.Y.ToArray());
             line.LegendText = s.Name;
-            line.Color = palette[i % palette.Length];
+            line.Color = color;
             line.LineWidth = 1.5f;
+
+            // A secondary-axis series (e.g. a mean-removed PREVIEW next to its SOURCE) gets its own right Y axis,
+            // auto-scaled to its own values, so both curves' shapes read clearly instead of one crushing the other.
+            if (s.OnSecondaryAxis)
+            {
+                rightAxis ??= plot.Axes.AddRightAxis();
+                line.Axes.YAxis = rightAxis;
+                rightAxis.Label.Text = s.Name;                 // name the right scale (e.g. "PREVIEW")
+                rightAxis.Label.ForeColor = color;             // tie the axis label to its series colour
+                rightAxis.FrameLineStyle.Color = color;
+            }
         }
 
         if (input.Series.Count > 1)

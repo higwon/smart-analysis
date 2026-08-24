@@ -79,7 +79,7 @@ public sealed record ImageRenderInput
 /// <summary>One labeled XY series (e.g. a profile or spectrum). Immutable; X and Y have equal length.</summary>
 public sealed record XySeries
 {
-    public XySeries(string name, ReadOnlyMemory<double> x, ReadOnlyMemory<double> y)
+    public XySeries(string name, ReadOnlyMemory<double> x, ReadOnlyMemory<double> y, bool onSecondaryAxis = false)
     {
         if (x.Length != y.Length)
         {
@@ -89,6 +89,7 @@ public sealed record XySeries
         Name = string.IsNullOrWhiteSpace(name) ? "series" : name;
         X = x;
         Y = y;
+        OnSecondaryAxis = onSecondaryAxis;
     }
 
     public string Name { get; }
@@ -96,6 +97,11 @@ public sealed record XySeries
     public ReadOnlyMemory<double> X { get; }
 
     public ReadOnlyMemory<double> Y { get; }
+
+    /// <summary>Plot this series against a <b>secondary (right) Y axis</b> auto-scaled to its own values — for
+    /// comparing two curves whose value ranges differ a lot (e.g. a source vs a mean-removed preview), which a shared
+    /// axis would crush to flat lines. Default false (the primary left axis).</summary>
+    public bool OnSecondaryAxis { get; }
 }
 
 /// <summary>An XY plot to render: one or more <see cref="XySeries"/> with X/Y axis views. Immutable.</summary>
