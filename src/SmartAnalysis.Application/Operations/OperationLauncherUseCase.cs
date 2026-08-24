@@ -86,10 +86,11 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         }
 
         var fields = descriptor.Parameters.Parameters.Select(ToField).ToArray();
-        // DerivesImage tells the shell an image→image transform (a live SOURCE/PREVIEW compare) apart from an
-        // image→curve one BEFORE running — Process alone means "derives a dataset", not "derives an image".
+        // DerivesImage / DerivesCurve tell the shell what a Process op produces BEFORE running (Process alone only
+        // means "derives a dataset"), so it can offer an image SOURCE/PREVIEW compare or a curve source-vs-preview overlay.
         var derivesImage = descriptor.DerivedKind == DataKind.ScanImage;
-        return new OperationForm(descriptor.Id, descriptor.DisplayName, descriptor.Summary, CategoryOf(descriptor.Output), fields, derivesImage);
+        var derivesCurve = descriptor.DerivedKind == DataKind.LineProfile;
+        return new OperationForm(descriptor.Id, descriptor.DisplayName, descriptor.Summary, CategoryOf(descriptor.Output), fields, derivesImage, derivesCurve);
     }
 
     public async Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken cancellationToken = default)
@@ -182,6 +183,46 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
             finally
             {
                 image.Dispose();
+            }
+        }
+
+        result.DerivedDataset?.Dispose();
+        return null;
+    }
+
+    public async Task<CurveRenderInput?> PreviewCurveAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken cancellationToken = default)
+    {
+        // The curve counterpart of PreviewAsync: run a curve→curve op on a transient via the SAME Prepare path apply
+        // uses, project an OWNED curve render input ("PREVIEW"; ForLineProfile copies X/Y), then dispose the transient.
+        var prepared = Prepare(operationId, values);
+        if (prepared.Error is not null)
+        {
+            return null;
+        }
+
+        OperationResult result;
+        try
+        {
+            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (result.DerivedDataset is LineProfileDataset curve)
+        {
+            try
+            {
+                return RenderInputFactory.ForLineProfile(curve, "PREVIEW");
+            }
+            finally
+            {
+                curve.Dispose();
             }
         }
 

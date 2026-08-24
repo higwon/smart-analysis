@@ -72,8 +72,9 @@ public sealed class ShellViewModel : ObservableObject
     private Task _liveMeasurementsTask = Task.CompletedTask;
     private bool _isOperationPreview;
     private ImageRenderInput? _operationPreviewInput;
+    private CurveRenderInput? _operationPreviewCurve;
     private Task _operationPreviewTask = Task.CompletedTask;
-    private Func<DatasetId, CancellationToken, Task<ImageRenderInput?>>? _computePreview;
+    private Func<DatasetId, CancellationToken, Task<PreviewOutput>>? _computePreview;
     private CancellationTokenSource? _previewCts;
     private int _previewGeneration;
     private HistoryRowViewModel? _selectedStep;
@@ -213,32 +214,42 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>Whether an operation's settings preview owns the stage (source-vs-preview split, uncommitted).</summary>
     public bool IsOperationPreview => _isOperationPreview;
 
-    /// <summary>The compare panes show for a real Before/After OR an operation settings preview.</summary>
-    public bool ShowComparePanes => IsBeforeAfter || _isOperationPreview;
+    /// <summary>The compare panes show for a real Before/After OR an IMAGE operation settings preview (a curve preview
+    /// overlays on the curve view instead — see <see cref="OperationPreviewCurve"/>).</summary>
+    public bool ShowComparePanes => IsBeforeAfter || (_isOperationPreview && HasActiveImage);
 
     /// <summary>Left/right pane captions: source-vs-preview while previewing, else the before/after comparison.</summary>
     public string CompareBeforeLabel => _isOperationPreview ? "SOURCE" : "BEFORE";
     public string CompareAfterLabel => _isOperationPreview ? "PREVIEW" : "AFTER";
 
-    /// <summary>The owned render input of the live operation preview (the PREVIEW pane); null when not previewing.</summary>
+    /// <summary>The owned render input of the live IMAGE operation preview (the PREVIEW pane); null when not previewing.</summary>
     public ImageRenderInput? OperationPreviewInput => _operationPreviewInput;
+
+    /// <summary>The owned render input of the live CURVE operation preview (overlaid as "PREVIEW" on the source curve);
+    /// null when not previewing a curve op.</summary>
+    public CurveRenderInput? OperationPreviewCurve => _operationPreviewCurve;
 
     /// <summary>Awaitable settle of the in-flight preview computation (deterministic tests).</summary>
     public Task OperationPreviewSettled => _operationPreviewTask;
 
-    // Resolves the preview strategy for the editor being shown: the semantic Flatten panel, or a generic form that
-    // derives an IMAGE (image→image). An image→curve Process (e.g. Power Spectral Density) does NOT enter the
-    // compare mode — Process alone means "derives a dataset", not "derives an image", so the gate is form.DerivesImage,
-    // decided before running. Measure forms and the overlay editors (crop/line, own live preview) are excluded too.
+    // The result of one preview compute — an image OR a curve render input (whichever the op derives).
+    private readonly record struct PreviewOutput(ImageRenderInput? Image, CurveRenderInput? Curve);
+
+    // Resolves the preview strategy for the editor being shown: the semantic Flatten panel, a generic form that
+    // derives an IMAGE (image→image, active image), or one that derives a CURVE (curve→curve, active curve). Process
+    // alone means "derives a dataset", not a specific kind — so the gate is form.DerivesImage / form.DerivesCurve,
+    // decided before running. Measure forms and the image-overlay editors (crop/line, own live preview) are excluded.
     // A null strategy leaves the stage in its single view.
     private void SetOperationPreview(object? editor)
     {
         _computePreview = editor switch
         {
             FlattenPanelViewModel when HasActiveImage
-                => (id, ct) => _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange, ct),
+                => async (id, ct) => new PreviewOutput(await _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange, ct).ConfigureAwait(true), null),
             ParameterFormViewModel form when HasActiveImage && form.DerivesImage && !IsImageOverlayEditor(form)
-                => (id, ct) => _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange, ct),
+                => async (id, ct) => new PreviewOutput(await _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange, ct).ConfigureAwait(true), null),
+            ParameterFormViewModel form when _activeCurve is not null && form.DerivesCurve && !IsImageOverlayEditor(form)
+                => async (id, ct) => new PreviewOutput(null, await _launcher.PreviewCurveAsync(form.Id, form.Values, ct).ConfigureAwait(true)),
             _ => null,
         };
 
@@ -254,6 +265,7 @@ public sealed class ShellViewModel : ObservableObject
 
         _isOperationPreview = on;
         _operationPreviewInput = null; // clear the old preview; a fresh one is computed below when turning on
+        _operationPreviewCurve = null;
         OnPropertyChanged(nameof(IsOperationPreview));
         OnPropertyChanged(nameof(ShowComparePanes));
         OnPropertyChanged(nameof(CompareBeforeLabel));
@@ -261,6 +273,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSingle2D));
         OnPropertyChanged(nameof(ShowSingle3D));
         OnPropertyChanged(nameof(OperationPreviewInput));
+        OnPropertyChanged(nameof(OperationPreviewCurve));
 
         if (on)
         {
@@ -281,7 +294,7 @@ public sealed class ShellViewModel : ObservableObject
     // a slower A can never overwrite a newer B (an ActiveId-only guard misses this: both A and B are the same image).
     private void RefreshOperationPreview()
     {
-        if (_computePreview is not { } compute || _workspace.Active.ActiveId is not { } id || !HasActiveImage)
+        if (_computePreview is not { } compute || _workspace.Active.ActiveId is not { } id)
         {
             return;
         }
@@ -299,24 +312,26 @@ public sealed class ShellViewModel : ObservableObject
         _previewCts = null;
     }
 
-    private async Task ComputeOperationPreviewAsync(Func<DatasetId, CancellationToken, Task<ImageRenderInput?>> compute, DatasetId id, int generation, CancellationToken cancellationToken)
+    private async Task ComputeOperationPreviewAsync(Func<DatasetId, CancellationToken, Task<PreviewOutput>> compute, DatasetId id, int generation, CancellationToken cancellationToken)
     {
         try
         {
-            var input = await compute(id, cancellationToken).ConfigureAwait(true);
+            var output = await compute(id, cancellationToken).ConfigureAwait(true);
 
-            // Apply only if this is still the newest request for the still-previewed active image. The generation
-            // check is what defeats out-of-order completion; the ActiveId check drops a preview for a replaced image.
+            // Apply only if this is still the newest request for the still-previewed active dataset. The generation
+            // check is what defeats out-of-order completion; the ActiveId check drops a preview for a replaced dataset.
             if (_isOperationPreview && generation == _previewGeneration && _workspace.Active.ActiveId == id)
             {
-                _operationPreviewInput = input;
+                _operationPreviewInput = output.Image;
+                _operationPreviewCurve = output.Curve;
                 OnPropertyChanged(nameof(OperationPreviewInput));
+                OnPropertyChanged(nameof(OperationPreviewCurve));
                 ImagesChanged?.Invoke(this, EventArgs.Empty);
             }
         }
         catch
         {
-            // Best-effort preview: a cancellation or failure just shows no PREVIEW image, never an error banner.
+            // Best-effort preview: a cancellation or failure just shows no PREVIEW, never an error banner.
         }
     }
 

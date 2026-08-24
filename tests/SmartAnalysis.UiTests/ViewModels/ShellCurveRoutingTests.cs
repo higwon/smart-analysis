@@ -33,8 +33,11 @@ public sealed class ShellCurveRoutingTests
         => NewShell(ws, new FakeImageAnalysis());
 
     private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
+        => NewShell(ws, analysis, new FakeLauncher());
+
+    private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis, IOperationLauncher launcher)
         => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
-               new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
+               launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ScanImageDataset Image()
         => new(
@@ -162,6 +165,62 @@ public sealed class ShellCurveRoutingTests
         Assert.Null(vm.CurveSourceLine);
         Assert.Null(vm.CurveSourceImage);
         Assert.True(vm.IsSingleImage);
+    }
+
+    [Fact]
+    public async Task Opening_a_curve_process_form_previews_the_curve_without_image_panes()
+    {
+        var ws = new Workspace();
+        var curve = Curve();
+        ws.Add(curve);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(curve.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "profile.flatten").LaunchCommand.Execute(null); // a curve→curve Process op
+        await vm.OperationPreviewSettled;
+
+        Assert.True(vm.IsOperationPreview);
+        Assert.False(vm.ShowComparePanes);        // a curve preview overlays on the curve view, not the image compare panes
+        Assert.NotNull(vm.OperationPreviewCurve); // the PREVIEW curve to overlay on the source curve
+    }
+
+    [Fact]
+    public async Task Leaving_a_curve_process_preview_clears_it()
+    {
+        var ws = new Workspace();
+        var a = Curve();
+        var b = Curve();
+        ws.Add(a);
+        ws.Add(b);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(a.Id);
+        vm.LauncherItems.Single(i => i.Id == "profile.flatten").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+        Assert.True(vm.IsOperationPreview);
+
+        ws.SetActive(b.Id); // a new active dataset closes the editor → preview off
+        Assert.False(vm.IsOperationPreview);
+        Assert.Null(vm.OperationPreviewCurve);
+    }
+
+    // A launcher offering one curve→curve Process op that previews a canned curve.
+    private sealed class CurvePreviewLauncher : IOperationLauncher
+    {
+        public IReadOnlyList<OperationLauncherItem> ApplicableToActive() =>
+            [new OperationLauncherItem("profile.flatten", "Flatten", "Detrend the profile", OperationCategory.Process)];
+
+        public OperationForm? GetForm(string operationId) => operationId == "profile.flatten"
+            ? new OperationForm("profile.flatten", "Flatten", "Detrend the profile", OperationCategory.Process,
+                [new ParameterFieldDescriptor("order", "Order", ParameterFieldKind.Integer, 1, 0, 8, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesCurve: true)
+            : null;
+
+        public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+            => Task.FromException<OperationRunResult>(new NotImplementedException());
+
+        public Task<CurveRenderInput?> PreviewCurveAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+            => Task.FromResult<CurveRenderInput?>(RenderInputFactory.ForLineProfile(Curve(), "PREVIEW"));
     }
 
     // ---- minimal fakes (construction only) ----

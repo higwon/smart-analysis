@@ -1,5 +1,6 @@
 using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Analysis.Operations.Image;
+using SmartAnalysis.Analysis.Profiles;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Operations;
@@ -223,5 +224,69 @@ public sealed class OperationLauncherUseCaseTests
         var (_, _, _, launcher) = await SetupAsync();
 
         Assert.Null(await launcher.PreviewAsync("image.nope", new Dictionary<string, object?>(), Colormap.Grayscale, range: null));
+    }
+
+    // --- PreviewCurveAsync: the curve counterpart (curve→curve Process ops), for the source-vs-preview overlay ---
+
+    private static async Task<(Workspace ws, IOperationLauncher launcher)> SetupCurveAsync()
+    {
+        var read = await new PsiaTiffReader(StandardUnits.CreateRegistry())
+            .ReadAsync(FixturePath, ScanReadOptions.Default, CancellationToken.None);
+        var image = Assert.IsType<ScanImageDataset>(read.Dataset);
+
+        var ws = new Workspace();
+        ws.Add(image);
+
+        var env = new SystemExecutionEnvironmentProvider();
+        // Extract a row profile to make a curve active, then Flatten is the curve→curve op under preview.
+        var profileOp = new ProfileOperation(env);
+        var profile = Assert.IsType<LineProfileDataset>((await profileOp.RunAsync(
+            new OperationInput(image),
+            new ParameterSet(new Dictionary<string, object?> { ["orientation"] = ProfileOrientation.Row, ["index"] = 5 }),
+            progress: null, CancellationToken.None)).DerivedDataset);
+        ws.Add(profile);
+        ws.SetActive(profile.Id);
+
+        var registry = new OperationRegistry([new ProfileFlattenOperation(env), new ProfileRoughnessOperation(env)]);
+        return (ws, new OperationLauncherUseCase(ws, registry, new MeasurementStore()));
+    }
+
+    [Fact]
+    public async Task PreviewCurveAsync_derived_curve_returns_a_preview_committing_nothing()
+    {
+        var (ws, launcher) = await SetupCurveAsync();
+        var before = ws.Count;
+
+        var preview = await launcher.PreviewCurveAsync("profile.flatten", new Dictionary<string, object?> { ["order"] = 1 });
+
+        Assert.NotNull(preview);
+        Assert.NotEmpty(preview!.Series);           // an owned curve to overlay as PREVIEW
+        Assert.Equal("PREVIEW", preview.Series[0].Name);
+        Assert.Equal(before, ws.Count);             // committed nothing
+    }
+
+    [Fact]
+    public async Task PreviewCurveAsync_measurement_operation_has_no_curve_preview()
+    {
+        var (_, launcher) = await SetupCurveAsync();
+
+        // Profile roughness is a Measure over the curve — it derives no curve, so there is nothing to overlay.
+        Assert.Null(await launcher.PreviewCurveAsync("profile.roughness", new Dictionary<string, object?>()));
+    }
+
+    [Fact]
+    public async Task PreviewCurveAsync_invalid_parameter_shows_nothing()
+    {
+        var (_, launcher) = await SetupCurveAsync();
+
+        Assert.Null(await launcher.PreviewCurveAsync("profile.flatten", new Dictionary<string, object?> { ["order"] = 99 })); // above max (8)
+    }
+
+    [Fact]
+    public async Task PreviewCurveAsync_unknown_operation_shows_nothing()
+    {
+        var (_, launcher) = await SetupCurveAsync();
+
+        Assert.Null(await launcher.PreviewCurveAsync("profile.nope", new Dictionary<string, object?>()));
     }
 }

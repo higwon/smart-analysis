@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.UI.Controls;
 using SmartAnalysis.Domain.Geometry;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.ViewModels;
@@ -417,6 +418,21 @@ public partial class MainWindow : Window
         bool isBeforeAfter, bool showSingle3D, FrameworkElement compare, FrameworkElement surface, FrameworkElement image)
         => isBeforeAfter ? compare : showSingle3D ? surface : image;
 
+    // Renders a curve, overlaying the live PREVIEW series on the SOURCE while a curve→curve op is being previewed
+    // (profile flatten/crop/…), so the before/after shape is compared on one set of axes. Otherwise the plain curve.
+    private void RenderCurve(AfmCurveView target, LineProfileDataset curve)
+    {
+        if (_viewModel.IsOperationPreview && _viewModel.OperationPreviewCurve is { } preview && preview.Series.Count > 0)
+        {
+            var sourceInput = RenderInputFactory.ForLineProfile(curve, "SOURCE");
+            target.Render(new CurveRenderInput([sourceInput.Series[0], preview.Series[0]], sourceInput.X, sourceInput.Y));
+        }
+        else
+        {
+            target.Render(RenderInputFactory.ForLineProfile(curve));
+        }
+    }
+
     // Build transient render inputs and render them; retain nothing borrowed (V02 / ADR-011).
     private void RenderImages()
     {
@@ -446,14 +462,14 @@ public partial class MainWindow : Window
                 SingleImage.Render(RenderInputFactory.ForImage(source, colormap, _viewModel.EffectiveRange));
                 SingleImage.IsLineEditable = false;
                 SingleImage.SetLinePreview(line.X0, line.Y0, line.X1, line.Y1);
-                ProfileChart.Render(RenderInputFactory.ForLineProfile(curve));
+                RenderCurve(ProfileChart, curve);
                 LineProfilePanel.Visibility = Visibility.Visible;
                 SingleCurve.Clear();
             }
             else
             {
                 // A curve with no reconstructable source line (e.g. a PSD): full-screen curve view.
-                SingleCurve.Render(RenderInputFactory.ForLineProfile(curve));
+                RenderCurve(SingleCurve, curve);
                 SingleImage.Clear();
             }
 
