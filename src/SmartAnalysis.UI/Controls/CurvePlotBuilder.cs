@@ -1,3 +1,4 @@
+using System.Linq;
 using SmartAnalysis.Visualization.Rendering;
 
 namespace SmartAnalysis.UI.Controls;
@@ -24,6 +25,14 @@ public static class CurvePlotBuilder
         ArgumentNullException.ThrowIfNull(input);
 
         plot.Clear();
+
+        // Clear() drops plottables but NOT axes added via AddRightAxis(), so on a reused plot they accumulate every
+        // render (one extra right axis per refresh). Remove any non-default Y axis before rebuilding.
+        foreach (var extra in plot.Axes.GetYAxes().Where(a => a != plot.Axes.Left).ToList())
+        {
+            plot.Axes.Remove(extra);
+        }
+
         plot.FigureBackground.Color = theme.Figure;
         plot.DataBackground.Color = theme.DataArea;
         plot.Grid.MajorLineColor = theme.Grid;

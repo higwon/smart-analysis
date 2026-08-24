@@ -75,6 +75,25 @@ public sealed class CurvePlotBuilderTests
     }
 
     [Fact]
+    public void Configure_does_not_accumulate_right_axes_across_reconfigures()
+    {
+        var plot = new ScottPlot.Plot();
+        var x = new double[] { 0, 1, 2, 3 };
+        CurveRenderInput WithSecondary() => new(
+            [
+                new XySeries("SOURCE", x, new double[] { 0.24, 0.24, 0.24, 0.24 }),
+                new XySeries("PREVIEW", x, new double[] { 0, 0, 0, 0 }, onSecondaryAxis: true),
+            ],
+            new AxisView("Position", "nm", 0, 3, 4), new AxisView("Height", "nm", 0, 1, 4));
+
+        CurvePlotBuilder.Configure(plot, WithSecondary(), Theme());
+        CurvePlotBuilder.Configure(plot, WithSecondary(), Theme()); // a live param change re-renders on the same plot
+        CurvePlotBuilder.Configure(plot, WithSecondary(), Theme());
+
+        Assert.Equal(2, plot.Axes.GetYAxes().Count()); // one left + exactly one right — not a new right axis each render
+    }
+
+    [Fact]
     public void Configure_clears_previous_series_on_reconfigure()
     {
         var plot = new ScottPlot.Plot();
