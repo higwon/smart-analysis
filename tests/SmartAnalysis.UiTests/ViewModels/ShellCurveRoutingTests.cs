@@ -205,14 +205,40 @@ public sealed class ShellCurveRoutingTests
         Assert.Null(vm.OperationPreviewCurve);
     }
 
-    // A launcher offering one curve→curve Process op that previews a canned curve.
+    [Fact]
+    public async Task Switching_between_two_curve_process_forms_recomputes_the_preview()
+    {
+        var ws = new Workspace();
+        var curve = Curve();
+        ws.Add(curve);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(curve.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "profile.flatten").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+        Assert.Equal("profile.flatten", vm.OperationPreviewCurve!.Series[0].Name);
+
+        // Switch directly to another previewable op (both keep IsOperationPreview true) — the preview must recompute
+        // for the NEW op immediately, not linger on the previous op's result until a parameter is touched.
+        vm.LauncherItems.Single(i => i.Id == "profile.smooth").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+
+        Assert.Equal("profile.smooth", vm.OperationPreviewCurve!.Series[0].Name);
+    }
+
+    // A launcher offering two curve→curve Process ops; each previews a curve whose series is NAMED by its op id, so a
+    // test can tell which op's preview is showing.
     private sealed class CurvePreviewLauncher : IOperationLauncher
     {
         public IReadOnlyList<OperationLauncherItem> ApplicableToActive() =>
-            [new OperationLauncherItem("profile.flatten", "Flatten", "Detrend the profile", OperationCategory.Process)];
+        [
+            new OperationLauncherItem("profile.flatten", "Flatten", "Detrend the profile", OperationCategory.Process),
+            new OperationLauncherItem("profile.smooth", "Smooth", "Smooth the profile", OperationCategory.Process),
+        ];
 
-        public OperationForm? GetForm(string operationId) => operationId == "profile.flatten"
-            ? new OperationForm("profile.flatten", "Flatten", "Detrend the profile", OperationCategory.Process,
+        public OperationForm? GetForm(string operationId) => operationId is "profile.flatten" or "profile.smooth"
+            ? new OperationForm(operationId, operationId, "curve op", OperationCategory.Process,
                 [new ParameterFieldDescriptor("order", "Order", ParameterFieldKind.Integer, 1, 0, 8, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesCurve: true)
             : null;
 
@@ -220,7 +246,7 @@ public sealed class ShellCurveRoutingTests
             => Task.FromException<OperationRunResult>(new NotImplementedException());
 
         public Task<CurveRenderInput?> PreviewCurveAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
-            => Task.FromResult<CurveRenderInput?>(RenderInputFactory.ForLineProfile(Curve(), "PREVIEW"));
+            => Task.FromResult<CurveRenderInput?>(RenderInputFactory.ForLineProfile(Curve(), operationId)); // series named by op
     }
 
     // ---- minimal fakes (construction only) ----

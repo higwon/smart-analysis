@@ -253,7 +253,27 @@ public sealed class ShellViewModel : ObservableObject
             _ => null,
         };
 
-        SetOperationPreview(_computePreview is not null);
+        if (_computePreview is null)
+        {
+            SetOperationPreview(false);
+            return;
+        }
+
+        if (_isOperationPreview)
+        {
+            // Already previewing, but the editor (and its strategy) changed — a previewable op → another previewable
+            // op. The on/off toggle wouldn't re-run, so drop the stale preview now and recompute for the NEW op, else
+            // the previous op's PREVIEW lingers until the user first touches a parameter.
+            _operationPreviewInput = null;
+            _operationPreviewCurve = null;
+            OnPropertyChanged(nameof(OperationPreviewInput));
+            OnPropertyChanged(nameof(OperationPreviewCurve));
+            ImagesChanged?.Invoke(this, EventArgs.Empty); // clear the stale overlay immediately; the new one follows
+            RefreshOperationPreview();
+            return;
+        }
+
+        SetOperationPreview(true);
     }
 
     private void SetOperationPreview(bool on)
