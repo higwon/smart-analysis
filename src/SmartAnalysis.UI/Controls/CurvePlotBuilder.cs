@@ -59,11 +59,14 @@ public static class CurvePlotBuilder
             {
                 rightAxis ??= plot.Axes.AddRightAxis();
                 line.Axes.YAxis = rightAxis;
-                rightAxis.Label.Text = s.Name;                 // name the right scale (e.g. "PREVIEW")
-                rightAxis.Label.ForeColor = color;             // tie the axis label to its series colour
-                rightAxis.FrameLineStyle.Color = color;
+                rightAxis.Label.Text = s.Name; // name the right scale (e.g. "PREVIEW")
             }
         }
+
+        // Colour every axis with the theme AFTER adding the right axis (AddRightAxis happens post the initial
+        // Axes.Color, so its ticks/label/frame would otherwise keep ScottPlot's default dark colour — invisible on the
+        // dark chart). This re-applies the theme axis colour to all axes, the new right one included.
+        plot.Axes.Color(theme.Axis);
 
         if (input.Series.Count > 1)
         {
