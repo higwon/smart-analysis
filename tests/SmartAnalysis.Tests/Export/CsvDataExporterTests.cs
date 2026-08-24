@@ -115,6 +115,29 @@ public sealed class CsvDataExporterTests
     }
 
     [Fact]
+    public void A_recorded_parameter_keeps_its_unit_so_the_lineage_is_reproducible()
+    {
+        var path = TempCsv();
+        var step = new ProvenanceStep(
+            stepId: Guid.NewGuid().ToString("D"), inputDatasetId: DatasetId.New(), inputVersion: 0,
+            operationId: "profile.filter", operationVersion: 1, order: 0,
+            environment: ExecutionEnvironment.Unknown,
+            parameters: new Dictionary<string, PhysicalValue>
+            {
+                ["cutoff"] = new(0.5, StandardUnits.Micrometre),      // a physical parameter ...
+                ["order"] = new(1, StandardUnits.One),                 // ... and a dimensionless one
+            });
+        using var curve = Curve(ProvenanceRecord.DerivedFrom(DatasetId.New(), [step]));
+
+        new CsvDataExporter().ExportCurve(curve, path);
+
+        var preamble = Lines(path).Single(l => l.Contains("profile.filter"));
+        Assert.Contains("cutoff=0.5 um", preamble); // "cutoff=0.5" alone would not be reproducible
+        Assert.Contains("order=1", preamble);       // dimensionless stays bare (no "1" suffix)
+        Assert.DoesNotContain("order=1 1", preamble);
+    }
+
+    [Fact]
     public void Values_are_invariant_culture_so_a_comma_decimal_locale_cannot_corrupt_the_file()
     {
         var path = TempCsv();

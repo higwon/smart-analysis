@@ -410,6 +410,15 @@ public sealed class ShellViewModel : ObservableObject
         {
             if (SetProperty(ref _inspectorRole, value))
             {
+                // The measurement selection belongs to the Result role: any move off it (a step, an operation
+                // form, the dataset properties) drops it, so "export the measurement I am looking at" can never
+                // export a stale one. Callers entering the Result role set the id AFTER the role, so this never
+                // clears their own selection.
+                if (value != InspectorRole.Result)
+                {
+                    SelectedMeasurementId = null;
+                }
+
                 OnPropertyChanged(nameof(RoleIsDataset));
                 OnPropertyChanged(nameof(RoleIsOperation));
                 OnPropertyChanged(nameof(RoleIsResult));
@@ -627,6 +636,10 @@ public sealed class ShellViewModel : ObservableObject
                 && region.SourceId == _workspace.Active.ActiveId
                     ? region
                     : null;
+
+            // The just-run measurement is what the Result card shows, so it is what Export offers — set AFTER the
+            // role above (entering a non-Result role clears this).
+            SelectedMeasurementId = result.MeasurementId;
         }
     }
 

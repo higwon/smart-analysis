@@ -100,10 +100,14 @@ public sealed class CsvDataExporter : IDataExporter
         {
             var parameters = step.Parameters.Count == 0
                 ? string.Empty
-                : " · " + string.Join(" ", step.Parameters.Select(p => $"{p.Key}={Num(p.Value.Value)}"));
+                : " · " + string.Join(" ", step.Parameters.Select(p => $"{p.Key}={Num(p.Value.Value)}{UnitSuffix(p.Value.Unit.Symbol)}"));
             writer.WriteLine($"# step {step.Order + 1}: {step.OperationId}{parameters}");
         }
     }
+
+    // A parameter unit belongs in the lineage: "cutoff=0.5 um" is reproducible, "cutoff=0.5" is not. Dimensionless
+    // parameters (counts, orders, enum codes) carry no symbol and stay bare.
+    private static string UnitSuffix(string unit) => unit is "" or "1" ? string.Empty : " " + unit;
 
     private static string Header(string name, string unit)
         => Field(unit is "" or "1" ? name : $"{name} ({unit})");

@@ -189,6 +189,46 @@ public sealed class ShellMeasurementSelectTests
         => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
             new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
+    [Fact]
+    public void Running_a_measure_op_tracks_the_just_run_measurement_for_export()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        var launcher = new MeasureRunLauncher();
+        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+            launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
+
+        vm.LauncherItems.Single(i => i.Id == "image.grains").LaunchCommand.Execute(null);
+        Assert.IsType<ParameterFormViewModel>(vm.OperationEditor).ApplyCommand.Execute(null);
+
+        // Export must offer the measurement the Result card is showing — not the active image (the run path used to
+        // leave this null, so Export silently fell back to the image).
+        Assert.True(vm.RoleIsResult);
+        Assert.Equal(launcher.ProducedId, vm.SelectedMeasurementId);
+    }
+
+    [Fact]
+    public void Leaving_the_result_role_drops_the_measurement_export_selection()
+    {
+        var ws = new Workspace();
+        var image = Image();
+        ws.Add(image);
+        ws.SetActive(image.Id);
+
+        var vm = NewShell(ws, new FakeImageAnalysis());
+        vm.SelectMeasurement(DatasetId.New());
+        Assert.True(vm.HasSelectedMeasurement);
+
+        // A provenance step is a different Inspector role: the measurement is no longer what is on screen, so Export
+        // must not still offer it.
+        vm.SelectStep(new HistoryRowViewModel(1, "image.flatten", "order 1", HistoryStatus.Done));
+        Assert.Equal(InspectorRole.Step, vm.InspectorRole);
+        Assert.Null(vm.SelectedMeasurementId);
+    }
+
     private static ScanImageDataset Image()
         => new(
             DatasetId.New(), new DataSource("test", null),
@@ -245,10 +285,13 @@ public sealed class ShellMeasurementSelectTests
             ? new OperationForm("image.grains", "Grains", "Detect grains", OperationCategory.Measure, Array.Empty<ParameterFieldDescriptor>())
             : null;
 
+        // The id the run attaches, so a test can assert the shell tracks THAT measurement for export.
+        public DatasetId ProducedId { get; } = DatasetId.New();
+
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromResult(OperationRunResult.Measured(
                 new StatisticsResult(true, "img", new[] { new StatisticsReadout("Count", 1, "1") }, Array.Empty<int>(), null),
-                Array.Empty<string>(), DatasetId.New()));
+                Array.Empty<string>(), ProducedId));
     }
 
     private sealed class FakePersistence : IWorkspacePersistence
