@@ -33,8 +33,11 @@ public sealed class ShellCurveRoutingTests
         => NewShell(ws, new FakeImageAnalysis());
 
     private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
+        => NewShell(ws, analysis, new FakeLauncher());
+
+    private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis, IOperationLauncher launcher)
         => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
-               new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
+               launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ScanImageDataset Image()
         => new(
@@ -162,6 +165,117 @@ public sealed class ShellCurveRoutingTests
         Assert.Null(vm.CurveSourceLine);
         Assert.Null(vm.CurveSourceImage);
         Assert.True(vm.IsSingleImage);
+    }
+
+    [Fact]
+    public async Task Opening_a_curve_process_form_previews_the_curve_without_image_panes()
+    {
+        var ws = new Workspace();
+        var curve = Curve();
+        ws.Add(curve);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(curve.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "profile.flatten").LaunchCommand.Execute(null); // a curve→curve Process op
+        await vm.OperationPreviewSettled;
+
+        Assert.True(vm.IsOperationPreview);
+        Assert.False(vm.ShowComparePanes);        // a curve preview overlays on the curve view, not the image compare panes
+        Assert.NotNull(vm.OperationPreviewCurve); // the PREVIEW curve to overlay on the source curve
+    }
+
+    [Fact]
+    public async Task Leaving_a_curve_process_preview_clears_it()
+    {
+        var ws = new Workspace();
+        var a = Curve();
+        var b = Curve();
+        ws.Add(a);
+        ws.Add(b);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(a.Id);
+        vm.LauncherItems.Single(i => i.Id == "profile.flatten").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+        Assert.True(vm.IsOperationPreview);
+
+        ws.SetActive(b.Id); // a new active dataset closes the editor → preview off
+        Assert.False(vm.IsOperationPreview);
+        Assert.Null(vm.OperationPreviewCurve);
+    }
+
+    [Fact]
+    public async Task Switching_between_two_curve_process_forms_recomputes_the_preview()
+    {
+        var ws = new Workspace();
+        var curve = Curve();
+        ws.Add(curve);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(curve.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "profile.flatten").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+        Assert.Equal("profile.flatten", vm.OperationPreviewCurve!.Series[0].Name);
+
+        // Switch directly to another previewable op (both keep IsOperationPreview true) — the preview must recompute
+        // for the NEW op immediately, not linger on the previous op's result until a parameter is touched.
+        vm.LauncherItems.Single(i => i.Id == "profile.smooth").LaunchCommand.Execute(null);
+        await vm.OperationPreviewSettled;
+
+        Assert.Equal("profile.smooth", vm.OperationPreviewCurve!.Series[0].Name);
+    }
+
+    [Fact]
+    public async Task Opening_a_crop_profile_form_does_not_enter_the_curve_preview()
+    {
+        var ws = new Workspace();
+        var curve = Curve();
+        ws.Add(curve);
+
+        var vm = NewShell(ws, new FakeImageAnalysis(), new CurvePreviewLauncher());
+        ws.SetActive(curve.Id);
+
+        vm.LauncherItems.Single(i => i.Id == "profile.crop").LaunchCommand.Execute(null); // a range op (start/count)
+        await vm.OperationPreviewSettled;
+
+        // Crop derives a curve, but its start/count shape makes it a RANGE editor: the shell excludes it from the
+        // preview strategy (IsProfileRangeEditor), so IsOperationPreview stays false — which is exactly what lets
+        // RenderCurve fall through the preview branch to the vertical-marker branch (the markers are a live path).
+        Assert.False(vm.IsOperationPreview);
+        Assert.Null(vm.OperationPreviewCurve);
+    }
+
+    // A launcher offering two curve→curve Process ops; each previews a curve whose series is NAMED by its op id, so a
+    // test can tell which op's preview is showing.
+    private sealed class CurvePreviewLauncher : IOperationLauncher
+    {
+        public IReadOnlyList<OperationLauncherItem> ApplicableToActive() =>
+        [
+            new OperationLauncherItem("profile.flatten", "Flatten", "Detrend the profile", OperationCategory.Process),
+            new OperationLauncherItem("profile.smooth", "Smooth", "Smooth the profile", OperationCategory.Process),
+            new OperationLauncherItem("profile.crop", "Crop", "Crop the profile", OperationCategory.Process),
+        ];
+
+        public OperationForm? GetForm(string operationId) => operationId switch
+        {
+            "profile.flatten" or "profile.smooth" => new OperationForm(operationId, operationId, "curve op", OperationCategory.Process,
+                [new ParameterFieldDescriptor("order", "Order", ParameterFieldKind.Integer, 1, 0, 8, Array.Empty<ParameterFieldOption>(), null, "help")], DerivesCurve: true),
+            // Crop derives a curve too, but its start/count fields make it a range editor (markers), not a preview overlay.
+            "profile.crop" => new OperationForm("profile.crop", "Crop", "Crop the profile", OperationCategory.Process,
+            [
+                new ParameterFieldDescriptor("start", "Start", ParameterFieldKind.Integer, 0, 0, null, Array.Empty<ParameterFieldOption>(), null, "help"),
+                new ParameterFieldDescriptor("count", "Count", ParameterFieldKind.Integer, 4, 1, null, Array.Empty<ParameterFieldOption>(), null, "help"),
+            ], DerivesCurve: true),
+            _ => null,
+        };
+
+        public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+            => Task.FromException<OperationRunResult>(new NotImplementedException());
+
+        public Task<CurveRenderInput?> PreviewCurveAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+            => Task.FromResult<CurveRenderInput?>(RenderInputFactory.ForLineProfile(Curve(), operationId)); // series named by op
     }
 
     // ---- minimal fakes (construction only) ----

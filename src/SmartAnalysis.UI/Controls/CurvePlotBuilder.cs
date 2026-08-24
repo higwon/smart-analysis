@@ -49,5 +49,15 @@ public static class CurvePlotBuilder
         }
 
         plot.Axes.AutoScale();
+
+        // Vertical reference lines (e.g. a crop range's boundaries on the source curve), drawn after auto-scale so they
+        // span the data area without widening it.
+        foreach (var x in input.VerticalMarkers)
+        {
+            var marker = plot.Add.VerticalLine(x);
+            marker.Color = theme.Axis;
+            marker.LineWidth = 1.5f;
+            marker.LinePattern = ScottPlot.LinePattern.Dashed;
+        }
     }
 }

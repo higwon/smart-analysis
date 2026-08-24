@@ -43,6 +43,15 @@ public interface IOperationLauncher
         => Task.FromResult<ImageRenderInput?>(null);
 
     /// <summary>
+    /// The curve counterpart of <see cref="PreviewAsync"/>: runs a curve→curve <paramref name="operationId"/> on the
+    /// active curve WITHOUT committing anything, and projects its result to an <b>owned</b> <see cref="CurveRenderInput"/>
+    /// ("PREVIEW") the shell overlays on the source curve. Returns <c>null</c> when there is nothing to show (no active
+    /// curve, unknown op, invalid parameters, a run failure, or a non-curve result). A default no-op keeps test doubles simple.
+    /// </summary>
+    Task<CurveRenderInput?> PreviewCurveAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken cancellationToken = default)
+        => Task.FromResult<CurveRenderInput?>(null);
+
+    /// <summary>
     /// The display name of an <b>enum</b> parameter value for <paramref name="operationId"/> — e.g. "BandStop"
     /// for <c>kind = 3</c> — so provenance/history shows the member name instead of the raw code. Returns
     /// <c>null</c> (the caller then formats the number) when the parameter is not a known enum on that operation,

@@ -63,8 +63,8 @@ public partial class AfmImageView : UserControl, IImageView
         RegionOverlay.Cursor = Cursors.SizeAll;
         RegionOverlay.MouseLeftButtonDown += (_, e) => BeginRegionDrag(RegionHandle.Body, e);
         _regionHandles = BuildRegionHandles();
-        LineOverlay.Cursor = Cursors.SizeAll;
-        LineOverlay.MouseLeftButtonDown += (_, e) => BeginLineDrag(LineHandle.Body, e);
+        LineHitArea.Cursor = Cursors.SizeAll; // the wide transparent line is the grab target for the thin visible one
+        LineHitArea.MouseLeftButtonDown += (_, e) => BeginLineDrag(LineHandle.Body, e);
         _lineHandles = BuildLineHandles();
     }
 
@@ -216,6 +216,9 @@ public partial class AfmImageView : UserControl, IImageView
         LineOverlay.X1 = sx0; LineOverlay.Y1 = sy0;
         LineOverlay.X2 = sx1; LineOverlay.Y2 = sy1;
         LineOverlay.Visibility = Visibility.Visible;
+        LineHitArea.X1 = sx0; LineHitArea.Y1 = sy0;
+        LineHitArea.X2 = sx1; LineHitArea.Y2 = sy1;
+        LineHitArea.Visibility = _lineEditable ? Visibility.Visible : Visibility.Collapsed; // only grab-able when editable
         PositionLineHandles(sx0, sy0, sx1, sy1, _lineEditable);
     }
 
@@ -223,6 +226,7 @@ public partial class AfmImageView : UserControl, IImageView
     {
         _effectiveLine = null;
         LineOverlay.Visibility = Visibility.Collapsed;
+        LineHitArea.Visibility = Visibility.Collapsed;
         if (_lineHandles is not null)
         {
             foreach (var (_, dot) in _lineHandles)

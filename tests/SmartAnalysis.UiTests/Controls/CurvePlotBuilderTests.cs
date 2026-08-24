@@ -15,13 +15,13 @@ public sealed class CurvePlotBuilderTests
         new ScottPlot.Color(0x5B, 0x64, 0x72),
         [new ScottPlot.Color(0x25, 0x63, 0xEB), new ScottPlot.Color(0x7C, 0x84, 0x94)]);
 
-    private static CurveRenderInput Input(int seriesCount)
+    private static CurveRenderInput Input(int seriesCount, double[]? markers = null)
     {
         var x = new double[] { 0, 1, 2, 3 };
         var series = Enumerable.Range(0, seriesCount)
             .Select(i => new XySeries($"s{i}", x, new double[] { 0, i + 1, i, i + 2 }))
             .ToArray();
-        return new CurveRenderInput(series, new AxisView("Position", "nm", 0, 3, 4), new AxisView("Height", "nm", 0, 5, 4));
+        return new CurveRenderInput(series, new AxisView("Position", "nm", 0, 3, 4), new AxisView("Height", "nm", 0, 5, 4), markers);
     }
 
     [Theory]
@@ -45,6 +45,30 @@ public sealed class CurvePlotBuilderTests
 
         Assert.Equal("Position (nm)", plot.Axes.Bottom.Label.Text);
         Assert.Equal("Height (nm)", plot.Axes.Left.Label.Text);
+    }
+
+    [Fact]
+    public void Configure_draws_a_vertical_line_per_marker()
+    {
+        var plot = new ScottPlot.Plot();
+
+        CurvePlotBuilder.Configure(plot, Input(1, markers: [0.5, 2.5]), Theme()); // e.g. a crop range's boundaries
+
+        Assert.Equal(2, plot.GetPlottables<ScottPlot.Plottables.VerticalLine>().Count());
+    }
+
+    [Fact]
+    public void Configure_puts_both_series_on_the_same_shared_y_axis()
+    {
+        var plot = new ScottPlot.Plot();
+
+        CurvePlotBuilder.Configure(plot, Input(2), Theme()); // SOURCE + PREVIEW overlay
+
+        // Both series must share ONE Y axis (the left) — a truthful before/after amplitude comparison. (Independent
+        // per-curve axes would make a small-amplitude result look the same height as a large-amplitude source.)
+        var signals = plot.GetPlottables<ScottPlot.Plottables.SignalXY>().ToList();
+        Assert.Equal(2, signals.Count);
+        Assert.All(signals, s => Assert.Same(plot.Axes.Left, s.Axes.YAxis));
     }
 
     [Fact]

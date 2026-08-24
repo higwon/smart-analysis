@@ -45,8 +45,11 @@
                     <Ellipse x:Name="RegionEllipseOverlay" Visibility="Collapsed" IsHitTestVisible="False"
                              Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"
                              Fill="{DynamicResource SA.Brush.Chart.Selection}"/>
+                    <!-- A wide transparent line under the visible one: it's what receives the mouse, so the thin
+                         2px line is easy to grab and drag (a 2px hit target is missed too often). -->
+                    <Line x:Name="LineHitArea" Visibility="Collapsed" Stroke="Transparent" StrokeThickness="14"/>
                     <!-- The profile line (endpoints are separate draggable handles built in code). -->
-                    <Line x:Name="LineOverlay" Visibility="Collapsed"
+                    <Line x:Name="LineOverlay" Visibility="Collapsed" IsHitTestVisible="False"
                           Stroke="{DynamicResource SA.Brush.Accent.Primary}" StrokeThickness="2"/>
                 </Canvas>
             </Grid>

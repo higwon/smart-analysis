@@ -50,4 +50,5 @@ public sealed record OperationForm(
     string Summary,
     OperationCategory Category,
     IReadOnlyList<ParameterFieldDescriptor> Fields,
-    bool DerivesImage = false);
+    bool DerivesImage = false,
+    bool DerivesCurve = false);

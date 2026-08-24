@@ -59,6 +59,10 @@ public sealed class ParameterFormViewModel : ObservableObject
     /// applies. False for a measurement or an image→curve transform (e.g. Power Spectral Density).</summary>
     public bool DerivesImage => _form.DerivesImage;
 
+    /// <summary>Whether this operation derives a <b>curve</b> (a line profile) — so a source-vs-preview overlay applies
+    /// when the active dataset is a curve (e.g. profile flatten / crop / smooth).</summary>
+    public bool DerivesCurve => _form.DerivesCurve;
+
     public IReadOnlyList<ParameterFieldViewModel> Fields { get; }
 
     public bool HasFields => Fields.Count > 0;
