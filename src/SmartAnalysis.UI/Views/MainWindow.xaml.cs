@@ -422,10 +422,13 @@ public partial class MainWindow : Window
     {
         var colormap = _viewModel.Colormap;
 
-        // The docked profile panel belongs to a line-profile editor (WireLinePreview) or a committed curve paired with
-        // its source (below). When neither applies, collapse a panel left over from a previous curve view.
+        // The read-only sampling line + docked profile panel belong to a line-profile editor (WireLinePreview) or a
+        // committed curve paired with its source (below). When neither applies, clear the line off the image control
+        // (Render/Clear keep the stored preview alive) and collapse the panel — else a previous curve's line would
+        // reappear on the next image when the ROI overlay refreshes.
         if (_lineFields.Count == 0 && !_viewModel.ShowCurveSourceImage)
         {
+            SingleImage.ClearLinePreview();
             LineProfilePanel.Visibility = Visibility.Collapsed;
             ProfileChart.Clear();
         }

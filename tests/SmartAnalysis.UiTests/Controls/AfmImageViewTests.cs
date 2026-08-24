@@ -122,6 +122,37 @@ public sealed class AfmImageViewTests
     }
 
     [Fact]
+    public void A_cleared_line_does_not_reappear_on_the_next_image()
+    {
+        // Regression: a paired line-profile curve draws a read-only line; leaving it for a normal image must clear
+        // the line off the control. Render/Clear keep the stored preview alive, so without an explicit
+        // ClearLinePreview() the old line reappears on the next image (the shell now calls it — this locks the
+        // control contract the fix relies on: once cleared, a subsequent Render does NOT bring the line back).
+        var (shownWhilePaired, lineAfterClearAndRerender) = WpfTestHost.Invoke(() =>
+        {
+            var view = new AfmImageView { IsLineEditable = false };
+            var host = new Border { Width = 320, Height = 240, Child = view };
+            host.Measure(new Size(320, 240));
+            host.Arrange(new Rect(0, 0, 320, 240));
+            host.UpdateLayout();
+
+            view.Render(SolidInput(64, 64));
+            view.SetLinePreview(0, 32, 63, 32); // the read-only sampling line of a paired curve
+            host.UpdateLayout();
+            bool shown = view.EffectiveLine is not null;
+
+            view.ClearLinePreview();         // leaving the paired curve
+            view.Render(SolidInput(64, 64)); // the next image renders
+            host.UpdateLayout();
+
+            return (shown, view.EffectiveLine);
+        });
+
+        Assert.True(shownWhilePaired, "the read-only line should show while the curve is paired with its source");
+        Assert.Null(lineAfterClearAndRerender); // and must NOT reappear on the next image
+    }
+
+    [Fact]
     public void A_scan_larger_than_the_viewport_is_arranged_at_its_natural_pixel_size()
     {
         // Regression: a bitmap whose natural size exceeds the viewport used to be arranged (and realized) at the
