@@ -73,6 +73,25 @@ public sealed class CurveSegmentationTests
             [new CurveSegment(SegmentKind.Approach, 0, 8)])); // 8 of 10 samples
 
     [Fact]
+    public void The_exposed_segments_cannot_be_cast_back_to_a_mutable_array()
+    {
+        var seg = new CurveSegmentation(6,
+        [
+            new CurveSegment(SegmentKind.Approach, 0, 3),
+            new CurveSegment(SegmentKind.Retract, 3, 6),
+        ]);
+
+        // Returning the raw array (typed as IReadOnlyList) would let a caller cast it back and overwrite an entry —
+        // breaking the ordered/gapless/total-coverage invariants AFTER construction, or injecting a null.
+        Assert.IsNotType<CurveSegment[]>(seg.Segments);
+        Assert.Throws<NotSupportedException>(() => ((IList<CurveSegment>)seg.Segments)[0] = null!);
+
+        // And the invariants still hold when read back.
+        Assert.Equal(3, seg.CountOf(SegmentKind.Approach));
+        Assert.Equal(SegmentKind.Retract, seg.KindAt(5));
+    }
+
+    [Fact]
     public void All_undetermined_covers_the_whole_curve_and_an_empty_curve_has_no_segments()
     {
         var all = CurveSegmentation.AllUndetermined(5);

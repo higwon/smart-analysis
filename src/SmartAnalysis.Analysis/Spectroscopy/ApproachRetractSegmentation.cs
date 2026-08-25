@@ -73,7 +73,17 @@ public static class ApproachRetractSegmentation
         var runs = new List<(int Start, int End, int Direction)>();
         for (int i = 0; i < trendLength; i++)
         {
-            int sign = Math.Sign(separation[i + window] - separation[i]);
+            float from = separation[i];
+            float to = separation[i + window];
+            if (!float.IsFinite(from) || !float.IsFinite(to))
+            {
+                // A non-finite endpoint says nothing about the ramp's direction (and Math.Sign would throw on the
+                // NaN difference). Skip the sample rather than guess: the surrounding runs still carry the phase, and
+                // a curve with no finite trend at all falls through to all-Undetermined.
+                continue;
+            }
+
+            int sign = Math.Sign(to - from);
             if (sign == 0)
             {
                 continue; // flat stretch: it belongs to whichever run surrounds it

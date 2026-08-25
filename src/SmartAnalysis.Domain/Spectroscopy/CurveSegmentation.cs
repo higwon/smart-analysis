@@ -12,7 +12,10 @@ namespace SmartAnalysis.Domain.Spectroscopy;
 /// </summary>
 public sealed class CurveSegmentation
 {
-    private readonly CurveSegment[] _segments;
+    // Held as a read-only wrapper, not the raw array: a caller must not be able to cast Segments back to
+    // CurveSegment[] and mutate it, which would break the ordered/gapless/total-coverage invariants the
+    // constructor enforced (or inject a null for OfKind to trip over).
+    private readonly IReadOnlyList<CurveSegment> _segments;
 
     public CurveSegmentation(int sampleCount, IReadOnlyList<CurveSegment> segments)
     {
@@ -42,7 +45,7 @@ public sealed class CurveSegmentation
         }
 
         SampleCount = sampleCount;
-        _segments = copy;
+        _segments = Array.AsReadOnly(copy);
     }
 
     /// <summary>Number of samples the segmentation covers (the curve's length).</summary>

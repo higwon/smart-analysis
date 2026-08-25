@@ -86,6 +86,38 @@ public sealed class ApproachRetractSegmentationTests
         => Assert.Throws<ArgumentOutOfRangeException>(
             () => ApproachRetractSegmentation.BySeparationTrend(Ramp(30, 30), windowRatio));
 
+    [Fact]
+    public void Non_finite_separation_samples_do_not_throw_and_do_not_invent_a_phase()
+    {
+        // A dropout in the middle of a round-trip ramp. ForceCurveDataset does not constrain sample finiteness, so
+        // this is a legal curve — and "unclassifiable" must be an outcome, not an exception (the NaN difference
+        // would otherwise reach Math.Sign and throw).
+        var separation = Ramp(down: 60, up: 60);
+        separation[30] = float.NaN;
+        separation[31] = float.PositiveInfinity;
+        separation[90] = float.NegativeInfinity;
+
+        var seg = ApproachRetractSegmentation.BySeparationTrend(separation);
+
+        Assert.Equal(separation.Length, seg.SampleCount);          // still a total, gapless segmentation
+        Assert.Equal(SegmentKind.Approach, seg.KindAt(5));         // the surrounding ramp still reads as a phase
+        Assert.Equal(SegmentKind.Retract, seg.KindAt(115));
+        var approachEnd = seg.OfKind(SegmentKind.Approach).Max(s => s.End);
+        var retractStart = seg.OfKind(SegmentKind.Retract).Min(s => s.Start);
+        Assert.True(approachEnd <= retractStart, "the dropout must not invent an extra phase");
+    }
+
+    [Fact]
+    public void An_all_non_finite_separation_is_undetermined()
+    {
+        var separation = new float[40];
+        Array.Fill(separation, float.NaN);
+
+        var seg = ApproachRetractSegmentation.BySeparationTrend(separation);
+
+        Assert.Equal(40, seg.CountOf(SegmentKind.Undetermined)); // no finite trend anywhere → nothing is claimed
+    }
+
     // ---- MaxForce mode ----
 
     [Fact]
