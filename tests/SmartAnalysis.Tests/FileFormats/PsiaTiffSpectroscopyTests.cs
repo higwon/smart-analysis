@@ -354,6 +354,62 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("Lockin1 Amplitude")]
+    [InlineData("PFM Amplitude")]
+    [InlineData("Lock-In4 Amplitude")]
+    public async Task Another_detectors_voltage_swept_against_z_is_not_a_deflection(string ordinate)
+    {
+        // The dangerous shape: a LENGTH abscissa (so the earlier guard passes) against a voltage that has nothing to
+        // do with the cantilever. The probe calibration in the header says nothing about which channel was selected —
+        // it describes the probe — so its mere presence must not turn a lock-in or piezoresponse amplitude into nN.
+        // Those numbers would look entirely plausible and would flow straight into the contact-mechanics fits.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new(ordinate, "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 2.0,   // a perfectly valid calibration is present...
+                sensitivity: 100.0),  // ...and must not be taken as permission
+            Planar(Float, Ramp(0, 1), Ramp(5, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
+    }
+
+    [Fact]
+    public async Task The_vertical_photodiode_channel_is_what_counts_as_a_deflection()
+    {
+        // The one voltage ordinate that IS the cantilever: the vertical photodiode segment difference. Real files
+        // name it "Vertical (A-B)", and legacy picks the same channel by the same word.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Vertical (A-B)", "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 2.0,
+                sensitivity: 100.0),
+            Planar(Float, Ramp(0, 1), Ramp(5, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        Assert.Equal(StandardUnits.Nanonewton.Symbol, curve.ForceChannel.Unit.Symbol);
+    }
+
     [Fact]
     public async Task A_voltage_ordinate_against_a_non_length_abscissa_is_still_not_a_force_curve()
     {

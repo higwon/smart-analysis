@@ -280,19 +280,20 @@ public sealed class PsiaTiffReader : IScanFileReader
 
         var separationUnit = ResolveUnit(xLine.Unit, out bool xKnown);
         var ordinateUnit = ResolveUnit(yLine.Unit, out bool yKnown);
+        bool isDeflection = IsDeflectionVoltage(yLine, ordinateUnit);
         if (!xKnown || !yKnown || separationUnit.Dimension != StandardUnits.Length
-            || (ordinateUnit.Dimension != StandardUnits.Force && ordinateUnit.Dimension != StandardUnits.Voltage))
+            || (ordinateUnit.Dimension != StandardUnits.Force && !isDeflection))
         {
             return FileReadResult.Failure(FileReadErrorKind.UnsupportedImageType,
                 $"Spectroscopy '{xLine.SourceName}' [{xLine.Unit}] vs '{yLine.SourceName}' [{yLine.Unit}] is not a "
-                + "force-distance curve (a length abscissa against a force or deflection ordinate).");
+                + "force-distance curve (a length abscissa against a force or cantilever-deflection ordinate).");
         }
 
         // Most instruments never store a force: they store what the photodiode measured, a deflection voltage. The
         // curve is still force-distance, but the force has to be recovered from the probe calibration the file
         // recorded with it — and without that calibration the force is simply not knowable from this file.
         CantileverCalibration? calibration = null;
-        if (ordinateUnit.Dimension == StandardUnits.Voltage)
+        if (isDeflection)
         {
             if (!CantileverCalibration.TryCreate(
                     spectroscopy.ForceConstantNewtonPerMetre, spectroscopy.SensitivityVoltPerMicrometre, out var cal))
@@ -384,6 +385,18 @@ public sealed class PsiaTiffReader : IScanFileReader
         }
     }
 
+    /// <summary>
+    /// Whether an ordinate is the cantilever's vertical deflection, and so a force in disguise. A voltage alone is
+    /// not enough: a lock-in or piezoresponse amplitude swept against Z is a different detector entirely, and the
+    /// probe calibration sitting in the header is no evidence about WHICH channel was selected - it describes the
+    /// probe, not the ordinate. Legacy identifies the same channel the same way (<c>ForceConstantViewModel</c>:
+    /// <c>SourceName.Contains("Vertical")</c>); the name real files carry is "Vertical (A-B)", the vertical
+    /// photodiode segment difference.
+    /// </summary>
+    private static bool IsDeflectionVoltage(PsiaSpectroscopyLine line, Unit unit)
+        => unit.Dimension == StandardUnits.Voltage
+           && line.SourceName.Contains("Vertical", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Index of the first declared source the file flags as the requested axis, or -1.</summary>
     private static int FindAxis(PsiaSpectroscopyHeader header, bool isXAxis)
     {
@@ -452,7 +465,7 @@ public sealed class PsiaTiffReader : IScanFileReader
                 spectroscopy.ForceConstantNewtonPerMetre.ToString(CultureInfo.InvariantCulture);
         }
 
-        // A force this reader COMPUTED must never be indistinguishable from one the instrument stored (ADR-013):
+        // A force this reader COMPUTED must never be indistinguishable from one the instrument stored:
         // record that it was derived, and the two numbers it was derived with.
         if (calibration is { } probe)
         {
