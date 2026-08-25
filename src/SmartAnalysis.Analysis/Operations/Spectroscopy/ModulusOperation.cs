@@ -48,8 +48,11 @@ public sealed class ModulusOperation : IAnalysisOperation
         [
             new ParameterDescriptor(ModelParameter, typeof(ContactModel), defaultValue: ContactModel.Hertz, help: "Contact model: Hertz (spherical tip) or Sneddon (conical tip)."),
             new ParameterDescriptor(PoissonRatioParameter, typeof(double), defaultValue: DefaultPoissonRatio, min: 0.0, max: 0.499, help: "Poisson's ratio of the sample (0–0.499; 0.5 is incompressible and the models break down)."),
-            new ParameterDescriptor(TipRadiusParameter, typeof(double), defaultValue: DefaultTipRadiusNm, min: 0.0, max: null, unit: StandardUnits.Nanometre, help: "Hertz: tip radius."),
-            new ParameterDescriptor(HalfAngleParameter, typeof(double), defaultValue: DefaultHalfAngleDegrees, min: 0.0, max: 89.9, help: "Sneddon: tip half-angle in degrees (below 90°)."),
+            // The two geometry parameters are CONDITIONAL — only the chosen model reads one — so their ranges are
+            // enforced in Validate against that model, not here. A schema range would apply unconditionally and
+            // block a perfectly good Hertz fit because the (unused) half-angle happens to sit outside a cone range.
+            new ParameterDescriptor(TipRadiusParameter, typeof(double), defaultValue: DefaultTipRadiusNm, unit: StandardUnits.Nanometre, help: "Hertz: tip radius."),
+            new ParameterDescriptor(HalfAngleParameter, typeof(double), defaultValue: DefaultHalfAngleDegrees, help: "Sneddon: tip half-angle in degrees (above 0° and below 90°)."),
         ]),
         output: OutputKind.Artifact,
         isDeterministic: true,
@@ -84,6 +87,7 @@ public sealed class ModulusOperation : IAnalysisOperation
                 $"The separation channel must be a length ({curve.SeparationChannel.Unit.Symbol} is {curve.SeparationChannel.Unit.Dimension.Name}).");
         }
 
+        // The chosen model's geometry range is enforced HERE (the schema cannot: the parameters are conditional).
         // A non-physical tip is a bad PARAMETER, not a curve the model failed to describe — so it is a typed failure
         // here (F04) rather than a NaN modulus with a "check the geometry / is this an approach half?" warning that
         // blurs a settled cause into a data problem. Only the geometry the chosen model actually uses is checked: a

@@ -167,8 +167,10 @@ public sealed class ModulusOperationTests
         Assert.False(Op().Validate(new OperationInput(wrong), ParameterSet.Empty).IsValid);
     }
 
-    [Fact]
-    public void A_zero_tip_radius_is_a_typed_validation_failure_for_hertz()
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    public void A_non_physical_tip_radius_is_a_typed_validation_failure_for_hertz(double tipRadius)
     {
         using var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
 
@@ -176,7 +178,7 @@ public sealed class ModulusOperationTests
         // so it must not come back as a NaN modulus with a "maybe check your data" warning.
         var validation = Op().Validate(
             new OperationInput(curve),
-            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Hertz, ["tipRadius"] = 0.0 }));
+            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Hertz, ["tipRadius"] = tipRadius }));
 
         Assert.False(validation.IsValid);
         Assert.Contains(validation.Errors, e => e.Contains("radius"));
@@ -185,6 +187,7 @@ public sealed class ModulusOperationTests
     [Theory]
     [InlineData(0.0)]
     [InlineData(90.0)]   // a flat punch, not a cone
+    [InlineData(-1.0)]
     public void A_non_physical_half_angle_is_a_typed_validation_failure_for_sneddon(double halfAngle)
     {
         using var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
@@ -196,17 +199,34 @@ public sealed class ModulusOperationTests
         Assert.False(validation.IsValid);
     }
 
-    [Fact]
-    public void The_unused_models_geometry_never_blocks_a_fit()
+    [Theory]
+    [InlineData(0.0)]     // meaningless as a cone …
+    [InlineData(90.0)]    // … a flat punch …
+    [InlineData(-1.0)]    // … and outright nonsense
+    public void An_unusable_half_angle_never_blocks_a_hertz_fit(double halfAngle)
     {
         using var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
 
-        // A half-angle of zero is meaningless, but a Hertz fit never reads it — so it must not block one (and the
-        // mirror case: a zero radius must not block a Sneddon fit).
-        Assert.True(Op().Validate(new OperationInput(curve),
-            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Hertz, ["tipRadius"] = RadiusNm, ["halfAngle"] = 0.0 })).IsValid);
-        Assert.True(Op().Validate(new OperationInput(curve),
-            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Sneddon, ["halfAngle"] = 18.0, ["tipRadius"] = 0.0 })).IsValid);
+        // A Hertz fit never reads the half-angle, so NO value of it may block one. This must hold across the whole
+        // parameter range, not just at zero — which is why the geometry ranges live in Validate, not in the schema
+        // (a schema range applies unconditionally and would reject these).
+        var validation = Op().Validate(new OperationInput(curve),
+            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Hertz, ["tipRadius"] = RadiusNm, ["halfAngle"] = halfAngle }));
+
+        Assert.True(validation.IsValid, string.Join("; ", validation.Errors));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    public void An_unusable_tip_radius_never_blocks_a_sneddon_fit(double tipRadius)
+    {
+        using var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
+
+        var validation = Op().Validate(new OperationInput(curve),
+            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Sneddon, ["halfAngle"] = 18.0, ["tipRadius"] = tipRadius }));
+
+        Assert.True(validation.IsValid, string.Join("; ", validation.Errors));
     }
 
     [Fact]
