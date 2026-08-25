@@ -174,6 +174,32 @@ public sealed class LegacyBaselineGoldenTests
         AssertFittedMatchesY(plane, 1e-6);
     }
 
+    [Fact]
+    public void Als_baseline_golden_is_well_formed_and_stays_under_the_peaks()
+    {
+        using var doc = Load("als-baseline.json");
+        var cases = doc.RootElement.EnumerateArray().ToList();
+        Assert.NotEmpty(cases);
+
+        foreach (var c in cases)
+        {
+            var y = c.GetProperty("Y").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+            var baseline = c.GetProperty("Baseline").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+            Assert.Equal(y.Length, baseline.Length);
+            Assert.True(c.GetProperty("Lambda").GetDouble() > 0);
+            Assert.True(c.GetProperty("Iterations").GetInt32() >= 1);
+            Assert.Equal(Sha256(y), c.GetProperty("InputSha256").GetString()); // the recorded input produced this case
+        }
+
+        // The defining ALS property on the asymmetric cases: the baseline follows the background but stays UNDER the
+        // peaks — so the golden is a meaningful baseline, not an average through the signal.
+        var peaks = cases.Single(c => c.GetProperty("Id").GetString() == "sloping-two-peaks");
+        var signal = peaks.GetProperty("Y").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+        var under = peaks.GetProperty("Baseline").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+        int peakIndex = Array.IndexOf(signal, signal.Max());
+        Assert.True(under[peakIndex] < signal[peakIndex] - 1.0, "the baseline must sit well under the tallest peak");
+    }
+
     private static void AssertFittedMatchesY(JsonElement c, double tolerance)
     {
         var y = c.GetProperty("Y").EnumerateArray().Select(e => e.GetDouble()).ToArray();
