@@ -209,22 +209,51 @@ public sealed class RenderInputTests
     }
 
     [Fact]
-    public void ForForceCurve_ignores_non_finite_samples_when_sizing_the_axes()
+    public void ForForceCurve_sizes_the_axes_from_drawable_pairs_only()
     {
+        // Four samples, two of them undrawable. In an XY plot a sample is a PAIR: (NaN, 1000) and (5, +Inf) cannot be
+        // plotted, so NEITHER coordinate of either may stretch an axis — otherwise the 1000 would blow up the Y range
+        // and the 5 would sit inside an X range it never earned, squashing the real curve.
         using var curve = new ForceCurveDataset(
             DatasetId.New(), new DataSource("test", null),
-            ScanBuffer<float>.TakeOwnership([10f, float.NaN, 0f], 3, 1),
-            ScanBuffer<float>.TakeOwnership([0f, 20f, float.PositiveInfinity], 3, 1),
+            ScanBuffer<float>.TakeOwnership([10f, float.NaN, 5f, 0f], 4, 1),
+            ScanBuffer<float>.TakeOwnership([0f, 1000f, float.PositiveInfinity, 20f], 4, 1),
             new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
             new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
             ScanMetadata.Unknown, ProvenanceRecord.Root);
 
         var input = RenderInputFactory.ForForceCurve(curve);
 
+        // Only (10, 0) and (0, 20) are drawable, so they alone define both ranges.
         Assert.Equal(0.0, input.X.Start, 10);
         Assert.Equal(10.0, input.X.End, 10);
         Assert.Equal(0.0, input.Y.Start, 10);
-        Assert.Equal(20.0, input.Y.End, 10); // the infinity never sets the extent
+        Assert.Equal(20.0, input.Y.End, 10);
+
+        // The raw samples are still carried through, so the dropout reads as a gap rather than being silently moved.
+        Assert.Equal(4, input.Series[0].X.Length);
+        Assert.True(double.IsNaN(input.Series[0].X.Span[1]));
+        Assert.True(double.IsPositiveInfinity(input.Series[0].Y.Span[2]));
+    }
+
+    [Fact]
+    public void ForForceCurve_with_no_drawable_pair_falls_back_to_a_unit_range()
+    {
+        using var curve = new ForceCurveDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership([float.NaN, 5f], 2, 1),
+            ScanBuffer<float>.TakeOwnership([3f, float.NaN], 2, 1),
+            new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
+            new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var input = RenderInputFactory.ForForceCurve(curve);
+
+        // No pair is drawable, so neither the 5 nor the 3 may define a range.
+        Assert.Equal(0.0, input.X.Start, 10);
+        Assert.Equal(0.0, input.X.End, 10);
+        Assert.Equal(0.0, input.Y.Start, 10);
+        Assert.Equal(0.0, input.Y.End, 10);
     }
 
     [Fact]

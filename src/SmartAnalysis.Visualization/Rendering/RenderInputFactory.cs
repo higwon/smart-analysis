@@ -60,6 +60,9 @@ public static class RenderInputFactory
     /// Builds a curve render input from a force curve: <b>force against separation</b>, the way a force–distance plot
     /// is read. Unlike a line profile there is no regular axis — separation is a measured channel, so the X values are
     /// its samples. Both channels are copied into owned arrays, so the input outlives the dataset (ADR-011).
+    /// The axis extents are taken over <b>drawable pairs only</b>: a sample whose separation OR force is non-finite
+    /// cannot be plotted, so neither of its coordinates contributes to a range (the samples themselves are kept as-is,
+    /// so the dropout still reads as a gap).
     /// </summary>
     public static CurveRenderInput ForForceCurve(ForceCurveDataset curve, string? seriesName = null)
     {
@@ -75,24 +78,26 @@ public static class RenderInputFactory
         for (int i = 0; i < n; i++)
         {
             double x = separation[i], y = force[i];
-            xs[i] = x;
+            xs[i] = x;   // the raw samples are kept as-is, so a dropout stays a gap in the plotted line
             ys[i] = y;
-            if (double.IsFinite(x))
+
+            // In an XY plot a sample is a PAIR: if either coordinate is non-finite the point cannot be drawn, so
+            // neither of its coordinates may set an extent. Checking the axes independently would let an undrawable
+            // sample's finite half stretch the other axis and squash the real curve into a corner.
+            if (!double.IsFinite(x) || !double.IsFinite(y))
             {
-                if (x < xMin) xMin = x;
-                if (x > xMax) xMax = x;
+                continue;
             }
 
-            if (double.IsFinite(y))
-            {
-                if (y < yMin) yMin = y;
-                if (y > yMax) yMax = y;
-            }
+            if (x < xMin) xMin = x;
+            if (x > xMax) xMax = x;
+            if (y < yMin) yMin = y;
+            if (y > yMax) yMax = y;
         }
 
         if (xMax < xMin)
         {
-            xMin = xMax = 0.0; // no finite separation
+            xMin = xMax = 0.0; // no drawable pair at all
         }
 
         if (yMax < yMin)
