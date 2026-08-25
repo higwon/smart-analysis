@@ -66,6 +66,7 @@ public sealed class ShellViewModel : ObservableObject
     private object? _operationEditor;
     private StatisticsResultViewModel? _statistics;
     private MeasurementRegion? _selectedRegion;
+    private DatasetId? _selectedMeasurementId;
     private MeasurementLine? _curveSourceLine;
     private ScanImageDataset? _curveSourceImage;
     private StatisticsResultViewModel? _liveMeasurements;
@@ -173,6 +174,13 @@ public sealed class ShellViewModel : ObservableObject
     }
 
     public bool HasStatus => !string.IsNullOrEmpty(StatusMessage);
+
+    /// <summary>Shows a status banner message (e.g. a failed export the view performed on the shell's behalf).</summary>
+    public void ShowStatus(string? message)
+    {
+        StatusMessage = message;
+        OnPropertyChanged(nameof(HasStatus));
+    }
 
     public string? ActiveContextText
     {
@@ -402,6 +410,15 @@ public sealed class ShellViewModel : ObservableObject
         {
             if (SetProperty(ref _inspectorRole, value))
             {
+                // The measurement selection belongs to the Result role: any move off it (a step, an operation
+                // form, the dataset properties) drops it, so "export the measurement I am looking at" can never
+                // export a stale one. Callers entering the Result role set the id AFTER the role, so this never
+                // clears their own selection.
+                if (value != InspectorRole.Result)
+                {
+                    SelectedMeasurementId = null;
+                }
+
                 OnPropertyChanged(nameof(RoleIsDataset));
                 OnPropertyChanged(nameof(RoleIsOperation));
                 OnPropertyChanged(nameof(RoleIsResult));
@@ -619,6 +636,10 @@ public sealed class ShellViewModel : ObservableObject
                 && region.SourceId == _workspace.Active.ActiveId
                     ? region
                     : null;
+
+            // The just-run measurement is what the Result card shows, so it is what Export offers — set AFTER the
+            // role above (entering a non-Result role clears this).
+            SelectedMeasurementId = result.MeasurementId;
         }
     }
 
@@ -844,6 +865,7 @@ public sealed class ShellViewModel : ObservableObject
             {
                 SelectedRegion = null;
                 Statistics = null;
+                SelectedMeasurementId = null;
                 SelectedStep = null;
                 InspectorRole = InspectorRole.DatasetProperties;
             }
@@ -885,7 +907,24 @@ public sealed class ShellViewModel : ObservableObject
         SelectedStep = null;
         InspectorRole = InspectorRole.Result;
         SelectedRegion = region is not null && region.SourceId == _workspace.Active.ActiveId ? region : null;
+        SelectedMeasurementId = artifactId;
     }
+
+    /// <summary>The attached measurement currently shown in the Result role, so it can be exported; null when the
+    /// Inspector is not showing one.</summary>
+    public DatasetId? SelectedMeasurementId
+    {
+        get => _selectedMeasurementId;
+        private set
+        {
+            if (SetProperty(ref _selectedMeasurementId, value))
+            {
+                OnPropertyChanged(nameof(HasSelectedMeasurement));
+            }
+        }
+    }
+
+    public bool HasSelectedMeasurement => _selectedMeasurementId is not null;
 
     private async Task ImportAsync()
     {
@@ -1094,6 +1133,7 @@ public sealed class ShellViewModel : ObservableObject
         // A new active dataset resets the Inspector to its properties (op editor / result / step are transient)
         // and re-populates the launcher from the registry for the new active dataset's kind.
         Statistics = null;
+        SelectedMeasurementId = null;
         _selectedRegion = null; // cleared silently; the RoiChanged below already refreshes the overlay
         SelectedStep = null;
         OperationEditor = null;
