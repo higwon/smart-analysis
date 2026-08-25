@@ -36,6 +36,7 @@ quantity the user believes it is. Every entry is tagged, and the measurement-sci
 | ID | Kind | Severity | Measurement-science entry |
 |---|---|---|---|
 | **LD-11** | Defect | High | Modulus is fitted against piezo travel, not tip–sample separation |
+| **LD-12** | Defect | High | Out-of-range resampling silently returns zero |
 | **LD-08** | Defect | Medium | Oliver–Pharr uses diamond's elastic constants for every probe |
 | **LI-01** | Improvement | — | The deflection channel's physical identity is recovered from a display-name substring |
 
@@ -51,6 +52,47 @@ A parity-report row marked 🟡 *intentional difference* says "we chose differen
 behaviour is a defect". The two overlap but are not the same: **LD-06** and **LD-07** are 🟡 rows whose
 underlying legacy behaviour is also a defect, while **LD-01** has no parity row at all — the legacy feature
 never produced a number to compare against.
+
+## Relationship to `legacy-analysis/07-tech-debt-register.md`
+
+A tech-debt register for the legacy product **already exists**, written during the up-front analysis phase:
+[`../legacy-analysis/07-tech-debt-register.md`](../legacy-analysis/07-tech-debt-register.md), with 18 entries
+(C1–C3, H1–H6, M1–M6, L1–L3). This file does not replace it. They answer different questions, and their
+severity scales measure different things:
+
+| | `07-tech-debt-register` | **this file** |
+|---|---|---|
+| Written | Up front, from a survey of the codebase | During implementation, as we read code to port it |
+| Granularity | Structural themes | One concrete finding per entry, with the code quoted |
+| **Severity means** | Impact on **the rewrite** — what we must not carry forward | Impact on **the legacy product's users** |
+| Audience | Us, deciding what to rebuild | Whoever maintains the legacy product |
+
+So a structural problem such as **H1** (file path used as data identity) or **C2** (WPF-bound domain) belongs
+there and is *not* duplicated here: it is a reason we are rebuilding, not a bug report for the shipping
+product. Conversely, a specific wrong number belongs here even when its theme is already named there.
+
+Where the two touch, entries here name the 07 theme they instantiate:
+
+| Theme in `07` | Instantiated here by |
+|---|---|
+| **M2** Extension-only detection; locale-dependent encoding | LD-03, LD-04, LD-05 |
+| **M3** Host-endian assumptions | LD-09 |
+| **M5** Incomplete / silently-wrong algorithm paths | LD-01, LD-02, LD-07, LD-12 |
+| **L2** Naming / hygiene | LD-10 |
+| *(no theme — found during implementation)* | LD-06, LD-08, **LD-11**, LI-01, LI-02, LI-03 |
+
+The last row is the point of keeping this file: the measurement-science findings (**LD-08**, **LD-11**,
+**LD-12**) were not visible from a structural survey. They need someone reading the physics while porting it.
+
+## Where these findings come from
+
+Three sources, all reconciled against the legacy tree before an entry is written:
+
+1. **The up-front analysis** — `07-tech-debt-register` and the other `legacy-analysis/*` documents.
+2. **Pull-request history** — every merged PR body was scanned for legacy findings that were recorded in the
+   PR and nowhere else. That sweep is what surfaced the FWHM defect (LD-01), the too-short ALS return (LD-07),
+   and the extension-only detection (LD-05) as *specific* entries rather than themes.
+3. **Direct audit while porting** — reading the legacy code for behaviour and noticing something wrong.
 
 ## Ground rules
 
@@ -492,6 +534,43 @@ spring constant, which FF08 now recovers from the header, so the pieces are in p
 
 ---
 
+## LD-12 · Out-of-range resampling silently returns zero
+
+**Severity:** High
+**Lens:** **Measurement science**
+**File:** `Framework/Analysis/FW.Analysis.Calculate/PiFM/SpectrumMatch/Preprocessor/Processor/ResampleProcessor.cs`
+
+```csharp
+for (...)
+{
+    double x1 = xValues[i];
+    double x2 = xValues[i + 1];
+
+    if (targetX < x1 || targetX > x2)
+    {
+        continue;
+    }
+    ...
+    return y1 + (y2 - y1) * t;
+}
+
+return 0;
+```
+
+**What is wrong.** The loop looks for the interval containing `targetX`. When none does — because the target
+grid extends past where the spectrum was actually measured — the method returns `0` rather than reporting that
+there is no value there.
+
+**Why it is a measurement error and not just a coding one.** Zero is a perfectly ordinary intensity. Extrapolated
+zeros are indistinguishable from measured zeros, and they land at the **edges of the resampled grid**, which is
+exactly where a spectrum-matching comparison is most sensitive to shape. A library match score is then computed
+partly against data the instrument never produced, with nothing in the result to say so.
+
+**In the new product.** Resampling is not yet ported. Recorded so that when it is, out-of-range targets are NaN
+(consistent with **ADR-016**) or an explicit refusal — never a fabricated sample.
+
+---
+
 # Improvements
 
 ## LI-01 · The cantilever deflection channel is identified by a substring of its display name
@@ -584,6 +663,7 @@ What has actually been audited, so the unreviewed remainder stays visible.
 | `SmartAnalysis.Dialog.SpectroscopyProcess` | 🟡 Partial | LI-01. Reached via the force-constant path only. |
 | `FW.UI.Common/SpectroscopyAnalysisModel` — modulus/stiffness call path | ✅ Audited | LD-11 |
 | `FW.Data.Scan` — scan/spectroscopy data models | 🟡 Partial | Read for payload-layout confirmation (FF06/FF07); nothing wrong found in what was read. |
+| `FW.Analysis.Calculate/PiFM/SpectrumMatch` — preprocessing | 🟡 Partial | LD-12. Reached via the `07` M5 lead; the matching and scoring code itself is unread. |
 | `LIB.File.HDF5` | ⬜ Not reviewed | Until FF04. |
 | `LIB.File.SQLite` | ⬜ Not reviewed | Until the persistence tasks. |
 | WPF dialogs & view-models (general) | ⬜ Not reviewed | Read piecemeal for UI behaviour; not audited. |
@@ -599,9 +679,13 @@ Recorded so a later pass does not repeat the search.
 | Undisposed `FileStream` / `BinaryReader` | `Library/File` | Clean — all construction sites are `using`. |
 | Hardcoded buffer sizes / magic byte counts in readers | `Library/File` | Clean — sizes come from named `PspptConst` entries or tag metadata. |
 | Modulus fit window straddling approach and retract | `Modulus`, `SpectroscopyAnalysisModel` | Clean — the fit range is bounded by caller-supplied `indexA`/`indexB`, so the user selects a branch on the chart rather than the code spanning both. |
+| Merged pull-request bodies for legacy findings recorded only there | all 97 merged PRs | 5 found; 3 were already entries (LD-01, LD-05, LD-07), 2 were structural and belong to `07` (H1 path-identity, the three-way active-item defect). |
 
 ## Adding an entry
 
+0. Check [`../legacy-analysis/07-tech-debt-register.md`](../legacy-analysis/07-tech-debt-register.md) first.
+   If the finding is a **structural** problem with the rewrite, it belongs there, not here. If it is a concrete
+   wrong result, it belongs here — and should name the 07 theme it instantiates.
 1. Confirm it in the legacy tree. Name the **file and symbol**, and quote the **actual code** — not a
    paraphrase, and not a line number.
 2. An entry backed only by one of our own documents does not go in. Re-verify against the source: doing that

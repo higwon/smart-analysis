@@ -9,6 +9,13 @@ license safety), not necessarily on the current shipping product.
 
 Format per item: **Problem / Severity / Evidence / Current impact / Risk if ported as-is / Recommended response.**
 
+> **Concrete findings live next door.** This register names *structural themes*, scored by their impact on
+> the rewrite. Individual wrong results found while porting — with the legacy code quoted, scored by their
+> impact on the **legacy product’s users** — go in
+> [`../migration/36-legacy-defect-register.md`](../migration/36-legacy-defect-register.md), which maps its
+> entries back to the themes here. M2, M3, M5 and L2 each have specific instances recorded there, and it also
+> holds measurement-science defects that a structural survey could not see.
+
 ---
 
 ## Critical

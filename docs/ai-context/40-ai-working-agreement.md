@@ -123,6 +123,8 @@ color/size/padding/template; theme colors via `DynamicResource`. **UI color ≠ 
     including "also open" when we have inherited the problem.
   - Update its coverage map when you audit a new area — **including when the area comes back clean**, so
     nobody repeats the search.
+  - Check `docs/legacy-analysis/07-tech-debt-register.md` first: **structural** problems with the rewrite
+    belong there, concrete wrong results belong in 36, and a 36 entry should name the 07 theme it instantiates.
   - This is separate from the parity report: 🟡 there means "we chose differently"; an entry here means the
     old behaviour is a defect or a liability. Do not fix it in the legacy tree — it is read-only for us.
 
