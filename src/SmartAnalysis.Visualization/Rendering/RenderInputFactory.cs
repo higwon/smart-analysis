@@ -56,6 +56,56 @@ public static class RenderInputFactory
             dataRange);
     }
 
+    /// <summary>
+    /// Builds a curve render input from a force curve: <b>force against separation</b>, the way a force–distance plot
+    /// is read. Unlike a line profile there is no regular axis — separation is a measured channel, so the X values are
+    /// its samples. Both channels are copied into owned arrays, so the input outlives the dataset (ADR-011).
+    /// </summary>
+    public static CurveRenderInput ForForceCurve(ForceCurveDataset curve, string? seriesName = null)
+    {
+        ArgumentNullException.ThrowIfNull(curve);
+
+        int n = curve.Length;
+        var separation = curve.Separation.Memory.Span;
+        var force = curve.Force.Memory.Span;
+        var xs = new double[n];
+        var ys = new double[n];
+        double xMin = double.PositiveInfinity, xMax = double.NegativeInfinity;
+        double yMin = double.PositiveInfinity, yMax = double.NegativeInfinity;
+        for (int i = 0; i < n; i++)
+        {
+            double x = separation[i], y = force[i];
+            xs[i] = x;
+            ys[i] = y;
+            if (double.IsFinite(x))
+            {
+                if (x < xMin) xMin = x;
+                if (x > xMax) xMax = x;
+            }
+
+            if (double.IsFinite(y))
+            {
+                if (y < yMin) yMin = y;
+                if (y > yMax) yMax = y;
+            }
+        }
+
+        if (xMax < xMin)
+        {
+            xMin = xMax = 0.0; // no finite separation
+        }
+
+        if (yMax < yMin)
+        {
+            yMin = yMax = 0.0;
+        }
+
+        var series = new XySeries(seriesName ?? curve.ForceChannel.DisplayName, xs, ys);
+        var xAxis = new AxisView(curve.SeparationChannel.DisplayName, curve.SeparationChannel.Unit.Symbol, xMin, xMax, n);
+        var yAxis = new AxisView(curve.ForceChannel.DisplayName, curve.ForceChannel.Unit.Symbol, yMin, yMax, n);
+        return new CurveRenderInput([series], xAxis, yAxis);
+    }
+
     /// <summary>Builds a single-series curve render input from a line profile (x = axis positions, y = values).</summary>
     public static CurveRenderInput ForLineProfile(LineProfileDataset profile, string? seriesName = null)
     {
