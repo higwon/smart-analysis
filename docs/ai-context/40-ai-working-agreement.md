@@ -111,11 +111,18 @@ color/size/padding/template; theme colors via `DynamicResource`. **UI color ≠ 
 - Structure/UI/persistence: **intentionally different** per the design docs.
 - If you must deviate from documented legacy numeric behavior, record an ADR explaining why
   (`docs/ai-context/41-doc-maintenance-and-adr.md`) and note it in the spec's parity section.
-- If, while reading legacy as a reference, you find that the legacy code is **wrong** — not merely different —
-  add an entry to `docs/migration/36-legacy-defect-register.md`. Cite legacy `file:line`, state the
-  consequence for a user of the *legacy* product, and say what the new code does instead. This is separate
-  from the parity report: 🟡 there means "we chose differently", an entry there means "the old behaviour is a
-  defect". Do not fix it in the legacy tree — it is read-only for this project.
+- While reading legacy as a reference, record what you find in `docs/migration/36-legacy-defect-register.md`.
+  It is an append-only register that will keep growing as we work through the legacy tree — do not leave a
+  finding in the pull request that surfaced it.
+  - `LD-` when the legacy code is **wrong**: a wrong, missing, or corrupted result.
+  - `LI-` when it is not wrong but **risky**: fragile, duplicated, or unconfigurable in a way that will bite.
+  - Cite legacy `file:line` (re-verify against the source — an entry backed only by our own docs does not
+    count), state the consequence for a user of the *legacy* product, and say what the new code does instead,
+    including "also open" when we have inherited the problem.
+  - Update its coverage map when you audit a new area — **including when the area comes back clean**, so
+    nobody repeats the search.
+  - This is separate from the parity report: 🟡 there means "we chose differently"; an entry here means the
+    old behaviour is a defect or a liability. Do not fix it in the legacy tree — it is read-only for us.
 
 ## 12. Core decisions you must NOT change on your own
 (Only change via an ADR + human review.)
