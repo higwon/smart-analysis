@@ -78,6 +78,7 @@ Where the two touch, entries here name the 07 theme they instantiate:
 | **M2** Extension-only detection; locale-dependent encoding | LD-03, LD-04, LD-05 |
 | **M3** Host-endian assumptions | LD-09 |
 | **M5** Incomplete / silently-wrong algorithm paths | LD-01, LD-02, LD-07, LD-12 |
+| **C3** No reproducibility / no provenance persistence | LD-13 |
 | **L2** Naming / hygiene | LD-10 |
 | *(no theme — found during implementation)* | LD-06, LD-08, **LD-11**, LI-01, LI-02, LI-03 |
 
@@ -92,7 +93,9 @@ Three sources, all reconciled against the legacy tree before an entry is written
 2. **Pull-request history** — every merged PR body was scanned for legacy findings that were recorded in the
    PR and nowhere else. That sweep is what surfaced the FWHM defect (LD-01), the too-short ALS return (LD-07),
    and the extension-only detection (LD-05) as *specific* entries rather than themes.
-3. **Direct audit while porting** — reading the legacy code for behaviour and noticing something wrong.
+3. **Our own `docs/` tree** — all 75 markdown files, since findings were also recorded in design and
+   spec documents and nowhere else.
+4. **Direct audit while porting** — reading the legacy code for behaviour and noticing something wrong.
 
 ## Ground rules
 
@@ -571,6 +574,48 @@ partly against data the instrument never produced, with nothing in the result to
 
 ---
 
+## LD-13 · Saving silently discards the entire processing history
+
+**Severity:** High
+**Lens:** Code
+**Files:** `Project/SmartAnalysis/SmartAnalysis/Desk/ViewModel/MainMenuCommandViewModel.cs`
+(`ReopenTiffForSaveAsAsync`), `Library/File/LIB.File.Tiff/TiffWriter.cs`
+**07 theme:** C3 — no reproducibility / no provenance persistence
+
+Save-as writes the TIFF and then destroys the in-memory document and re-reads it from disk:
+
+```csharp
+private async Task ReopenTiffForSaveAsAsync(string saveAsFile, BaseTrayItemModel trayItemModel, AbstractChildWindow window)
+{
+    var index = MainViewModel?.DeleteTrayItemToSameTiffPath(saveAsFile);
+    var selfIndex = MainViewModel?.DeleteTrayItemFromTray(trayItemModel);
+    MainViewModel?.OnTrayItemDeleted_DeleteDocumentWindow(window);
+    RemoveOpenedFile(trayItemModel);
+
+    OverwriteSaveAsIndex = index.Value.Equals(-1) ? selfIndex.Value : index.Value;
+    await OpenFileAsync(saveAsFile);
+}
+```
+
+`TiffWriter` contains no history or provenance handling at all — searching it for either term returns nothing.
+The processing history exists only in the in-memory model that these four lines delete.
+
+**What is wrong.** The output format has nowhere to record what was done, and the reopen guarantees the record
+is gone rather than merely unsaved. The two together mean the loss is total and immediate, not "until you close
+the app".
+
+**Consequence.** A user flattens, filters, and measures an image, saves it, and the file that comes back has no
+trace of any of it — no warning, and the window looks the same because it has been transparently replaced by a
+freshly-read document. Nobody can later establish how a published number was produced, including the person who
+produced it. For PiFM inputs it is worse: the HDF5 the data came from carries the instrument's own richer
+history, which is read but never carried forward, so saving downgrades provenance that already existed.
+
+**In the new product.** Provenance is mandatory and persisted — every dataset carries a `ProvenanceRecord`
+lineage that survives save and reopen (**ADR-004**, **ADR-013**), which is one of the three reasons the product
+is being rebuilt rather than ported (07 C3).
+
+---
+
 # Improvements
 
 ## LI-01 · The cantilever deflection channel is identified by a substring of its display name
@@ -666,6 +711,7 @@ What has actually been audited, so the unreviewed remainder stays visible.
 | `FW.Analysis.Calculate/PiFM/SpectrumMatch` — preprocessing | 🟡 Partial | LD-12. Reached via the `07` M5 lead; the matching and scoring code itself is unread. |
 | `LIB.File.HDF5` | ⬜ Not reviewed | Until FF04. |
 | `LIB.File.SQLite` | ⬜ Not reviewed | Until the persistence tasks. |
+| Save / reopen path — `MainMenuCommandViewModel`, `TiffWriter` | 🟡 Partial | LD-13. The save-as flow only; the rest of the persistence code is unread. |
 | WPF dialogs & view-models (general) | ⬜ Not reviewed | Read piecemeal for UI behaviour; not audited. |
 
 ## Swept for and not found
@@ -680,6 +726,22 @@ Recorded so a later pass does not repeat the search.
 | Hardcoded buffer sizes / magic byte counts in readers | `Library/File` | Clean — sizes come from named `PspptConst` entries or tag metadata. |
 | Modulus fit window straddling approach and retract | `Modulus`, `SpectroscopyAnalysisModel` | Clean — the fit range is bounded by caller-supplied `indexA`/`indexB`, so the user selects a branch on the chart rather than the code spanning both. |
 | Merged pull-request bodies for legacy findings recorded only there | all 97 merged PRs | 5 found; 3 were already entries (LD-01, LD-05, LD-07), 2 were structural and belong to `07` (H1 path-identity, the three-way active-item defect). |
+| Our own `docs/` tree for legacy findings recorded only there | all 75 markdown files | 2 new entries (LD-12, LD-13) plus 6 untraced leads, below. Nearly every reference resolves back to 07 M5 or doc 06, confirming 07 is the hub. |
+
+## Open leads — named in our own documents, not yet traced to legacy code
+
+These are legacy defects our design documents assert but for which no specific legacy `file:line` has been
+confirmed. They are **not** entries: an entry requires the code in hand. Listed so the next audit knows where
+to look rather than rediscovering the lead.
+
+| Lead | Named in | Status |
+|---|---|---|
+| Reversed axes not handled | `target-design/13-analysis-operation-contract.md`, from 07 M5 | Untraced |
+| Non-overlapping spectra not handled | same | Untraced |
+| Unit mismatch not handled | same | Untraced |
+| NaN / Infinity propagated silently through analysis | same | Untraced. FF01's rule (ADR-015) says legacy neither preserves nor flags non-finite pixels; the specific code was not located. |
+| Free-text comment fields used to carry state | `ai-context/40-ai-working-agreement.md`, from 07 M5 / 06 | Untraced |
+| Untested XEI ports — DifferenceFlatten, DriftCorrection | 07 M5 evidence line | Untraced; flagged as untested rather than shown wrong |
 
 ## Adding an entry
 
