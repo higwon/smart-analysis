@@ -91,6 +91,46 @@ public sealed class ForceDistanceMeasuresOperationTests
     }
 
     [Fact]
+    public async Task A_threshold_that_falls_between_samples_uses_the_interpolated_crossing()
+    {
+        // The reviewer case: coarse, unevenly-spaced samples where the threshold lands BETWEEN two of them.
+        // Force 0,30,60,90,100 over separation 4,3,2,1,0 with threshold 50% ⇒ targetForce = 50, which sits between
+        // the force-30 and force-60 samples. Snapping to a sample would pair ΔF against a force the curve never had.
+        var separation = new float[] { 4, 3, 2, 1, 0 };
+        var force = new float[] { 0, 30, 60, 90, 100 };
+        using var curve = Curve(separation, force);
+
+        var artifact = await MeasureAsync(curve, ("threshold", 50.0));
+
+        // The crossing is at force 50, between (3, 30) and (2, 60): z = 3 - (20/30) = 2.3333…
+        // So Δz = |0 - 2.3333| = 2.3333 and ΔF = 100 - 50 = 50 → stiffness = 21.43, both from that ONE pair.
+        double deformation = artifact.Scalars["Deformation"].Value;
+        double stiffness = artifact.Scalars["Stiffness"].Value;
+        Assert.Equal(2.33333, deformation, 4);
+        Assert.Equal(50.0 / 2.33333, stiffness, 3);
+
+        // The contract itself: the two measures come from the same two points, so ΔF/Δz must reproduce the stiffness.
+        Assert.Equal((100.0 - 50.0) / deformation, stiffness, 6);
+    }
+
+    [Fact]
+    public async Task Stiffness_and_deformation_always_describe_the_same_two_points()
+    {
+        // Deliberately awkward: uneven force steps and a threshold that lands mid-gap at 55%.
+        var separation = new float[] { 10, 8, 5, 3, 2, 0 };
+        var force = new float[] { 0, 12, 41, 77, 88, 100 };
+        using var curve = Curve(separation, force);
+
+        var artifact = await MeasureAsync(curve, ("threshold", 55.0));
+
+        double maxForce = artifact.Scalars["MaxForce"].Value;
+        double target = maxForce * 0.55;
+        double deformation = artifact.Scalars["Deformation"].Value;
+        // The edge is the exact crossing, so the force drop over the measured span is exactly maxForce - target.
+        Assert.Equal((maxForce - target) / deformation, artifact.Scalars["Stiffness"].Value, 6);
+    }
+
+    [Fact]
     public async Task Adhesion_is_the_depth_of_the_pull_off()
     {
         // A retract half that dips to -30 nN before releasing.
@@ -176,6 +216,26 @@ public sealed class ForceDistanceMeasuresOperationTests
         var step = Assert.Single(artifact.Provenance.Steps);
         Assert.Equal("force-curve.fd-measures", step.OperationId);
         Assert.Equal(40.0, step.Parameters["threshold"].Value);
+    }
+
+    [Fact]
+    public void Channels_that_are_not_a_force_and_a_length_are_rejected()
+    {
+        // A mis-built curve whose channels are volts and amps would otherwise yield a "V/A" value CLAIMING the
+        // Stiffness dimension — convertible against N/m. That is a corrupted measurement, not a labelling slip.
+        var separation = new float[] { 4, 3, 2, 1, 0 };
+        var force = new float[] { 0, 30, 60, 90, 100 };
+        using var wrong = new ForceCurveDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(separation, separation.Length, 1),
+            ScanBuffer<float>.TakeOwnership(force, force.Length, 1),
+            new ChannelDescriptor("current", ChannelKind.Unknown, StandardUnits.Ampere, "Current"),
+            new ChannelDescriptor("voltage", ChannelKind.Unknown, StandardUnits.Volt, "Voltage"),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var validation = Op().Validate(new OperationInput(wrong), ParameterSet.Empty);
+
+        Assert.False(validation.IsValid);
     }
 
     [Fact]

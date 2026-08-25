@@ -9,11 +9,12 @@ namespace SmartAnalysis.Analysis.Operations.Spectroscopy;
 /// <b>max force</b>, <b>adhesion</b> (the deepest pull-off), <b>stiffness</b>, and <b>deformation</b> — as a Measure
 /// artifact attached to the curve.
 /// <para>
-/// Stiffness and deformation follow the legacy definition: take a <c>threshold</c> percentage of the maximum force,
-/// find where the curve last sits at or above that force, and measure the force drop over the separation travelled
-/// between there and the peak. Stiffness is <c>|ΔF / Δz|</c> and deformation is <c>|Δz|</c>, so the two share one
-/// geometry and cannot disagree. Units are carried through from the curve's own channels (no assumed nm/nN), and the
-/// composite stiffness unit is force-per-length built from them.
+/// Stiffness and deformation are read off <b>exactly two points</b>: the force peak, and the window edge where the
+/// curve crosses a <c>threshold</c> percentage of that peak force (the separation is <b>interpolated</b> at the exact
+/// crossing, so the "% of max force" keeps its meaning instead of snapping to whichever sample sits nearby). Stiffness
+/// is that pair's <c>|ΔF / Δz|</c> and deformation its <c>|Δz|</c> — both from the same geometry, so they cannot
+/// disagree. Units are carried through from the curve's own channels (no assumed nm/nN, and the channels must
+/// really be a force and a length — validated), and the stiffness unit is force-per-length built from them.
 /// </para>
 /// Intended to run on <b>one half</b> of a curve (A23) — a round trip mixes the push and the pull-off, so its
 /// "max force" and "adhesion" describe different phases; the operation therefore warns when it sees a full round trip.
@@ -58,6 +59,21 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
         if (input.Primary is not ForceCurveDataset curve)
         {
             return ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(ForceCurveDataset)} as its primary input.");
+        }
+
+        // The channels must really BE force and length: the stiffness unit is built as force-per-length and carries
+        // the Stiffness dimension, so a curve whose channels are (say) volts and amps would otherwise produce a "V/A"
+        // value claiming to be a stiffness — convertible against N/m. That is a corrupted measurement, not a label bug.
+        if (curve.ForceChannel.Unit.Dimension != StandardUnits.Force)
+        {
+            return ValidationResult.Fail(
+                $"The force channel must be a force ({curve.ForceChannel.Unit.Symbol} is {curve.ForceChannel.Unit.Dimension.Name}).");
+        }
+
+        if (curve.SeparationChannel.Unit.Dimension != StandardUnits.Length)
+        {
+            return ValidationResult.Fail(
+                $"The separation channel must be a length ({curve.SeparationChannel.Unit.Symbol} is {curve.SeparationChannel.Unit.Dimension.Name}).");
         }
 
         return HasFiniteSample(curve)
@@ -134,15 +150,18 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
         // rather than a misleading "smallest force".
         double adhesion = valley >= 0 && minForce < 0 ? -minForce : 0.0;
 
-        // The stiffness/deformation window: from the peak back to where the curve last sits at or above the
-        // threshold force. Both measures share this one geometry, so they can never disagree.
+        // The stiffness/deformation window runs between EXACTLY TWO points: the peak (maxForce, z[peak]) and the
+        // threshold edge. Both measures are read off that one pair — deformation is its separation span and stiffness
+        // its force drop over that span — so they can never describe different geometries.
         double targetForce = maxForce * threshold / 100.0;
-        int boundary = FindThresholdBoundary(force, separation, peak, targetForce);
-        double deltaForce = maxForce - targetForce;
-        double deltaZ = boundary >= 0 ? separation[peak] - separation[boundary] : double.NaN;
+        var edge = FindThresholdEdge(force, separation, peak, targetForce);
+        double deltaForce = edge is { } e ? maxForce - e.Force : double.NaN;
+        double deltaZ = edge is { } e2 ? separation[peak] - e2.Separation : double.NaN;
 
         double deformation = double.IsFinite(deltaZ) ? Math.Abs(deltaZ) : double.NaN;
-        double stiffness = double.IsFinite(deltaZ) && deltaZ != 0.0 ? Math.Abs(deltaForce / deltaZ) : double.NaN;
+        double stiffness = double.IsFinite(deltaZ) && double.IsFinite(deltaForce) && deltaZ != 0.0
+            ? Math.Abs(deltaForce / deltaZ)
+            : double.NaN;
         if (!double.IsFinite(stiffness))
         {
             warnings.Add(new OperationWarning("fd.no-window", "The threshold window has no separation travel; stiffness and deformation are undefined."));
@@ -207,29 +226,54 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
         return false;
     }
 
-    // Walks outward from the peak to the last sample still at or above the threshold force — the far edge of the
-    // window the drop is measured over. Returns -1 when no finite neighbour qualifies.
-    private static int FindThresholdBoundary(ReadOnlySpan<float> force, ReadOnlySpan<float> separation, int peak, double targetForce)
+    /// <summary>The far end of the threshold window: a force and the separation it occurs at.</summary>
+    private readonly record struct WindowEdge(double Force, double Separation);
+
+    // The outer edge of the threshold window, as an exact (force, separation) pair so ΔF and Δz describe the SAME two
+    // points. Preferred form: the curve's crossing of targetForce, with the separation interpolated between the two
+    // bracketing samples — that keeps the "% of max force" meaning exact rather than snapping to whichever sample
+    // happens to sit nearby. When the curve never crosses (it stays at or above the threshold throughout), the edge is
+    // the farthest qualifying sample and its OWN force is used, so the pair still comes from one geometry.
+    private static WindowEdge? FindThresholdEdge(ReadOnlySpan<float> force, ReadOnlySpan<float> separation, int peak, double targetForce)
     {
-        int boundary = -1;
+        double peakZ = separation[peak];
+        WindowEdge? crossing = null;
+        WindowEdge? farthestAbove = null;
+
+        int previous = -1;
         for (int i = 0; i < force.Length; i++)
         {
-            if (i == peak || !double.IsFinite(force[i]) || !double.IsFinite(separation[i]))
+            if (!double.IsFinite(force[i]) || !double.IsFinite(separation[i]))
             {
-                continue;
+                continue; // a dropout breaks the bracket; the next finite pair starts a new one
             }
 
-            if (force[i] >= targetForce)
+            if (force[i] >= targetForce && i != peak
+                && (farthestAbove is not { } fa || Math.Abs(separation[i] - peakZ) > Math.Abs(fa.Separation - peakZ)))
             {
-                // The farthest qualifying sample in separation is the window's edge.
-                if (boundary < 0 || Math.Abs(separation[i] - separation[peak]) > Math.Abs(separation[boundary] - separation[peak]))
+                farthestAbove = new WindowEdge(force[i], separation[i]);
+            }
+
+            if (previous >= 0)
+            {
+                double a = force[previous], b = force[i];
+                if ((a >= targetForce && b < targetForce) || (a < targetForce && b >= targetForce))
                 {
-                    boundary = i;
+                    // Linear interpolation of the separation at the exact threshold force.
+                    double span = b - a;
+                    double fraction = span == 0.0 ? 0.0 : (targetForce - a) / span;
+                    double z = separation[previous] + (fraction * (separation[i] - separation[previous]));
+                    if (crossing is not { } c || Math.Abs(z - peakZ) > Math.Abs(c.Separation - peakZ))
+                    {
+                        crossing = new WindowEdge(targetForce, z);
+                    }
                 }
             }
+
+            previous = i;
         }
 
-        return boundary;
+        return crossing ?? farthestAbove;
     }
 
     // A round trip turns around: separation falls then rises (or the reverse). One half is monotone in intent, so a
