@@ -253,9 +253,13 @@ public sealed class PsiaTiffReader : IScanFileReader
                 $"Multi-point spectroscopy ({spectroscopy.SpectroscopyPoints} spectra in one file) is not supported yet.");
         }
 
-        if (!System.Enum.IsDefined(typeof(PsiaTiff.DataType), header.DataType))
+        // The spectroscopy payload carries its OWN element type: a processed file (an offset-adjusted curve, say)
+        // is written as float while the 2D header it inherited still says short. The 2D header is only a fallback for
+        // a header too short to hold the field.
+        int dataType = spectroscopy.DataType ?? header.DataType;
+        if (!System.Enum.IsDefined(typeof(PsiaTiff.DataType), dataType))
         {
-            return FileReadResult.Failure(FileReadErrorKind.Corrupt, $"Unsupported PSIA data type {header.DataType}.");
+            return FileReadResult.Failure(FileReadErrorKind.Corrupt, $"Unsupported PSIA data type {dataType}.");
         }
 
         int xIndex = FindAxis(spectroscopy, isXAxis: true);
@@ -290,7 +294,7 @@ public sealed class PsiaTiffReader : IScanFileReader
             return FileReadResult.Failure(FileReadErrorKind.Truncated, "PSIA spectroscopy data tag (0xC507) is missing.");
         }
 
-        int bytesPerValue = header.DataType switch
+        int bytesPerValue = dataType switch
         {
             (int)PsiaTiff.DataType.Short => sizeof(short),
             (int)PsiaTiff.DataType.Int => sizeof(int),
@@ -298,13 +302,20 @@ public sealed class PsiaTiffReader : IScanFileReader
         };
 
         // The payload is channel-planar, so a mis-read would still land inside the buffer and yield a plausible-looking
-        // curve. Requiring the declared size is what turns that into a refusal.
+        // curve. The size must match EXACTLY: a BYTE tag's ValueCount is the payload's logical length, with no
+        // alignment padding to allow for. A larger payload is the dangerous direction — it means the header and the
+        // data disagree, most likely several spectra whose SpectPoints was misread as one, and accepting it would
+        // read the leading planes and hand back a plausible curve. That is the partial consumption of an unverified
+        // layout this reader exists to refuse.
         long expected = spectroscopy.ExpectedDataBytes(bytesPerValue);
-        if (dataEntry.ValueCount < expected)
+        if (dataEntry.ValueCount != expected)
         {
-            return FileReadResult.Failure(FileReadErrorKind.Truncated,
-                $"Spectroscopy payload ({dataEntry.ValueCount} bytes) is smaller than the declared "
-                + $"{spectroscopy.DataPoints}x{spectroscopy.SourceCount}x{bytesPerValue} = {expected} bytes.");
+            bool short_ = dataEntry.ValueCount < expected;
+            return FileReadResult.Failure(
+                short_ ? FileReadErrorKind.Truncated : FileReadErrorKind.Corrupt,
+                $"Spectroscopy payload ({dataEntry.ValueCount} bytes) is {(short_ ? "smaller" : "larger")} than the "
+                + $"declared {spectroscopy.DataPoints}x{spectroscopy.SourceCount}x{spectroscopy.SpectroscopyPoints}"
+                + $"x{bytesPerValue} = {expected} bytes.");
         }
 
         ct.ThrowIfCancellationRequested();
@@ -312,16 +323,16 @@ public sealed class PsiaTiffReader : IScanFileReader
         byte[] dataBytes = ReadByteField(fieldReader, dataEntry);
         int count = spectroscopy.DataPoints;
         float[] separationValues = ReadPlane(
-            dataBytes, count, xIndex, header.DataType, bytesPerValue, xLine.DataGain, spectroscopy.Offsets[xIndex]);
+            dataBytes, count, xIndex, dataType, bytesPerValue, xLine.DataGain, spectroscopy.Offsets[xIndex]);
         float[] forceValues = ReadPlane(
-            dataBytes, count, yIndex, header.DataType, bytesPerValue, yLine.DataGain, spectroscopy.Offsets[yIndex]);
+            dataBytes, count, yIndex, dataType, bytesPerValue, yLine.DataGain, spectroscopy.Offsets[yIndex]);
 
         var separationChannel = new ChannelDescriptor(
             Key(xLine.SourceName, "separation"), ChannelKind.Topography, separationUnit, displayName: xLine.SourceName);
         var forceChannel = new ChannelDescriptor(
             Key(yLine.SourceName, "force"), ChannelKind.Force, forceUnit, displayName: yLine.SourceName);
 
-        var metadata = BuildSpectroscopyMetadata(header, spectroscopy, xLine, yLine, contentHash);
+        var metadata = BuildSpectroscopyMetadata(header, spectroscopy, xLine, yLine, dataType, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
         var separation = ScanBuffer<float>.TakeOwnership(separationValues, count, 1);
@@ -384,13 +395,14 @@ public sealed class PsiaTiffReader : IScanFileReader
         PsiaSpectroscopyHeader spectroscopy,
         PsiaSpectroscopyLine xLine,
         PsiaSpectroscopyLine yLine,
+        int dataType,
         string contentHash)
     {
         string model = string.IsNullOrWhiteSpace(header.ImageMode) ? "unknown" : header.ImageMode;
         var extended = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["psia.imageType"] = header.ImageType.ToString(CultureInfo.InvariantCulture),
-            ["psia.dataType"] = header.DataType.ToString(CultureInfo.InvariantCulture),
+            ["psia.dataType"] = dataType.ToString(CultureInfo.InvariantCulture), // the payload's, not the 2D header's
             ["psia.spect.dataPoints"] = spectroscopy.DataPoints.ToString(CultureInfo.InvariantCulture),
             ["psia.spect.sources"] = spectroscopy.SourceCount.ToString(CultureInfo.InvariantCulture),
             ["psia.spect.xSource"] = xLine.SourceName,

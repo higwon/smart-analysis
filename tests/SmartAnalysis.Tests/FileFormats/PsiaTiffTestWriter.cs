@@ -156,13 +156,20 @@ internal static class PsiaTiffTestWriter
     /// <summary>Bytes the writer emits for tag 0xC506 — through ForceConstant and Sensitivity.</summary>
     public const int SpectroscopyHeaderBytes = 992;
 
+    /// <summary>A real 0xC506 header's size, which runs past Sensitivity.</summary>
+    public const int FullSpectroscopyHeaderBytes = 1220;
+
+    /// <summary>Where the payload's element type sits in a full header.</summary>
+    public const int PayloadDataTypeOffset = 1108;
+
     /// <summary>Builds a spectroscopy header (tag 0xC506) with the eight fixed channel slots.</summary>
     public static byte[] BuildSpectroscopyHeader(
         SpectroscopyLine[] lines,
         int dataPoints,
         int spectroscopyPoints = 1,
         double forceConstant = 0,
-        int? sourceCountOverride = null)
+        int? sourceCountOverride = null,
+        int? payloadDataType = null)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms, Encoding.Unicode);
@@ -215,7 +222,16 @@ internal static class PsiaTiffTestWriter
             throw new InvalidOperationException($"Test spectroscopy header is {bytes.Length} bytes, expected {SpectroscopyHeaderBytes}.");
         }
 
-        return bytes;
+        if (payloadDataType is not { } dataType)
+        {
+            return bytes;
+        }
+
+        // A real header runs on past Sensitivity; the payload's element type sits at a known offset inside that tail.
+        var full = new byte[FullSpectroscopyHeaderBytes];
+        bytes.CopyTo(full, 0);
+        BitConverter.GetBytes(dataType).CopyTo(full, PayloadDataTypeOffset);
+        return full;
     }
 
     /// <summary>

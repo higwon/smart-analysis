@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 
 namespace SmartAnalysis.Infrastructure.FileFormats.Tiff;
@@ -156,7 +157,8 @@ internal sealed record PsiaSpectroscopyHeader(
     int DataPoints,
     int SpectroscopyPoints,
     IReadOnlyList<double> Offsets,
-    double ForceConstantNewtonPerMetre)
+    double ForceConstantNewtonPerMetre,
+    int? DataType)
 {
     /// <summary>Channel slots in the struct, always written whether or not they are used.</summary>
     private const int LineSlots = 8;
@@ -164,8 +166,17 @@ internal sealed record PsiaSpectroscopyHeader(
     /// <summary>Bytes needed to reach the end of the sample counts — the minimum a usable header must have.</summary>
     private const int MinBytes = (LineSlots * 96) + (5 * sizeof(int));
 
+    /// <summary>Bytes needed to also reach the end of the per-source <c>Offset</c> array.</summary>
+    private const int OffsetsEndBytes = 872;
+
     /// <summary>Bytes needed to also reach <c>ForceConstantNewtonPerMeter</c>, which older writers may omit.</summary>
     private const int ForceConstantBytes = 984;
+
+    /// <summary>
+    /// Absolute offset of the payload's element type. The fields between it and <c>Sensitivity</c> are not mapped,
+    /// so it is read by position rather than by inventing names for the bytes in between.
+    /// </summary>
+    private const int DataTypeOffset = 1108;
 
     public long ExpectedDataBytes(int bytesPerValue)
         => (long)DataPoints * SourceCount * SpectroscopyPoints * bytesPerValue;
@@ -200,7 +211,9 @@ internal sealed record PsiaSpectroscopyHeader(
 
         var offsets = new double[LineSlots];
         double forceConstant = 0;
-        if (headerBytes.Length >= ForceConstantBytes)
+        // Each trailing field is gated on its own reach, so a header that stops short of ForceConstant still
+        // yields the offsets that precede it rather than silently zeroing them.
+        if (headerBytes.Length >= OffsetsEndBytes)
         {
             _ = r.ReadBytes(4 * sizeof(float));           // drive periods / speeds
             _ = r.ReadInt32();                            // VolumeImage
@@ -209,15 +222,22 @@ internal sealed record PsiaSpectroscopyHeader(
                 offsets[i] = r.ReadDouble();
             }
 
-            _ = r.ReadBytes(LineSlots * sizeof(int));     // LogScale[8]
-            _ = r.ReadBytes(LineSlots * sizeof(int));     // Square[8]
-            _ = r.ReadInt32();                            // PerXPoint
-            _ = r.ReadInt32();                            // ReferenceImage
-            _ = r.ReadBytes(4 * sizeof(double));          // scan size / offset
-            forceConstant = r.ReadDouble();
+            if (headerBytes.Length >= ForceConstantBytes)
+            {
+                _ = r.ReadBytes(LineSlots * sizeof(int)); // LogScale[8]
+                _ = r.ReadBytes(LineSlots * sizeof(int)); // Square[8]
+                _ = r.ReadInt32();                        // PerXPoint
+                _ = r.ReadInt32();                        // ReferenceImage
+                _ = r.ReadBytes(4 * sizeof(double));      // scan size / offset
+                forceConstant = r.ReadDouble();
+            }
         }
 
-        return new PsiaSpectroscopyHeader(lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant);
+        int? dataType = headerBytes.Length >= DataTypeOffset + sizeof(int)
+            ? BinaryPrimitives.ReadInt32LittleEndian(headerBytes.AsSpan(DataTypeOffset))
+            : null;
+
+        return new PsiaSpectroscopyHeader(lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant, dataType);
     }
 
     private static string ReadFixedString(BinaryReader r, int charCount)

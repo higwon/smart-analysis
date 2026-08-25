@@ -92,7 +92,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
         }
 
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
-        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
+        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff", SearchOption.AllDirectories).OrderBy(p => p))
         {
             var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
             (result.Dataset as IDisposable)?.Dispose();
@@ -122,7 +122,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
 
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
         int curves = 0;
-        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
+        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff", SearchOption.AllDirectories).OrderBy(p => p))
         {
             var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
             using var dataset = result.Dataset as IDisposable;
@@ -196,7 +196,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
         }
 
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
-        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
+        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff", SearchOption.AllDirectories).OrderBy(p => p))
         {
             var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
 

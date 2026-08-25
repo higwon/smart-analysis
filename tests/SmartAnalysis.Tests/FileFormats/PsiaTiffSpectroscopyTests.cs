@@ -281,6 +281,88 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
     }
 
     [Fact]
+    public async Task A_payload_larger_than_the_header_declares_is_refused_rather_than_partly_read()
+    {
+        // The mirror of the truncated case, and the one that matters more. A payload holding MORE than the counts
+        // describe means the header and the data disagree — most likely several spectra whose SpectPoints was
+        // misread as 1. Accepting it would read the first two planes and hand back a perfectly plausible force
+        // curve, which is exactly the partial consumption of an unverified layout this reader refuses to do.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points), // declares 8 x 2 x 1 x 4 = 64 bytes
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1), Ramp(0, 1), Ramp(1000, 1))); // but writes 128
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FileReadErrorKind.Corrupt, result.Error!.Kind);
+    }
+
+    [Fact]
+    public async Task A_header_stopping_short_of_the_force_constant_still_yields_the_offsets_before_it()
+    {
+        // Trailing fields are gated on their own reach, not on the last one's. Gating the offsets on ForceConstant
+        // would zero them for any writer that stops in between — quietly shifting every sample of both channels.
+        const int throughOffsets = 872;
+        var header = PsiaTiffTestWriter.BuildSpectroscopyHeader(
+            [
+                new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false, Offset: -5),
+                new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true, Offset: 7),
+            ],
+            dataPoints: Points,
+            forceConstant: 26);
+
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            header[..throughOffsets],
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        Assert.Equal(-5f, curve.Separation.Span[0]);
+        Assert.Equal(1007f, curve.Force.Span[0]);
+        Assert.False(curve.Metadata.Extended.ContainsKey("psia.spect.forceConstant_N_per_m")); // never reached
+    }
+
+    [Fact]
+    public async Task The_payloads_own_element_type_wins_over_the_2d_headers()
+    {
+        // A processed file (an offset-adjusted curve) is written as float while the 2D header it inherited still says
+        // short. Trusting the 2D header there halves the stride: the size check catches it, but only after refusing a
+        // file that is perfectly readable. The spectroscopy header carries the payload's real element type.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(Short), // the 2D header says short...
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                payloadDataType: Float), // ...but the payload is float
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        Assert.Equal(Ramp(0, 1).Select(v => (float)v).ToArray(), curve.Separation.Span.ToArray());
+        Assert.Equal(Ramp(1000, 1).Select(v => (float)v).ToArray(), curve.Force.Span.ToArray());
+        Assert.Equal("2", curve.Metadata.Extended["psia.dataType"]); // what was actually read, not what the 2D header said
+    }
+
+    [Fact]
     public async Task A_spectroscopy_file_without_its_spectroscopy_header_is_corrupt()
     {
         var path = NewPath();
