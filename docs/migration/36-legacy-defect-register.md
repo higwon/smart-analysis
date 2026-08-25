@@ -10,15 +10,34 @@ Rather than let each finding sit in the pull request that happened to surface it
 [coverage map](#coverage-map) tracks how much of the legacy tree has actually been audited, so *"not yet
 reviewed"* stays visible and shrinks on purpose instead of being confused with *"nothing there"*.
 
-## Two kinds of entry
+## Two kinds of entry, two lenses
 
-| Type | Prefix | Means |
+**Kind** — how strong the claim is:
+
+| Kind | Prefix | Means |
 |---|---|---|
-| **Defect** | `LD-` | The legacy code produces a wrong, missing, or corrupted result. |
-| **Improvement** | `LI-` | The code is not wrong today, but is fragile, duplicated, or unconfigurable in a way that will bite. |
+| **Defect** | `LD-` | The legacy product produces a wrong, missing, or corrupted result. |
+| **Improvement** | `LI-` | Not wrong today, but fragile, duplicated, or unconfigurable in a way that will bite. |
 
 Keeping these apart matters: a register where everything is "an issue" gets ignored. An `LD-` entry claims
 something is **broken**; an `LI-` entry claims something is **risky**.
+
+**Lens** — what kind of wrongness it is:
+
+| Lens | Means |
+|---|---|
+| **Code** | A programming error: a guard in the wrong place, a decode with the wrong encoding, a value never assigned. |
+| **Measurement science** | The code does exactly what it was written to do, and the **AFM or spectroscopy is wrong** — a physical constant that cannot be right for the probe in use, a quantity plotted against the wrong axis, an identity recovered by guesswork. |
+
+The second lens is the one that does not show up in a code review, and it is the more dangerous of the two in a
+measurement product: nothing crashes, nothing looks odd, and the number that comes out is simply not the
+quantity the user believes it is. Every entry is tagged, and the measurement-science ones are listed here:
+
+| ID | Kind | Severity | Measurement-science entry |
+|---|---|---|---|
+| **LD-11** | Defect | High | Modulus is fitted against piezo travel, not tip–sample separation |
+| **LD-08** | Defect | Medium | Oliver–Pharr uses diamond's elastic constants for every probe |
+| **LI-01** | Improvement | — | The deflection channel's physical identity is recovered from a display-name substring |
 
 ## How this differs from the neighbouring documents
 
@@ -58,6 +77,7 @@ never produced a number to compare against.
 ## LD-01 · Spectral-range FWHM is never computed, but the result reports itself valid
 
 **Severity:** High
+**Lens:** Code
 **File:** `Framework/Analysis/FW.Analysis.Calculate/PiFM/SpectralRangeAnalyzer.cs`
 **Symbol:** `SpectralRangeAnalyzer.Analyze` → `SpectralRangeAnalysisResult`
 
@@ -100,6 +120,7 @@ crossings, scaled to the X unit), covered by tests.
 ## LD-02 · Empty-input guard is silently undone by `Calculate()`
 
 **Severity:** High
+**Lens:** Code
 **File:** `Framework/Analysis/FW.Analysis.Calculate/SummaryStatisticsCalculator.cs`
 **Symbols:** constructor and `CalculateBasics()`
 
@@ -178,6 +199,7 @@ parity test recording the deliberate divergence.
 ## LD-03 · Extended-header XML is decoded with the machine's ANSI codepage
 
 **Severity:** High
+**Lens:** Code
 **File:** `Library/File/LIB.File.Tiff/TiffFile.cs`
 
 ```csharp
@@ -201,6 +223,7 @@ XML declaration / BOM, and confirm against real fixtures before pinning an encod
 ## LD-04 · PS-PPT maker string and delimiter are decoded with the machine's ANSI codepage
 
 **Severity:** Medium
+**Lens:** Code
 **File:** `Library/File/LIB.File.PSPPT/PspptFile.cs`
 
 ```csharp
@@ -217,6 +240,7 @@ codepage mismatch here is not only a metadata problem, it can affect whether the
 ## LD-05 · A file's format is decided by its extension alone
 
 **Severity:** Medium
+**Lens:** Code
 **Files:** `Library/File/LIB.File.Tiff/Enum/EOpenFileType.cs` (`OpenFileTypeExtensions.FromOpenFileType`),
 `Framework/Data/FW.Data.Scan/BaseScanData.cs`
 
@@ -260,6 +284,7 @@ fall back to the extension only when the content cannot be read at all, and repo
 ## LD-06 · The PSIA magic-number tag is checked for presence, not for value
 
 **Severity:** Medium
+**Lens:** Code
 **Files:** `Library/File/LIB.File.Tiff/TiffFile.cs` (`IsCheckMagicNumber`),
 `Library/File/LIB.File.Tiff/Enum/EPsiaTag.cs`
 
@@ -296,6 +321,7 @@ or a spec. Recorded here rather than quietly inherited.
 ## LD-07 · Baseline correction returns the input unchanged when the profile is too short
 
 **Severity:** Medium
+**Lens:** Code
 **File:** `Framework/Analysis/FW.Analysis.Calculate/BaselineCorrction.cs`
 **Symbol:** `BaselineCorrection.CalculateAlsBaseline`
 
@@ -328,6 +354,7 @@ once, when the file was left out of a golden-harness source list and the recorde
 ## LD-08 · Oliver–Pharr uses hardcoded diamond constants for every probe
 
 **Severity:** Medium
+**Lens:** **Measurement science**
 **File:** `Framework/Analysis/FW.Analysis.Calculate/Modulus/ModulusCalculator.cs`
 
 ```csharp
@@ -358,6 +385,7 @@ no tip-compliance term. Recorded so that when Oliver–Pharr is added, the tip e
 ## LD-09 · PS-PPT frame-table parsing depends on the host machine's endianness
 
 **Severity:** Low (latent)
+**Lens:** Code
 **File:** `Library/File/LIB.File.PSPPT/PspptFile.cs`
 **Symbols:** `ReadFrameTableHeader`, and the frame-offset loop below it
 
@@ -388,6 +416,7 @@ matters.
 ## LD-10 · `FullWithAtHalfMaximum` is misspelled in a public API
 
 **Severity:** Low
+**Lens:** Code
 **File:** `Framework/Analysis/FW.Analysis.Calculate/PiFM/SpectralRangeAnalyzer.cs`
 
 ```csharp
@@ -400,10 +429,74 @@ time as **LD-01**, since that entry has to touch the same property anyway.
 
 ---
 
+## LD-11 · Modulus is fitted against piezo travel, not tip–sample separation
+
+**Severity:** High
+**Lens:** **Measurement science**
+**Files:** `Framework/UI/FW.UI.Common/Model/SpectroscopyAnalysisModel.cs`,
+`Framework/Analysis/FW.Analysis.Calculate/Modulus/ModulusCalculator.cs`
+
+The X data handed to the modulus fit is whichever channel the file calls the Z axis, passed straight through:
+
+```csharp
+forceValues      = SpectroscopyDataService.GetAllData(pointIndex, forceLine);
+separationValues = SpectroscopyDataService.GetAllData(pointIndex, separationLine);
+
+forceValues = GetOffsetAdjustedValues(pointIndex, forceValues, offsetThreshold);   // Y baseline only
+
+modulusCalculator.SetModulusParameters(EModulusModel.OliverNPharr, forceValues, separationValues, ...);
+```
+
+`GetOffsetAdjustedValues` subtracts a constant from the **force**, nothing more:
+
+```csharp
+double[] newYValues = values.Values.Select(y => y - yOffset.GetValueIn(values.Unit)).ToArray();
+```
+
+and inside the calculator the collection is only unit-converted before use:
+
+```csharp
+SeparationPhyicalValues = new PhysicalValueCollection(separation.GetValuesIn(Length.Unit.METER), Length.Unit.METER);
+```
+
+**What is wrong — the physics.** The channel supplied is the scanner's own position: real files name it
+`Z Scan`, `Z Height`, `Z Detector` or `Z Detector Fit`, and none of those is the tip–sample separation. Once the
+tip is in contact, the piezo's advance is shared between **indenting the sample** and **bending the cantilever**:
+
+```
+separation = z − d          where d is the cantilever deflection (force / k)
+indentation δ = (z − z_contact) − (d − d_contact)
+```
+
+Searching the entire legacy solution for that subtraction finds nothing — there is no `z - deflection` anywhere,
+and no channel in any of our 124 real sample files carries a pre-computed separation. The correction is
+therefore never applied, by the file or by the code.
+
+**Consequence.** The fitted slope is `dF/dz` instead of `dF/dδ`, so the measured stiffness is the **series
+combination of the cantilever and the sample** rather than the sample alone. The error scales with sample
+stiffness:
+
+- On a compliant sample (`k_sample ≪ k_cantilever`) almost all of the travel is indentation and the result is
+  close to right.
+- On a stiff sample the cantilever bends nearly as much as the piezo advances, `δ → 0`, and the reported modulus
+  saturates towards a value governed by the **cantilever's** spring constant. The sample can be made to look
+  softer than it is, and two samples both much stiffer than the probe become indistinguishable.
+
+This is the same regime **LD-08** degrades in, and the two compound: one understates the tip-compliance
+correction, the other omits the cantilever-compliance correction entirely.
+
+**In the new product.** Not yet corrected either — A12 currently fits against the separation channel as read.
+`ForceCurveDataset.Separation` is populated straight from the file's Z channel by `PsiaTiffReader`, so the same
+caveat applies to our Hertz and Sneddon fits. Recorded as **also open**: the deflection subtraction needs the
+spring constant, which FF08 now recovers from the header, so the pieces are in place.
+
+---
+
 # Improvements
 
 ## LI-01 · The cantilever deflection channel is identified by a substring of its display name
 
+**Lens:** **Measurement science**
 **File:** `Project/SmartAnalysis/Dialogs/SmartAnalysis.Dialog.SpectroscopyProcess/ViewModel/ForceConstantViewModel.cs`
 **Symbol:** `CalculateFromCursorAction`
 
@@ -441,6 +534,7 @@ the way it is.
 
 ## LI-02 · The ALS smoothing parameter is rescaled by the same magic factor in two places
 
+**Lens:** Code
 **Files:** `Framework/Analysis/FW.Analysis.Calculate/PiFM/PeakDetector.cs`,
 `Framework/Analysis/FW.Analysis.Calculate/PiFM/SpectrumMatch/Preprocessor/Processor/BaselineCorrectionProcessor.cs`
 
@@ -460,6 +554,7 @@ to spot, because both still produce a plausible-looking baseline.
 
 ## LI-03 · Roughness volume conversion is a magic factor explained only by a trailing comment
 
+**Lens:** Code
 **File:** `Framework/Analysis/FW.Analysis.Calculate/RoughnessCalculator.cs`
 
 ```csharp
@@ -487,6 +582,7 @@ What has actually been audited, so the unreviewed remainder stays visible.
 | `LIB.File.Tiff` — reader, tags, open-type | ✅ Audited | LD-03, LD-05, LD-06 |
 | `LIB.File.PSPPT` — header, frame table | 🟡 Partial | LD-04, LD-09. Entry points only; the payload decode path is unread until FF03. |
 | `SmartAnalysis.Dialog.SpectroscopyProcess` | 🟡 Partial | LI-01. Reached via the force-constant path only. |
+| `FW.UI.Common/SpectroscopyAnalysisModel` — modulus/stiffness call path | ✅ Audited | LD-11 |
 | `FW.Data.Scan` — scan/spectroscopy data models | 🟡 Partial | Read for payload-layout confirmation (FF06/FF07); nothing wrong found in what was read. |
 | `LIB.File.HDF5` | ⬜ Not reviewed | Until FF04. |
 | `LIB.File.SQLite` | ⬜ Not reviewed | Until the persistence tasks. |
@@ -502,6 +598,7 @@ Recorded so a later pass does not repeat the search.
 | Floating-point equality on measured values | `Framework/Analysis` | Clean. |
 | Undisposed `FileStream` / `BinaryReader` | `Library/File` | Clean — all construction sites are `using`. |
 | Hardcoded buffer sizes / magic byte counts in readers | `Library/File` | Clean — sizes come from named `PspptConst` entries or tag metadata. |
+| Modulus fit window straddling approach and retract | `Modulus`, `SpectroscopyAnalysisModel` | Clean — the fit range is bounded by caller-supplied `indexA`/`indexB`, so the user selects a branch on the chart rather than the code spanning both. |
 
 ## Adding an entry
 
@@ -510,8 +607,11 @@ Recorded so a later pass does not repeat the search.
 2. An entry backed only by one of our own documents does not go in. Re-verify against the source: doing that
    is what turned LD-02 from a vague "returns sentinels" into the real mechanism, and what demoted LD-09 from
    an active bug to a latent one.
-3. Choose the type honestly: `LD-` only if something is actually **wrong**.
-4. State the consequence for a **legacy** user, not for us.
-5. Say what the new product does instead, including "also open" when we have inherited the problem.
-6. Update the coverage map if the finding came from auditing a new area — **including when the area comes back
+3. Choose the kind honestly: `LD-` only if something is actually **wrong**.
+4. Tag the **lens**. Ask specifically whether the AFM or spectroscopy is right, not only whether the code is:
+   a correct implementation of the wrong physics passes every code review and still reports a number that is
+   not the quantity the user believes it is.
+5. State the consequence for a **legacy** user, not for us.
+6. Say what the new product does instead, including "also open" when we have inherited the problem.
+7. Update the coverage map if the finding came from auditing a new area — **including when the area comes back
    clean**.
