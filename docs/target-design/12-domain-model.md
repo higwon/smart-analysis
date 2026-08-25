@@ -137,8 +137,8 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
   the same buffer instance can't fill two roles (force-curve). Reload with the same `DatasetId`
   compares equal regardless of buffer instances (real H1 fix).
 - **Deferred (incremental build):** ~~`ChannelDescriptor`/`ScanMetadata` → **D01**~~ (done);
-  ~~`Provenance` member → **F05**~~ (done); force-curve approach/retract segment model →
-  **D03/EPIC-SPEC01** (only remaining deferral).
+  ~~`Provenance` member → **F05**~~ (done); ~~force-curve approach/retract segment model →
+  **D03/EPIC-SPEC01**~~ (done — `CurveSegment`/`CurveSegmentation`, computed not stored per **ADR-020**).
 
 ## Implemented in F01
 - **Units**: `Dimension`, `Unit` (affine `ScaleToBase`/`OffsetToBase`), `PhysicalValue`
@@ -153,6 +153,6 @@ normalizer, convertibility checks) — **behaviorally reuse it** (grade B, doc 0
 
 - ~~`ScanBuffer<T>` backing~~ — **decided (ADR-011)**: owned array over `Memory<T>`; revisit pooling
   (ArrayPool) or mmap only on evidence, behind the same API.
-- Whether `ForceCurve` approach/retract split is stored or recomputed on demand.
+- ~~Whether `ForceCurve` approach/retract split is stored or recomputed on demand.~~ **Resolved — ADR-020**: computed on demand (`ApproachRetractSegmentation` → `CurveSegmentation`), so a curve is never frozen to one classifier's mode/parameters and the split is recorded in provenance like any other analysis step.
 - Extension metadata: `Dictionary<string,string>` vs. a typed variant union.
 - Whether vector-scan is a distinct dataset type or a `ScanImageDataset` variant (legacy: sub-mode).
