@@ -116,8 +116,10 @@ color/size/padding/template; theme colors via `DynamicResource`. **UI color ≠ 
   finding in the pull request that surfaced it.
   - `LD-` when the legacy code is **wrong**: a wrong, missing, or corrupted result.
   - `LI-` when it is not wrong but **risky**: fragile, duplicated, or unconfigurable in a way that will bite.
-  - Cite legacy `file:line` (re-verify against the source — an entry backed only by our own docs does not
-    count), state the consequence for a user of the *legacy* product, and say what the new code does instead,
+  - Name the legacy **file and symbol** and quote the **actual code** — not a paraphrase, and not a line
+    number (they rot). Re-verify against the source: an entry backed only by our own docs does not count,
+    and that check is what has caught wrong entries before.
+  - State the consequence for a user of the *legacy* product, and say what the new code does instead,
     including "also open" when we have inherited the problem.
   - Update its coverage map when you audit a new area — **including when the area comes back clean**, so
     nobody repeats the search.
