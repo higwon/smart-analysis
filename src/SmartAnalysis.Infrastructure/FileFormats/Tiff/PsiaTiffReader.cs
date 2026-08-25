@@ -27,21 +27,21 @@ namespace SmartAnalysis.Infrastructure.FileFormats.Tiff;
 public sealed class PsiaTiffReader : IScanFileReader
 {
     private readonly IUnitRegistry _units;
+    private readonly IScanFormatDetector _detector;
 
-    public PsiaTiffReader(IUnitRegistry units)
-        => _units = units ?? throw new ArgumentNullException(nameof(units));
-
-    public bool CanRead(string path)
+    public PsiaTiffReader(IUnitRegistry units, IScanFormatDetector? detector = null)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return false;
-        }
-
-        var ext = Path.GetExtension(path);
-        return ext.Equals(".tiff", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".tif", StringComparison.OrdinalIgnoreCase);
+        _units = units ?? throw new ArgumentNullException(nameof(units));
+        _detector = detector ?? new MagicByteFormatDetector();
     }
+
+    /// <summary>
+    /// Whether this reader recognises the file. Identification is by <b>content</b> (FF05) with the extension only as
+    /// a fallback — so a TIFF saved without an extension, or with the wrong one, is still offered to this reader, and
+    /// a file merely NAMED <c>.tiff</c> whose bytes say otherwise is not.
+    /// </summary>
+    public bool CanRead(string path)
+        => !string.IsNullOrWhiteSpace(path) && _detector.Detect(path).Format == ScanFileFormat.Tiff;
 
     public Task<FileReadResult> ReadAsync(string path, ScanReadOptions options, CancellationToken cancellationToken)
     {

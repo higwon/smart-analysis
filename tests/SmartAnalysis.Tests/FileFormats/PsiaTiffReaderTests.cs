@@ -201,7 +201,41 @@ public sealed class PsiaTiffReaderTests : IDisposable
     [InlineData("scan.png", false)]
     [InlineData("", false)]
     public void CanRead_matches_tiff_extensions(string path, bool expected)
-        => Assert.Equal(expected, NewReader().CanRead(path));
+        => Assert.Equal(expected, NewReader().CanRead(path)); // a non-existent path can only be judged by its name
+
+    [Fact]
+    public void CanRead_accepts_a_real_tiff_whatever_it_is_named()
+    {
+        // FF05: identification is by content. A TIFF saved as ".dat" is still a TIFF, and the legacy
+        // extension-only check would have refused it.
+        var renamed = Path.Combine(Path.GetTempPath(), $"sa-canread-{Guid.NewGuid():N}.dat");
+        var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Tiff", "cheese-15x15.tiff");
+        File.Copy(fixture, renamed, overwrite: true);
+        try
+        {
+            Assert.True(NewReader().CanRead(renamed));
+        }
+        finally
+        {
+            File.Delete(renamed);
+        }
+    }
+
+    [Fact]
+    public void CanRead_refuses_a_file_that_is_merely_named_tiff()
+    {
+        // The other half: the name says TIFF but the bytes do not, so this reader must not claim it.
+        var fake = Path.Combine(Path.GetTempPath(), $"sa-canread-{Guid.NewGuid():N}.tiff");
+        File.WriteAllText(fake, "not a scan at all");
+        try
+        {
+            Assert.False(NewReader().CanRead(fake));
+        }
+        finally
+        {
+            File.Delete(fake);
+        }
+    }
 
     [Fact]
     public void Registers_via_di_and_binds_the_port()
