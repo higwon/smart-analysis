@@ -41,6 +41,9 @@
     <Compile Include="$(LegacyCalcDir)\PolynomialLeastSquaresRegression.cs">
       <Link>Legacy\PolynomialLeastSquaresRegression.cs</Link>
     </Compile>
+    <Compile Include="$(LegacyCalcDir)\BaselineCorrction.cs">
+      <Link>Legacy\BaselineCorrction.cs</Link>
+    </Compile>
     <Compile Include="$(LegacyCalcDir)\MultiplePolynomialRegression.cs">
       <Link>Legacy\MultiplePolynomialRegression.cs</Link>
     </Compile>

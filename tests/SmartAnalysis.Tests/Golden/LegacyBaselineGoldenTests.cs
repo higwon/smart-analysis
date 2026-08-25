@@ -51,7 +51,14 @@ public sealed class LegacyBaselineGoldenTests
         Assert.False(legacy.GetProperty("Dirty").GetBoolean());
         Assert.Equal("FW.Analysis.Calculate", legacy.GetProperty("SourceSet").GetString());
         var sources = legacy.GetProperty("Sources").EnumerateArray().ToList();
-        Assert.Equal(3, sources.Count);
+
+        // EVERY legacy file the harness compiles must be hashed here: a golden whose producing source is not
+        // recorded cannot be reproduced or audited, which is the whole point of MV00. (BaselineCorrction was once
+        // compiled without being listed, so the ALS golden had no source provenance.)
+        var names = sources.Select(s => s.GetProperty("Name").GetString()).ToArray();
+        Assert.Equal(
+            ["BaselineCorrction.cs", "MultiplePolynomialRegression.cs", "PolynomialLeastSquaresRegression.cs", "SummaryStatisticsCalculator.cs"],
+            names.Order().ToArray());
         foreach (var s in sources)
         {
             Assert.False(string.IsNullOrWhiteSpace(s.GetProperty("Name").GetString()));
@@ -172,6 +179,32 @@ public sealed class LegacyBaselineGoldenTests
         var plane = doc.RootElement.EnumerateArray()
             .Single(c => c.GetProperty("Id").GetString() == "plane-order1");
         AssertFittedMatchesY(plane, 1e-6);
+    }
+
+    [Fact]
+    public void Als_baseline_golden_is_well_formed_and_stays_under_the_peaks()
+    {
+        using var doc = Load("als-baseline.json");
+        var cases = doc.RootElement.EnumerateArray().ToList();
+        Assert.NotEmpty(cases);
+
+        foreach (var c in cases)
+        {
+            var y = c.GetProperty("Y").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+            var baseline = c.GetProperty("Baseline").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+            Assert.Equal(y.Length, baseline.Length);
+            Assert.True(c.GetProperty("Lambda").GetDouble() > 0);
+            Assert.True(c.GetProperty("Iterations").GetInt32() >= 1);
+            Assert.Equal(Sha256(y), c.GetProperty("InputSha256").GetString()); // the recorded input produced this case
+        }
+
+        // The defining ALS property on the asymmetric cases: the baseline follows the background but stays UNDER the
+        // peaks — so the golden is a meaningful baseline, not an average through the signal.
+        var peaks = cases.Single(c => c.GetProperty("Id").GetString() == "sloping-two-peaks");
+        var signal = peaks.GetProperty("Y").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+        var under = peaks.GetProperty("Baseline").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+        int peakIndex = Array.IndexOf(signal, signal.Max());
+        Assert.True(under[peakIndex] < signal[peakIndex] - 1.0, "the baseline must sit well under the tallest peak");
     }
 
     private static void AssertFittedMatchesY(JsonElement c, double tolerance)

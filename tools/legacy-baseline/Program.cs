@@ -32,6 +32,7 @@ string[] compiledSources =
     "SummaryStatisticsCalculator.cs",
     "PolynomialLeastSquaresRegression.cs",
     "MultiplePolynomialRegression.cs",
+    "BaselineCorrction.cs",
 ];
 
 // Repo root of the SAME directory the source was compiled from — provenance and source are one repo.
@@ -122,6 +123,30 @@ for (int r = 0; r < 4; r++)
 Multi("plane-order1", "normal", 1, [.. g1], [.. g2], [.. plane]);
 Multi("surface-order2", "normal", 2, [.. g1], [.. g2], [.. curve]);
 
+// ---------- ALS baseline (enables A29) ----------
+var alsCases = new List<AlsCase>();
+void Als(string id, string cls, double[] y, double lambda, double p, int iterations)
+{
+    var baseline = BaselineCorrection.CalculateAlsBaseline(y, lambda, p, iterations);
+    alsCases.Add(new AlsCase(id, cls, y, Sha256(y), lambda, p, iterations, baseline, Tolerance));
+}
+
+// A sloping background with two peaks on it — the case ALS exists for (the baseline must stay under the peaks).
+var alsSignal = Enumerable.Range(0, 60).Select(i =>
+{
+    double bg = 10.0 + 0.25 * i;
+    double peak1 = 8.0 * Math.Exp(-Math.Pow(i - 18, 2) / 8.0);
+    double peak2 = 5.0 * Math.Exp(-Math.Pow(i - 42, 2) / 12.0);
+    return bg + peak1 + peak2;
+}).ToArray();
+
+Als("sloping-two-peaks", "normal", alsSignal, 1e5, 0.01, 10);
+Als("sloping-two-peaks-stiff", "normal", alsSignal, 1e7, 0.01, 10);   // stiffer baseline
+Als("sloping-two-peaks-symmetric", "normal", alsSignal, 1e5, 0.5, 10); // p = 0.5 (least-squares, no asymmetry)
+Als("flat", "edge", Enumerable.Repeat(3.0, 20).ToArray(), 1e5, 0.01, 10);
+Als("too-short", "edge", [1.0, 2.0], 1e5, 0.01, 10);                   // n < 3 → returned unchanged
+Als("single-iteration", "edge", alsSignal, 1e5, 0.01, 1);
+
 // ---------- Manifest (provenance: same repo as the compiled source; clean tree; source hashes) ----------
 var sources = compiledPaths
     .Select(p => new SourceFile(Path.GetFileName(p), Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p)))))
@@ -139,12 +164,13 @@ var manifest = new GoldenManifest(
     MathNet: "5.0.0",
     Notes: "Legacy numeric primitives from FW.Analysis.Calculate driven on synthetic inputs. "
          + "Full Whole/Line/Surface flatten orchestration is deferred (legacy orchestration is WPF/Dialogs-coupled); "
-         + "these 1D/2D polynomial-fit goldens are the flatten math core A01 reuses.");
+         + "these 1D/2D polynomial-fit goldens are the flatten math core A01 reuses. ALS baseline (A29) is included: it is self-contained double math in the legacy source.");
 
 Write("manifest.json", manifest);
 Write("summary-statistics.json", statCases);
 Write("polynomial-fit-1d.json", polyCases);
 Write("polynomial-fit-2d.json", multiCases);
+Write("als-baseline.json", alsCases);
 
 Console.WriteLine($"Wrote golden data to {Path.GetFullPath(outputDir)}");
 Console.WriteLine($"  legacy: {manifest.Legacy.Branch} @ {manifest.Legacy.Commit} (clean)");
@@ -209,3 +235,4 @@ sealed record StatOutputs(
 
 sealed record PolyCase(string Id, string Class, int Order, double[] X, double[] Y, string InputSha256, double[] Fitted, double Tolerance);
 sealed record MultiPolyCase(string Id, string Class, int Order, double[] X1, double[] X2, double[] Y, string InputSha256, double[] Fitted, double Tolerance);
+sealed record AlsCase(string Id, string Class, double[] Y, string InputSha256, double Lambda, double P, int Iterations, double[] Baseline, double Tolerance);
