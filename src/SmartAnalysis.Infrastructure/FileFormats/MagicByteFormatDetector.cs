@@ -94,10 +94,14 @@ public sealed class MagicByteFormatDetector : IScanFormatDetector
             return null;
         }
 
+        // The extensions the product actually writes and opens (the legacy file dialog's filter is
+        // "*.tiff;*.ps-ppt;*.h5"). Note ".ps-ppt", not ".psppt" — that is what the real files are named, and getting
+        // it wrong would make this fallback useless for exactly the format it was added for. ".ppt" is deliberately
+        // NOT here: it is PowerPoint's, and guessing a presentation is a scan helps nobody.
         return extension.ToLowerInvariant() switch
         {
             ".tif" or ".tiff" => ScanFileFormat.Tiff,
-            ".ppt" or ".psppt" => ScanFileFormat.PsPpt,
+            ".ps-ppt" => ScanFileFormat.PsPpt,
             ".h5" or ".hdf5" => ScanFileFormat.Hdf5,
             _ => null,
         };

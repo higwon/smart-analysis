@@ -103,7 +103,7 @@ public sealed class MagicByteFormatDetectorTests
     [Theory]
     [InlineData(".tif")]
     [InlineData(".h5")]
-    [InlineData(".psppt")]
+    [InlineData(".ps-ppt")]
     public void A_readable_file_whose_bytes_match_nothing_is_unknown_whatever_it_is_named(string extension)
     {
         var path = WriteTemp(extension, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07);
@@ -125,7 +125,7 @@ public sealed class MagicByteFormatDetectorTests
     [InlineData(".tiff", ScanFileFormat.Tiff)]
     [InlineData(".TIFF", ScanFileFormat.Tiff)]   // the name check is case-insensitive
     [InlineData(".h5", ScanFileFormat.Hdf5)]
-    [InlineData(".psppt", ScanFileFormat.PsPpt)]
+    [InlineData(".ps-ppt", ScanFileFormat.PsPpt)]  // the REAL extension: "128x128_329MB.ps-ppt"
     public void A_file_whose_content_cannot_be_examined_falls_back_to_its_name(string extension, ScanFileFormat expected)
     {
         // Missing (or locked): there are no bytes to judge, so the name is all that is left — and the caller is told
@@ -137,6 +137,30 @@ public sealed class MagicByteFormatDetectorTests
         Assert.Equal(expected, detection.Format);
         Assert.Equal(FormatEvidence.Extension, detection.Evidence);
         Assert.False(detection.IsFromContent);
+    }
+
+    [Fact]
+    public void An_unreadable_real_ps_ppt_name_falls_back_correctly()
+    {
+        // The product's files are named "<something>.ps-ppt" (the legacy dialog filters on *.ps-ppt). Path.GetExtension
+        // returns ".ps-ppt", so a table listing only ".psppt" would leave the fallback useless for the very format it
+        // exists to cover.
+        var path = Path.Combine(Path.GetTempPath(), $"128x128_329MB-{Guid.NewGuid():N}.ps-ppt");
+
+        var detection = Detector().Detect(path);
+
+        Assert.Equal(ScanFileFormat.PsPpt, detection.Format);
+        Assert.Equal(FormatEvidence.Extension, detection.Evidence);
+    }
+
+    [Fact]
+    public void A_powerpoint_file_is_never_guessed_to_be_a_scan()
+    {
+        // ".ppt" belongs to PowerPoint. Guessing a presentation is a PS-PPT scan would be a wrong answer dressed as
+        // an identification — and the legacy dialog never used it either.
+        var path = Path.Combine(Path.GetTempPath(), $"deck-{Guid.NewGuid():N}.ppt");
+
+        Assert.Equal(FormatDetection.Unknown, Detector().Detect(path));
     }
 
     [Fact]
