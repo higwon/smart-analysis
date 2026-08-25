@@ -32,7 +32,8 @@ public static class CompositionRoot
         services.AddDataExport();       // IDataExporter    -> CsvDataExporter (+ IExportUseCase)
 
         // Analysis operations (explicit per-module registration, ADR-005) + the registry over them.
-        services.AddImageAnalysis();    // Statistics + Flatten (+ IExecutionEnvironmentProvider)
+        services.AddImageAnalysis();          // image + profile operations (+ IExecutionEnvironmentProvider)
+        services.AddSpectroscopyAnalysis();   // force-curve operations (EPIC-SPEC01)
         services.AddOperationRegistry();
 
         // Application use cases the UI drives (doc 11: UI → Application, not Analysis).

@@ -1,5 +1,5 @@
 using SmartAnalysis.Analysis.Operations;
-using SmartAnalysis.Analysis.Operations.Image;
+using SmartAnalysis.Analysis.Operations.Spectroscopy;
 using SmartAnalysis.Analysis.Spectroscopy;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.Operations;

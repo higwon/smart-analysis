@@ -5,7 +5,7 @@ using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Spectroscopy;
 using SmartAnalysis.Domain.Units;
 
-namespace SmartAnalysis.Analysis.Operations.Image;
+namespace SmartAnalysis.Analysis.Operations.Spectroscopy;
 
 /// <summary>Which half of the round trip to keep.</summary>
 public enum CurvePhase

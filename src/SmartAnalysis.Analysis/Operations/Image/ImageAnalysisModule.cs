@@ -38,9 +38,6 @@ public static class ImageAnalysisModule
         services.AddAnalysisOperation<ProfileFilterOperation>();
         services.AddAnalysisOperation<PeakDetectionOperation>();
         services.AddAnalysisOperation<ProfileRangeStatisticsOperation>();
-
-        // Spectroscopy (EPIC-SPEC01): the force-curve half-split every FD measurement builds on (A23).
-        services.AddAnalysisOperation<ApproachRetractSplitOperation>();
         return services;
     }
 }
