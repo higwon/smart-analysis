@@ -87,7 +87,7 @@ The last row is the point of keeping this file: the measurement-science findings
 
 ## Where these findings come from
 
-Three sources, all reconciled against the legacy tree before an entry is written:
+Four sources, all reconciled against the legacy tree before an entry is written:
 
 1. **The up-front analysis** — `07-tech-debt-register` and the other `legacy-analysis/*` documents.
 2. **Pull-request history** — every merged PR body was scanned for legacy findings that were recorded in the
