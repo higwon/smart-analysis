@@ -48,7 +48,7 @@ public sealed class ModulusOperation : IAnalysisOperation
         [
             new ParameterDescriptor(ModelParameter, typeof(ContactModel), defaultValue: ContactModel.Hertz, help: "Contact model: Hertz (spherical tip) or Sneddon (conical tip)."),
             new ParameterDescriptor(PoissonRatioParameter, typeof(double), defaultValue: DefaultPoissonRatio, min: 0.0, max: 0.499, help: "Poisson's ratio of the sample (0–0.499; 0.5 is incompressible and the models break down)."),
-            new ParameterDescriptor(TipRadiusParameter, typeof(double), defaultValue: DefaultTipRadiusNm, min: 0.0, max: null, unit: null, help: "Hertz: tip radius in nanometres."),
+            new ParameterDescriptor(TipRadiusParameter, typeof(double), defaultValue: DefaultTipRadiusNm, min: 0.0, max: null, unit: StandardUnits.Nanometre, help: "Hertz: tip radius."),
             new ParameterDescriptor(HalfAngleParameter, typeof(double), defaultValue: DefaultHalfAngleDegrees, min: 0.0, max: 89.9, help: "Sneddon: tip half-angle in degrees (below 90°)."),
         ]),
         output: OutputKind.Artifact,
@@ -84,8 +84,33 @@ public sealed class ModulusOperation : IAnalysisOperation
                 $"The separation channel must be a length ({curve.SeparationChannel.Unit.Symbol} is {curve.SeparationChannel.Unit.Dimension.Name}).");
         }
 
+        // A non-physical tip is a bad PARAMETER, not a curve the model failed to describe — so it is a typed failure
+        // here (F04) rather than a NaN modulus with a "check the geometry / is this an approach half?" warning that
+        // blurs a settled cause into a data problem. Only the geometry the chosen model actually uses is checked: a
+        // half-angle never influences a Hertz fit, so it has no business blocking one.
+        var (model, _, tipRadius, halfAngle) = Read(parameters);
+        if (model == ContactModel.Hertz)
+        {
+            if (!(tipRadius > 0.0))
+            {
+                return ValidationResult.Fail("The tip radius must be greater than zero for the Hertz (spherical tip) model.");
+            }
+        }
+        else if (!(halfAngle > 0.0 && halfAngle < 90.0))
+        {
+            return ValidationResult.Fail("The tip half-angle must be above 0° and below 90° for the Sneddon (conical tip) model.");
+        }
+
         return ValidationResult.Success;
     }
+
+    // The parameters as their real types, with the schema defaults applied — shared by Validate and RunAsync so the
+    // two can never disagree about what was asked for.
+    private static (ContactModel Model, double PoissonRatio, double TipRadiusNm, double HalfAngleDegrees) Read(IParameterSet parameters)
+        => (parameters.TryGet<ContactModel>(ModelParameter, out var m) ? m : ContactModel.Hertz,
+            parameters.TryGet<double>(PoissonRatioParameter, out var pr) ? pr : DefaultPoissonRatio,
+            parameters.TryGet<double>(TipRadiusParameter, out var tr) ? tr : DefaultTipRadiusNm,
+            parameters.TryGet<double>(HalfAngleParameter, out var ha) ? ha : DefaultHalfAngleDegrees);
 
     public Task<OperationResult> RunAsync(
         OperationInput input,
@@ -103,10 +128,7 @@ public sealed class ModulusOperation : IAnalysisOperation
         }
 
         var curve = (ForceCurveDataset)input.Primary;
-        var model = parameters.TryGet<ContactModel>(ModelParameter, out var m) ? m : ContactModel.Hertz;
-        double poisson = parameters.TryGet<double>(PoissonRatioParameter, out var pr) ? pr : DefaultPoissonRatio;
-        double tipRadiusNm = parameters.TryGet<double>(TipRadiusParameter, out var tr) ? tr : DefaultTipRadiusNm;
-        double halfAngle = parameters.TryGet<double>(HalfAngleParameter, out var ha) ? ha : DefaultHalfAngleDegrees;
+        var (model, poisson, tipRadiusNm, halfAngle) = Read(parameters);
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Fitting the contact model."));
@@ -136,7 +158,7 @@ public sealed class ModulusOperation : IAnalysisOperation
         if (double.IsNaN(fit.Modulus))
         {
             warnings.Add(new OperationWarning("modulus.no-fit",
-                "The contact model could not be fitted to this curve; check the tip geometry and that the curve is an approach half with real indentation."));
+                "The contact model could not be fitted to this curve; check that it is an approach half with real indentation."));
         }
 
         var scalars = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)

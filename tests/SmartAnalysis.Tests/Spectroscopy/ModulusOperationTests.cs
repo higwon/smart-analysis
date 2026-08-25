@@ -1,6 +1,9 @@
 using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Analysis.Operations.Spectroscopy;
 using SmartAnalysis.Analysis.Spectroscopy;
+using SmartAnalysis.Application.Analysis;
+using SmartAnalysis.Application.Operations;
+using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Datasets;
@@ -162,6 +165,75 @@ public sealed class ModulusOperationTests
             ScanMetadata.Unknown, ProvenanceRecord.Root);
 
         Assert.False(Op().Validate(new OperationInput(wrong), ParameterSet.Empty).IsValid);
+    }
+
+    [Fact]
+    public void A_zero_tip_radius_is_a_typed_validation_failure_for_hertz()
+    {
+        using var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
+
+        // A radius of zero is a bad PARAMETER, not a curve the model failed to describe: the cause is already settled,
+        // so it must not come back as a NaN modulus with a "maybe check your data" warning.
+        var validation = Op().Validate(
+            new OperationInput(curve),
+            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Hertz, ["tipRadius"] = 0.0 }));
+
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Errors, e => e.Contains("radius"));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(90.0)]   // a flat punch, not a cone
+    public void A_non_physical_half_angle_is_a_typed_validation_failure_for_sneddon(double halfAngle)
+    {
+        using var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
+
+        var validation = Op().Validate(
+            new OperationInput(curve),
+            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Sneddon, ["halfAngle"] = halfAngle }));
+
+        Assert.False(validation.IsValid);
+    }
+
+    [Fact]
+    public void The_unused_models_geometry_never_blocks_a_fit()
+    {
+        using var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
+
+        // A half-angle of zero is meaningless, but a Hertz fit never reads it — so it must not block one (and the
+        // mirror case: a zero radius must not block a Sneddon fit).
+        Assert.True(Op().Validate(new OperationInput(curve),
+            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Hertz, ["tipRadius"] = RadiusNm, ["halfAngle"] = 0.0 })).IsValid);
+        Assert.True(Op().Validate(new OperationInput(curve),
+            new ParameterSet(new Dictionary<string, object?> { ["model"] = ContactModel.Sneddon, ["halfAngle"] = 18.0, ["tipRadius"] = 0.0 })).IsValid);
+    }
+
+    [Fact]
+    public void The_tip_radius_schema_declares_the_unit_the_operation_actually_uses()
+    {
+        var radius = Op().Descriptor.Parameters.Parameters.Single(p => p.Name == "tipRadius");
+
+        // The value is interpreted as nanometres and recorded as nanometres in provenance, so the schema must say so
+        // — otherwise the form shows a bare number whose meaning only the operation knows.
+        Assert.Equal("nm", radius.Unit?.Symbol);
+    }
+
+    [Fact]
+    public async Task Through_the_launcher_an_invalid_geometry_fails_without_attaching_a_measurement()
+    {
+        var ws = new Workspace();
+        var curve = HertzCurve(5e8, StandardUnits.Nanometre, StandardUnits.Nanonewton);
+        ws.Add(curve);
+        ws.SetActive(curve.Id);
+        var measurements = new MeasurementStore();
+        var registry = new OperationRegistry([new ModulusOperation(new SystemExecutionEnvironmentProvider())]);
+        var launcher = new OperationLauncherUseCase(ws, registry, measurements);
+
+        var result = await launcher.RunAsync("force-curve.modulus", new Dictionary<string, object?> { ["tipRadius"] = 0.0 });
+
+        Assert.False(result.Success);
+        Assert.Empty(measurements.ForSource(curve.Id)); // no measurement is attached for a rejected request
     }
 
     [Fact]
