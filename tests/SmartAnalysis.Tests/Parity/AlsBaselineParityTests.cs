@@ -45,7 +45,7 @@ public sealed class AlsBaselineParityTests
                 // Documented divergence (primitive level only): legacy returns the input unchanged for a profile too
                 // short for a second-difference penalty; the clean-room primitive rejects it so a caller cannot get a
                 // silently meaningless "baseline". The OPERATION (A29 profile.baseline) matches legacy behaviour — it
-                // guards the length and leaves the profile unchanged with a "low-rank" warning.
+                // guards the length and leaves the profile unchanged with a "low-rank" warning (ProfileBaselineOperationTests).
                 Assert.Throws<ArgumentException>(() => AlsBaseline.Compute(y.Select(v => (float)v).ToArray(), lambda, p, iterations));
                 cases++;
                 continue;

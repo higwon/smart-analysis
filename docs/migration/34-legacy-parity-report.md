@@ -30,7 +30,7 @@ Legacy baseline: `develop @ 1451945a` · sources `SummaryStatisticsCalculator`, 
 | 1D polynomial fit | `Polynomials.Fit1D` / `Infer1D` | `PolynomialLeastSquaresRegression` | 🟢 | `PolynomialParityTests` — orders 0–2 incl. a noisy line. The flatten (A01) and profile-flatten (A24) math core. |
 | 2D polynomial fit | `Polynomials` (2D) | `MultiplePolynomialRegression` | 🟢 | `PolynomialParityTests` — plane (order 1) + curved surface (order 2). The surface-flatten math core. |
 | ALS baseline | `AlsBaseline` | `BaselineCorrection` | 🟢 | `AlsBaselineParityTests` — sloping background with two peaks, at λ=1e5/1e7, p=0.01/0.5, 1 and 10 iterations. |
-| ALS on a too-short profile | `AlsBaseline` | `BaselineCorrection` | 🟡 | Legacy returns the input unchanged; the clean-room **primitive rejects** it so a caller cannot receive a meaningless "baseline". The **operation** (A29 `profile.baseline`) matches legacy behaviour — it leaves the profile unchanged and warns. Asserted in the same parity test. |
+| ALS on a too-short profile | `AlsBaseline` | `BaselineCorrection` | 🟡 | Legacy returns the input unchanged; the clean-room **primitive rejects** it so a caller cannot receive a meaningless "baseline". The **operation** (A29 `profile.baseline`) matches legacy behaviour — it leaves the profile unchanged and warns — asserted by `ProfileBaselineOperationTests.A_profile_with_too_few_finite_samples_is_left_unchanged`; the parity test asserts the primitive's rejection. |
 
 ## Operations whose legacy counterpart is UI-coupled
 

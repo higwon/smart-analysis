@@ -51,7 +51,14 @@ public sealed class LegacyBaselineGoldenTests
         Assert.False(legacy.GetProperty("Dirty").GetBoolean());
         Assert.Equal("FW.Analysis.Calculate", legacy.GetProperty("SourceSet").GetString());
         var sources = legacy.GetProperty("Sources").EnumerateArray().ToList();
-        Assert.Equal(3, sources.Count);
+
+        // EVERY legacy file the harness compiles must be hashed here: a golden whose producing source is not
+        // recorded cannot be reproduced or audited, which is the whole point of MV00. (BaselineCorrction was once
+        // compiled without being listed, so the ALS golden had no source provenance.)
+        var names = sources.Select(s => s.GetProperty("Name").GetString()).ToArray();
+        Assert.Equal(
+            ["BaselineCorrction.cs", "MultiplePolynomialRegression.cs", "PolynomialLeastSquaresRegression.cs", "SummaryStatisticsCalculator.cs"],
+            names.Order().ToArray());
         foreach (var s in sources)
         {
             Assert.False(string.IsNullOrWhiteSpace(s.GetProperty("Name").GetString()));

@@ -32,6 +32,7 @@ string[] compiledSources =
     "SummaryStatisticsCalculator.cs",
     "PolynomialLeastSquaresRegression.cs",
     "MultiplePolynomialRegression.cs",
+    "BaselineCorrction.cs",
 ];
 
 // Repo root of the SAME directory the source was compiled from — provenance and source are one repo.
