@@ -567,6 +567,19 @@ public partial class MainWindow : Window
             ProfileChart.Clear();
         }
 
+        if (_viewModel.ActiveForceCurve is { } forceCurve)
+        {
+            // A force curve is force against separation — its own view, not the spatial curve stage.
+            SingleForceCurve.Render(RenderInputFactory.ForForceCurve(forceCurve));
+            SingleCurve.Clear();
+            SingleImage.Clear();
+            SingleSurface.Clear();
+            BeforeImageView.Clear();
+            AfterImageView.Clear();
+            return;
+        }
+
+        SingleForceCurve.Clear();
         if (_viewModel.ActiveCurve is { } curve)
         {
             SingleSurface.Clear();

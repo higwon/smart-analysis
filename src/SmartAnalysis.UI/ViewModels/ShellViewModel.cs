@@ -57,6 +57,7 @@ public sealed class ShellViewModel : ObservableObject
     private ScanImageDataset? _activeImage;
     private ScanImageDataset? _beforeImage;
     private LineProfileDataset? _activeCurve;
+    private ForceCurveDataset? _activeForceCurve;
     private bool _is3D;
     private bool _isInteractiveImageEditing;
     private bool _roiEnabled;
@@ -738,6 +739,12 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>The active dataset when it is a 1D curve (profile/spectrum, e.g. a PSD); drives the curve view.</summary>
     public LineProfileDataset? ActiveCurve { get => _activeCurve; private set => SetProperty(ref _activeCurve, value); }
 
+    /// <summary>The active dataset when it is a force curve (spectroscopy); drives the force-distance view.</summary>
+    public ForceCurveDataset? ActiveForceCurve { get => _activeForceCurve; private set => SetProperty(ref _activeForceCurve, value); }
+
+    /// <summary>Whether the stage shows a force–distance plot (force against separation).</summary>
+    public bool IsSingleForceCurve => _activeForceCurve is not null;
+
     /// <summary>The source image an active line-profile curve was sampled from (to render beside the curve with the
     /// read-only line), or <c>null</c> when there is none / it is no longer in the workspace.</summary>
     public ScanImageDataset? CurveSourceImage { get => _curveSourceImage; private set => SetProperty(ref _curveSourceImage, value); }
@@ -1110,6 +1117,7 @@ public sealed class ShellViewModel : ObservableObject
             BuildHistory(dataset);
             ActiveImage = dataset as ScanImageDataset;
             ActiveCurve = dataset as LineProfileDataset;
+            ActiveForceCurve = dataset as ForceCurveDataset;
             BeforeImage = FirstComparisonImage(active);
             // A line-profile curve pairs with its source image + a read-only sampling line (when the source is still
             // in the workspace); any other curve (e.g. a PSD) has none and stays full-screen.
@@ -1125,6 +1133,7 @@ public sealed class ShellViewModel : ObservableObject
             HistoryRows.Clear();
             ActiveImage = null;
             ActiveCurve = null;
+            ActiveForceCurve = null;
             BeforeImage = null;
             CurveSourceLine = null;
             CurveSourceImage = null;
@@ -1147,6 +1156,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowComparePanes));
         OnPropertyChanged(nameof(IsSingleImage));
         OnPropertyChanged(nameof(IsSingleCurve));
+        OnPropertyChanged(nameof(IsSingleForceCurve));
         OnPropertyChanged(nameof(ShowCurveSourceImage));
         OnPropertyChanged(nameof(ShowSourceImagePane));
         OnPropertyChanged(nameof(ShowSingle2D));

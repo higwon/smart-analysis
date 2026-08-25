@@ -322,6 +322,9 @@
                                             Visibility="{Binding ShowSingle3D, Converter={StaticResource Bool2Vis}}"/>
                         <ctl:AfmCurveView x:Name="SingleCurve" Margin="{DynamicResource SA.Gap.2}"
                                           Visibility="{Binding IsSingleCurve, Converter={StaticResource Bool2Vis}}"/>
+                        <!-- Spectroscopy: a force-distance plot (force against separation), not a spatial curve. -->
+                        <ctl:AfmCurveView x:Name="SingleForceCurve" Margin="{DynamicResource SA.Gap.2}"
+                                          Visibility="{Binding IsSingleForceCurve, Converter={StaticResource Bool2Vis}}"/>
                         <!-- Two equal panes; each frames its image exactly like the single stage (same Gap.2 margin
                              on the AfmImageView) so the before/after images and their fixed-width palettes line up. -->
                         <Grid x:Name="CompareContent" Visibility="{Binding ShowComparePanes, Converter={StaticResource Bool2Vis}}">

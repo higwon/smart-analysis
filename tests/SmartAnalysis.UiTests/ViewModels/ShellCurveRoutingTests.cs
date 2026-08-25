@@ -76,6 +76,52 @@ public sealed class ShellCurveRoutingTests
         Assert.Null(vm.ActiveImage);
     }
 
+    private static ForceCurveDataset ForceCurve()
+        => new(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership([10f, 5f, 0f], 3, 1),
+            ScanBuffer<float>.TakeOwnership([0f, 20f, 50f], 3, 1),
+            new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
+            new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+    [Fact]
+    public void An_active_force_curve_routes_to_the_force_distance_view()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var curve = ForceCurve();
+        ws.Add(curve);
+        ws.SetActive(curve.Id);
+
+        // A force curve is its own stage: force against separation, not a spatial profile and not an image.
+        Assert.True(vm.IsSingleForceCurve);
+        Assert.Same(curve, vm.ActiveForceCurve);
+        Assert.False(vm.IsSingleCurve);
+        Assert.False(vm.IsSingleImage);
+        Assert.Null(vm.ActiveCurve);
+        Assert.Null(vm.ActiveImage);
+    }
+
+    [Fact]
+    public void Leaving_a_force_curve_clears_the_force_distance_stage()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws);
+        var force = ForceCurve();
+        var image = Image();
+        ws.Add(force);
+        ws.Add(image);
+
+        ws.SetActive(force.Id);
+        Assert.True(vm.IsSingleForceCurve);
+
+        ws.SetActive(image.Id);
+        Assert.False(vm.IsSingleForceCurve);
+        Assert.Null(vm.ActiveForceCurve);
+        Assert.True(vm.IsSingleImage);
+    }
+
     [Fact]
     public void An_active_image_routes_to_the_image_view_not_the_curve_view()
     {

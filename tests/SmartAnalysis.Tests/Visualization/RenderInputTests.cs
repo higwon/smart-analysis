@@ -168,6 +168,95 @@ public sealed class RenderInputTests
     }
 
     [Fact]
+    public void ForForceCurve_plots_force_against_separation_with_the_channel_units()
+    {
+        using var curve = new ForceCurveDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership([10f, 5f, 0f], 3, 1),   // separation
+            ScanBuffer<float>.TakeOwnership([0f, 20f, 50f], 3, 1),  // force
+            new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
+            new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var input = RenderInputFactory.ForForceCurve(curve);
+
+        var series = Assert.Single(input.Series);
+        // Separation is a MEASURED channel, not a regular axis — so X is its samples, not indices.
+        Assert.Equal([10.0, 5.0, 0.0], series.X.ToArray());
+        Assert.Equal([0.0, 20.0, 50.0], series.Y.ToArray());
+        Assert.Equal("nm", input.X.Unit);
+        Assert.Equal("nN", input.Y.Unit);
+        Assert.Equal("Separation", input.X.Title);
+        Assert.Equal("Force", input.Y.Title);
+    }
+
+    [Fact]
+    public void ForForceCurve_copies_its_samples_so_the_input_outlives_the_dataset()
+    {
+        var curve = new ForceCurveDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership([2f, 1f, 0f], 3, 1),
+            ScanBuffer<float>.TakeOwnership([0f, 1f, 2f], 3, 1),
+            new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
+            new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var input = RenderInputFactory.ForForceCurve(curve);
+        curve.Dispose(); // the render input must not be a view into the disposed buffers (ADR-011)
+
+        Assert.Equal([2.0, 1.0, 0.0], input.Series[0].X.ToArray());
+        Assert.Equal([0.0, 1.0, 2.0], input.Series[0].Y.ToArray());
+    }
+
+    [Fact]
+    public void ForForceCurve_sizes_the_axes_from_drawable_pairs_only()
+    {
+        // Four samples, two of them undrawable. In an XY plot a sample is a PAIR: (NaN, 1000) and (5, +Inf) cannot be
+        // plotted, so NEITHER coordinate of either may stretch an axis — otherwise the 1000 would blow up the Y range
+        // and the 5 would sit inside an X range it never earned, squashing the real curve.
+        using var curve = new ForceCurveDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership([10f, float.NaN, 5f, 0f], 4, 1),
+            ScanBuffer<float>.TakeOwnership([0f, 1000f, float.PositiveInfinity, 20f], 4, 1),
+            new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
+            new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var input = RenderInputFactory.ForForceCurve(curve);
+
+        // Only (10, 0) and (0, 20) are drawable, so they alone define both ranges.
+        Assert.Equal(0.0, input.X.Start, 10);
+        Assert.Equal(10.0, input.X.End, 10);
+        Assert.Equal(0.0, input.Y.Start, 10);
+        Assert.Equal(20.0, input.Y.End, 10);
+
+        // The raw samples are still carried through, so the dropout reads as a gap rather than being silently moved.
+        Assert.Equal(4, input.Series[0].X.Length);
+        Assert.True(double.IsNaN(input.Series[0].X.Span[1]));
+        Assert.True(double.IsPositiveInfinity(input.Series[0].Y.Span[2]));
+    }
+
+    [Fact]
+    public void ForForceCurve_with_no_drawable_pair_falls_back_to_a_unit_range()
+    {
+        using var curve = new ForceCurveDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership([float.NaN, 5f], 2, 1),
+            ScanBuffer<float>.TakeOwnership([3f, float.NaN], 2, 1),
+            new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
+            new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var input = RenderInputFactory.ForForceCurve(curve);
+
+        // No pair is drawable, so neither the 5 nor the 3 may define a range.
+        Assert.Equal(0.0, input.X.Start, 10);
+        Assert.Equal(0.0, input.X.End, 10);
+        Assert.Equal(0.0, input.Y.Start, 10);
+        Assert.Equal(0.0, input.Y.End, 10);
+    }
+
+    [Fact]
     public void CurveRenderInput_defaults_to_no_vertical_markers_and_copies_supplied_ones()
     {
         var x = new AxisView("X", "um", 0, 3, 4);
