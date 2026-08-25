@@ -168,6 +168,7 @@ internal static class PsiaTiffTestWriter
         int dataPoints,
         int spectroscopyPoints = 1,
         double forceConstant = 0,
+        double sensitivity = 0,
         int? sourceCountOverride = null,
         int? payloadDataType = null)
     {
@@ -213,7 +214,7 @@ internal static class PsiaTiffTestWriter
         }
 
         w.Write(forceConstant);
-        w.Write(0.0);                                  // SensitivityVoltPerMicroMeter
+        w.Write(sensitivity);
 
         w.Flush();
         var bytes = ms.ToArray();

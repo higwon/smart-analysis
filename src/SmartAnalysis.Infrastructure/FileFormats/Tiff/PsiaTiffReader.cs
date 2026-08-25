@@ -9,6 +9,7 @@ using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Metadata;
 using SmartAnalysis.Domain.Provenance;
+using SmartAnalysis.Domain.Spectroscopy;
 using SmartAnalysis.Domain.Units;
 using TiffLibrary;
 
@@ -278,14 +279,31 @@ public sealed class PsiaTiffReader : IScanFileReader
         var yLine = spectroscopy.Lines[yIndex];
 
         var separationUnit = ResolveUnit(xLine.Unit, out bool xKnown);
-        var forceUnit = ResolveUnit(yLine.Unit, out bool yKnown);
-        if (!xKnown || !yKnown
-            || separationUnit.Dimension != StandardUnits.Length
-            || forceUnit.Dimension != StandardUnits.Force)
+        var ordinateUnit = ResolveUnit(yLine.Unit, out bool yKnown);
+        if (!xKnown || !yKnown || separationUnit.Dimension != StandardUnits.Length
+            || (ordinateUnit.Dimension != StandardUnits.Force && ordinateUnit.Dimension != StandardUnits.Voltage))
         {
             return FileReadResult.Failure(FileReadErrorKind.UnsupportedImageType,
                 $"Spectroscopy '{xLine.SourceName}' [{xLine.Unit}] vs '{yLine.SourceName}' [{yLine.Unit}] is not a "
-                + "force-distance curve (a length abscissa against a force ordinate).");
+                + "force-distance curve (a length abscissa against a force or deflection ordinate).");
+        }
+
+        // Most instruments never store a force: they store what the photodiode measured, a deflection voltage. The
+        // curve is still force-distance, but the force has to be recovered from the probe calibration the file
+        // recorded with it — and without that calibration the force is simply not knowable from this file.
+        CantileverCalibration? calibration = null;
+        if (ordinateUnit.Dimension == StandardUnits.Voltage)
+        {
+            if (!CantileverCalibration.TryCreate(
+                    spectroscopy.ForceConstantNewtonPerMetre, spectroscopy.SensitivityVoltPerMicrometre, out var cal))
+            {
+                return FileReadResult.Failure(FileReadErrorKind.UnsupportedImageType,
+                    $"Spectroscopy '{yLine.SourceName}' is a deflection voltage, but the file carries no usable probe "
+                    + $"calibration (spring constant {spectroscopy.ForceConstantNewtonPerMetre} N/m, sensitivity "
+                    + $"{spectroscopy.SensitivityVoltPerMicrometre} V/um), so its force cannot be recovered.");
+            }
+
+            calibration = cal;
         }
 
         var dataEntry = ifd.FindEntry((TiffTag)PsiaTiff.TagSpectroscopyData);
@@ -327,12 +345,26 @@ public sealed class PsiaTiffReader : IScanFileReader
         float[] forceValues = ReadPlane(
             dataBytes, count, yIndex, dataType, bytesPerValue, yLine.DataGain, spectroscopy.Offsets[yIndex]);
 
+        var forceUnit = ordinateUnit;
+        if (calibration is { } probe)
+        {
+            // The stored gain and offset already put the ordinate in its own unit, so the volts are scaled to the
+            // base volt before the calibration is applied — a channel recorded in mV must not be read as V.
+            for (int i = 0; i < forceValues.Length; i++)
+            {
+                forceValues[i] = (float)probe.ForceNanonewtons(forceValues[i] * ordinateUnit.ScaleToBase);
+            }
+
+            forceUnit = _units.GetUnit(StandardUnits.Nanonewton.Symbol);
+        }
+
         var separationChannel = new ChannelDescriptor(
             Key(xLine.SourceName, "separation"), ChannelKind.Topography, separationUnit, displayName: xLine.SourceName);
         var forceChannel = new ChannelDescriptor(
             Key(yLine.SourceName, "force"), ChannelKind.Force, forceUnit, displayName: yLine.SourceName);
 
-        var metadata = BuildSpectroscopyMetadata(header, spectroscopy, xLine, yLine, dataType, contentHash);
+        var metadata = BuildSpectroscopyMetadata(
+            header, spectroscopy, xLine, yLine, dataType, calibration, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
         var separation = ScanBuffer<float>.TakeOwnership(separationValues, count, 1);
@@ -396,6 +428,7 @@ public sealed class PsiaTiffReader : IScanFileReader
         PsiaSpectroscopyLine xLine,
         PsiaSpectroscopyLine yLine,
         int dataType,
+        CantileverCalibration? calibration,
         string contentHash)
     {
         string model = string.IsNullOrWhiteSpace(header.ImageMode) ? "unknown" : header.ImageMode;
@@ -417,6 +450,17 @@ public sealed class PsiaTiffReader : IScanFileReader
         {
             extended["psia.spect.forceConstant_N_per_m"] =
                 spectroscopy.ForceConstantNewtonPerMetre.ToString(CultureInfo.InvariantCulture);
+        }
+
+        // A force this reader COMPUTED must never be indistinguishable from one the instrument stored (ADR-013):
+        // record that it was derived, and the two numbers it was derived with.
+        if (calibration is { } probe)
+        {
+            extended["psia.spect.forceDerivedFrom"] = $"{yLine.SourceName} [{yLine.Unit}]";
+            extended["psia.spect.springConstant_N_per_m"] =
+                probe.SpringConstantNewtonPerMetre.ToString(CultureInfo.InvariantCulture);
+            extended["psia.spect.sensitivity_V_per_um"] =
+                probe.SensitivityVoltPerMicrometre.ToString(CultureInfo.InvariantCulture);
         }
 
         return new ScanMetadata(model, DateTimeOffset.MinValue, extended);

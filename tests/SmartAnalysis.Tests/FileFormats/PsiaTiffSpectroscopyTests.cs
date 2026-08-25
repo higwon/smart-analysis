@@ -215,6 +215,171 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
     }
 
     [Fact]
+    public async Task A_deflection_voltage_ordinate_is_converted_to_force_with_the_files_own_calibration()
+    {
+        // The common real case: the instrument stored what the photodiode measured, not a force. 2 N/m at 100 V/um
+        // makes 5 V into 100 nN.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Height", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Vertical (A-B)", "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 2.0,
+                sensitivity: 100.0),
+            Planar(Float, Ramp(0, 1), Ramp(5, 0))); // a constant 5 V deflection
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        Assert.Equal(StandardUnits.Nanonewton.Symbol, curve.ForceChannel.Unit.Symbol);
+        Assert.Equal(StandardUnits.Force, curve.ForceChannel.Unit.Dimension);
+        foreach (var force in curve.Force.Span.ToArray())
+        {
+            Assert.Equal(100f, force, 3);
+        }
+    }
+
+    [Fact]
+    public async Task A_converted_force_says_so_and_records_what_it_was_derived_with()
+    {
+        // A computed force must never be indistinguishable from one the instrument measured: someone reading the
+        // result has to be able to tell, and to check the two numbers it depended on.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Height", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Vertical (A-B)", "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 6.81,
+                sensitivity: 85.14),
+            Planar(Float, Ramp(0, 1), Ramp(1, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        var extended = curve.Metadata.Extended;
+        Assert.Equal("Vertical (A-B) [V]", extended["psia.spect.forceDerivedFrom"]);
+        Assert.Equal("6.81", extended["psia.spect.springConstant_N_per_m"]);
+        Assert.Equal("85.14", extended["psia.spect.sensitivity_V_per_um"]);
+    }
+
+    [Fact]
+    public async Task A_force_the_instrument_already_stored_is_left_exactly_as_it_is()
+    {
+        // The conversion must not touch a file that needs none — no re-scaling, no unit rewrite.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 2.0,
+                sensitivity: 100.0), // a calibration is present, and must be ignored
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        Assert.Equal("nN", curve.ForceChannel.Unit.Symbol);
+        Assert.Equal(Ramp(1000, 1).Select(v => (float)v).ToArray(), curve.Force.Span.ToArray());
+        Assert.False(curve.Metadata.Extended.ContainsKey("psia.spect.forceDerivedFrom"));
+    }
+
+    [Theory]
+    [InlineData(0.0, 100.0)]  // no spring constant
+    [InlineData(2.0, 0.0)]    // no sensitivity
+    public async Task A_deflection_curve_with_no_usable_calibration_is_refused_not_guessed(double k, double sensitivity)
+    {
+        // Defaulting either number would yield a curve that looks entirely normal and is wrong by whatever factor the
+        // real probe differed by — and would then be fed to the contact-mechanics fits as if it were measured.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Height", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Vertical (A-B)", "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: k,
+                sensitivity: sensitivity),
+            Planar(Float, Ramp(0, 1), Ramp(5, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
+    }
+
+    [Fact]
+    public async Task A_deflection_recorded_in_millivolts_is_scaled_before_the_calibration_is_applied()
+    {
+        // The calibration is volts per micrometre. Feeding it a millivolt reading unscaled is off by a thousand,
+        // and nothing downstream would show it: the curve keeps its shape and only its magnitude is wrong.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Height", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Vertical (A-B)", "mV", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 2.0,
+                sensitivity: 100.0),
+            Planar(Float, Ramp(0, 1), Ramp(5000, 0))); // 5000 mV IS 5 V, so still 100 nN
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        foreach (var force in curve.Force.Span.ToArray())
+        {
+            Assert.Equal(100f, force, 3);
+        }
+    }
+
+    [Fact]
+    public async Task A_voltage_ordinate_against_a_non_length_abscissa_is_still_not_a_force_curve()
+    {
+        // A bias sweep against a lock-in amplitude is volts on both axes and has nothing to do with a cantilever.
+        // The abscissa being a length is what makes the ordinate a deflection worth converting.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Sample Bias", "V", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("PFM Amplitude", "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 2.0,
+                sensitivity: 100.0),
+            Planar(Float, Ramp(0, 1), Ramp(5, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
+    }
+
+    [Fact]
     public async Task A_spectrum_that_is_not_force_versus_distance_is_a_typed_refusal()
     {
         // A PiFM/IR sweep is a spectroscopy image too, but wavenumber against amplitude is not a force curve.
