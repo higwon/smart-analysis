@@ -24,9 +24,10 @@ public enum CurvePhase
 /// measurements (modulus, adhesion, sensitivity) operate on one clean half instead of a round trip.
 /// <para>
 /// The segmentation is computed here, never stored on the source (ADR-020), and the mode + its parameters + the
-/// effective sample range land in provenance — so the split is reproducible and auditable like any other step. When
-/// the requested phase is not present (an unsegmentable or one-directional curve) the run fails with a typed message
-/// rather than emitting a curve that silently is not that phase.
+/// effective sample range land in provenance — so the split is reproducible and auditable like any other step. A
+/// curve with no such phase (one-directional, or too flat/noisy to segment) is an <b>expected data condition</b>, so
+/// <see cref="Validate"/> reports it as a typed failure (F04) rather than letting the run throw — the alternative,
+/// emitting a curve that silently is not that phase, would corrupt every measurement taken over it.
 /// </para>
 /// Deterministic; DI-only (ADR-005).
 /// </summary>
@@ -76,9 +77,55 @@ public sealed class ApproachRetractSplitOperation : IAnalysisOperation
             return schema;
         }
 
-        return input.Primary is ForceCurveDataset
-            ? ValidationResult.Success
-            : ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(ForceCurveDataset)} as its primary input.");
+        if (input.Primary is not ForceCurveDataset curve)
+        {
+            return ValidationResult.Fail($"'{Descriptor.Id}' requires a {nameof(ForceCurveDataset)} as its primary input.");
+        }
+
+        // "This curve has no such phase" is an EXPECTED data condition (a valid curve, a valid mode, a valid phase —
+        // the segmentation simply found none), so it belongs here as a typed failure rather than as an exception out
+        // of RunAsync (F04). Deriving a half labelled "approach" that is not one would corrupt every measurement
+        // taken over it, so the run must not proceed.
+        var (phase, mode, windowRatio, minSegmentRatio) = Read(parameters);
+        if (FindSegment(curve, phase, mode, windowRatio, minSegmentRatio) is null)
+        {
+            return ValidationResult.Fail(
+                $"The curve has no {KindOf(phase)} phase under the '{mode}' mode; it may be one-directional or too noisy to segment.");
+        }
+
+        return ValidationResult.Success;
+    }
+
+    // The parameters as their real types, with the schema defaults applied.
+    private static (CurvePhase Phase, SegmentationMode Mode, double WindowRatio, double MinSegmentRatio) Read(IParameterSet parameters)
+        => (parameters.TryGet<CurvePhase>(PhaseParameter, out var ph) ? ph : CurvePhase.Approach,
+            parameters.TryGet<SegmentationMode>(ModeParameter, out var m) ? m : SegmentationMode.SeparationTrend,
+            parameters.TryGet<double>(WindowRatioParameter, out var wr) ? wr : DefaultWindowRatio,
+            parameters.TryGet<double>(MinSegmentRatioParameter, out var mr) ? mr : DefaultMinSegmentRatio);
+
+    private static SegmentKind KindOf(CurvePhase phase)
+        => phase == CurvePhase.Approach ? SegmentKind.Approach : SegmentKind.Retract;
+
+    // Segments the curve and resolves the phase to keep: the LONGEST run of it (a noisy ramp can produce several
+    // runs; the longest is the real phase, not a wobble). Null when the curve has no such phase. Pure and
+    // deterministic over immutable inputs, so Validate and RunAsync always agree.
+    private static CurveSegment? FindSegment(
+        ForceCurveDataset curve, CurvePhase phase, SegmentationMode mode, double windowRatio, double minSegmentRatio)
+    {
+        var segmentation = mode == SegmentationMode.MaxForce
+            ? ApproachRetractSegmentation.ByMaxForce(curve.Force.Memory.Span)
+            : ApproachRetractSegmentation.BySeparationTrend(curve.Separation.Memory.Span, windowRatio, minSegmentRatio);
+
+        CurveSegment? longest = null;
+        foreach (var s in segmentation.OfKind(KindOf(phase)))
+        {
+            if (longest is null || s.Length > longest.Length)
+            {
+                longest = s;
+            }
+        }
+
+        return longest;
     }
 
     public Task<OperationResult> RunAsync(
@@ -97,37 +144,16 @@ public sealed class ApproachRetractSplitOperation : IAnalysisOperation
         }
 
         var curve = (ForceCurveDataset)input.Primary;
-        var phase = parameters.TryGet<CurvePhase>(PhaseParameter, out var ph) ? ph : CurvePhase.Approach;
-        var mode = parameters.TryGet<SegmentationMode>(ModeParameter, out var m) ? m : SegmentationMode.SeparationTrend;
-        double windowRatio = parameters.TryGet<double>(WindowRatioParameter, out var wr) ? wr : DefaultWindowRatio;
-        double minSegmentRatio = parameters.TryGet<double>(MinSegmentRatioParameter, out var mr) ? mr : DefaultMinSegmentRatio;
+        var (phase, mode, windowRatio, minSegmentRatio) = Read(parameters);
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Segmenting the curve."));
 
-        var segmentation = mode == SegmentationMode.MaxForce
-            ? ApproachRetractSegmentation.ByMaxForce(curve.Force.Memory.Span)
-            : ApproachRetractSegmentation.BySeparationTrend(curve.Separation.Memory.Span, windowRatio, minSegmentRatio);
-
-        var wanted = phase == CurvePhase.Approach ? SegmentKind.Approach : SegmentKind.Retract;
-
-        // A curve can hold several runs of a phase (a noisy ramp); keep the longest — the real phase, not a wobble.
-        CurveSegment? segment = null;
-        foreach (var s in segmentation.OfKind(wanted))
-        {
-            if (segment is null || s.Length > segment.Length)
-            {
-                segment = s;
-            }
-        }
-
-        if (segment is null)
-        {
-            // Emitting "the approach" of a curve that has none would be a silently wrong dataset for every downstream
-            // measurement, so fail with a typed message instead (the launcher surfaces it).
-            throw new InvalidOperationException(
-                $"The curve has no {wanted} phase under the '{mode}' mode; it may be one-directional or too noisy to segment.");
-        }
+        // Validate already resolved this (same pure helper, same immutable inputs), so a null here means Validate was
+        // not honoured — a programmer error, not a data condition.
+        var segment = FindSegment(curve, phase, mode, windowRatio, minSegmentRatio)
+            ?? throw new InvalidOperationException(
+                $"Cannot run '{Descriptor.Id}': the curve has no {KindOf(phase)} phase (Validate was not honoured).");
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.5, "Copying the phase."));

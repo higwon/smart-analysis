@@ -1,6 +1,9 @@
 using SmartAnalysis.Analysis.Operations;
 using SmartAnalysis.Analysis.Operations.Image;
 using SmartAnalysis.Analysis.Spectroscopy;
+using SmartAnalysis.Application.Analysis;
+using SmartAnalysis.Application.Operations;
+using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Datasets;
@@ -49,6 +52,9 @@ public sealed class ApproachRetractSplitOperationTests
             new ChannelDescriptor("separation", ChannelKind.Unknown, StandardUnits.Nanometre, "Separation"),
             new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanometre, "Force"),
             ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+    private static ValidationResult Validate(ForceCurveDataset curve, params (string Key, object? Value)[] parameters)
+        => Op().Validate(new OperationInput(curve), new ParameterSet(parameters.ToDictionary(p => p.Key, p => p.Value)));
 
     private static async Task<OperationResult> RunAsync(ForceCurveDataset curve, params (string Key, object? Value)[] parameters)
         => await Op().RunAsync(
@@ -138,23 +144,47 @@ public sealed class ApproachRetractSplitOperationTests
     }
 
     [Fact]
-    public async Task A_curve_with_no_such_phase_fails_instead_of_deriving_a_wrong_one()
+    public void A_curve_with_no_such_phase_is_a_typed_validation_failure_not_an_exception()
     {
-        // A one-directional ramp: there is no retract to keep.
+        // A one-directional ramp: there is no retract to keep. Valid curve, valid mode, valid phase — the data simply
+        // has no such half, which F04 says is a typed Validate failure, not something RunAsync throws.
         using var curve = RoundTrip(down: 100, up: 0);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(curve, ("phase", CurvePhase.Retract)));
+        var validation = Validate(curve, ("phase", CurvePhase.Retract));
+
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Errors, e => e.Contains("Retract"));
     }
 
     [Fact]
-    public async Task An_unsegmentable_curve_fails_rather_than_guessing()
+    public void An_unsegmentable_curve_is_a_typed_validation_failure()
     {
         // Flat separation and flat force: nothing to split on, so neither phase exists.
         var flat = new float[40];
         Array.Fill(flat, 7f);
         using var curve = Curve(flat, (float[])flat.Clone());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(curve, ("phase", CurvePhase.Approach)));
+        Assert.False(Validate(curve, ("phase", CurvePhase.Approach)).IsValid);
+    }
+
+    [Fact]
+    public async Task Through_the_launcher_a_missing_phase_comes_back_as_a_typed_failure()
+    {
+        // The U08 path a user actually takes: the typed Validate failure must surface as OperationRunResult.Failed
+        // (with the reason), not as an exception the Application layer has to catch.
+        var ws = new Workspace();
+        var curve = RoundTrip(down: 100, up: 0); // one-directional: no retract
+        ws.Add(curve);
+        ws.SetActive(curve.Id);
+        var registry = new OperationRegistry([new ApproachRetractSplitOperation(new SystemExecutionEnvironmentProvider())]);
+        var launcher = new OperationLauncherUseCase(ws, registry, new MeasurementStore());
+
+        var result = await launcher.RunAsync("force-curve.split", new Dictionary<string, object?> { ["phase"] = "Retract" });
+
+        Assert.False(result.Success);
+        Assert.Contains("Retract", result.Error);
+        Assert.Equal(1, ws.Count);                 // nothing was derived
+        Assert.Equal(curve.Id, ws.Active.ActiveId); // and the active context is untouched
     }
 
     [Fact]
