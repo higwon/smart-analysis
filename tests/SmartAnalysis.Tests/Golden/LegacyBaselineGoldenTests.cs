@@ -55,7 +55,7 @@ public sealed class LegacyBaselineGoldenTests
         // EVERY legacy file the harness compiles must be hashed here: a golden whose producing source is not
         // recorded cannot be reproduced or audited, which is the whole point of MV00. (BaselineCorrction was once
         // compiled without being listed, so the ALS golden had no source provenance.)
-        var names = sources.Select(s => s.GetProperty("Name").GetString()).ToArray();
+        var names = sources.Select(s => s.GetProperty("Name").GetString() ?? string.Empty).ToArray();
         Assert.Equal(
             ["BaselineCorrction.cs", "MultiplePolynomialRegression.cs", "PolynomialLeastSquaresRegression.cs", "SummaryStatisticsCalculator.cs"],
             names.Order().ToArray());
