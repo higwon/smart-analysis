@@ -111,6 +111,11 @@ color/size/padding/template; theme colors via `DynamicResource`. **UI color ≠ 
 - Structure/UI/persistence: **intentionally different** per the design docs.
 - If you must deviate from documented legacy numeric behavior, record an ADR explaining why
   (`docs/ai-context/41-doc-maintenance-and-adr.md`) and note it in the spec's parity section.
+- If, while reading legacy as a reference, you find that the legacy code is **wrong** — not merely different —
+  add an entry to `docs/migration/36-legacy-defect-register.md`. Cite legacy `file:line`, state the
+  consequence for a user of the *legacy* product, and say what the new code does instead. This is separate
+  from the parity report: 🟡 there means "we chose differently", an entry there means "the old behaviour is a
+  defect". Do not fix it in the legacy tree — it is read-only for this project.
 
 ## 12. Core decisions you must NOT change on your own
 (Only change via an ADR + human review.)

@@ -96,6 +96,7 @@ coverage, method, and gaps.
 | [33-work-spec-template](migration/33-work-spec-template.md) | Template for per-feature work specs (incl. GitHub linkage) |
 | [34-legacy-parity-report](migration/34-legacy-parity-report.md) | **MV01**: per-operation legacy-vs-new status — parity-verified (CI-enforced against the frozen golden), intentional differences, clean-room-only |
 | [35-product-epics-roadmap](migration/35-product-epics-roadmap.md) | Product vertical-slice Epics (Image/Profile/Spectroscopy/PiFM/AI) + Task↔Epic mapping |
+| [36-legacy-defect-register](migration/36-legacy-defect-register.md) | Defects found **in the legacy product** while reading it as a reference - cited by legacy `file:line`, for whoever maintains it |
 | [specs/](migration/specs/) | Foundation + MVP-boundary specs: F00, F01, F03, F04, F05, D01, W01, MV00, UX01, **UIX01, UIX02, UIX03,** V00, V01, FF01, A01, A02, P01 |
 
 ### `ai-context/` — how AI sessions must work
