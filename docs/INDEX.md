@@ -41,6 +41,14 @@ coverage, method, and gaps.
 4. [`target-design/11-architecture-principles.md`](target-design/11-architecture-principles.md) — the rules.
 5. [`migration/32-dependency-roadmap.md`](migration/32-dependency-roadmap.md) — the sequence + MVP.
 
+### If you want to know what is wrong with the legacy product
+1. [`migration/36-legacy-defect-register.md`](migration/36-legacy-defect-register.md) — **start here.**
+   Every concrete finding, with the legacy code quoted; a coverage map of what has been audited; and the
+   untraced leads. It maps each entry back to the theme it instantiates in doc 07.
+2. [`legacy-analysis/07-tech-debt-register.md`](legacy-analysis/07-tech-debt-register.md) — the
+   **structural** themes, scored by their impact on the rewrite rather than on legacy’s users. Read this for
+   *why we are rebuilding*; read 36 for *what is broken*.
+
 ### If you are about to implement a feature (AI session)
 1. [`ai-context/40-ai-working-agreement.md`](ai-context/40-ai-working-agreement.md) — mandatory.
 2. [`ai-context/42-github-delivery-workflow.md`](ai-context/42-github-delivery-workflow.md) — the
@@ -64,7 +72,7 @@ coverage, method, and gaps.
 | [04-file-formats-io](legacy-analysis/04-file-formats-io.md) | TIFF / PS-PPT / HDF5 / SQLite / export parsers & I/O |
 | [05-ui-visualization](legacy-analysis/05-ui-visualization.md) | Shell, MVVM, DevExpress & SciChart footprint, 2 traced flows |
 | [06-persistence-provenance](legacy-analysis/06-persistence-provenance.md) | Save/restore, history, reproducibility gaps |
-| [07-tech-debt-register](legacy-analysis/07-tech-debt-register.md) | Critical/High/Medium/Low issues + migration risk |
+| [07-tech-debt-register](legacy-analysis/07-tech-debt-register.md) | **Structural** themes (C/H/M/L) scored by impact on the rewrite. Concrete per-defect findings live in [36](migration/36-legacy-defect-register.md) |
 
 ### `target-design/` — the new software
 | Doc | Covers |
@@ -96,7 +104,7 @@ coverage, method, and gaps.
 | [33-work-spec-template](migration/33-work-spec-template.md) | Template for per-feature work specs (incl. GitHub linkage) |
 | [34-legacy-parity-report](migration/34-legacy-parity-report.md) | **MV01**: per-operation legacy-vs-new status — parity-verified (CI-enforced against the frozen golden), intentional differences, clean-room-only |
 | [35-product-epics-roadmap](migration/35-product-epics-roadmap.md) | Product vertical-slice Epics (Image/Profile/Spectroscopy/PiFM/AI) + Task↔Epic mapping |
-| [36-legacy-defect-register](migration/36-legacy-defect-register.md) | **Running register** of legacy defects (`LD-`) and risky code (`LI-`), cited by legacy `file:line`, with a coverage map of what has been audited |
+| [36-legacy-defect-register](migration/36-legacy-defect-register.md) | **The entry point for legacy problems.** Running register of defects (`LD-`) and risky code (`LI-`) with the legacy code quoted, tagged Code vs **measurement science**, mapped to doc 07 themes, plus a coverage map and untraced leads |
 | [specs/](migration/specs/) | Foundation + MVP-boundary specs: F00, F01, F03, F04, F05, D01, W01, MV00, UX01, **UIX01, UIX02, UIX03,** V00, V01, FF01, A01, A02, P01 |
 
 ### `ai-context/` — how AI sessions must work
