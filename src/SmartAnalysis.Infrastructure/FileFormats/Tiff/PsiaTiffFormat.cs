@@ -130,3 +130,100 @@ internal sealed record PsiaImageHeader(
         return (nul >= 0 ? s[..nul] : s).Trim();
     }
 }
+
+/// <summary>One of the eight fixed channel slots in <c>PsiaSpectroscopyHeaderStruct</c> (tag 0xC506).</summary>
+/// <param name="IsXAxis">The file's own answer to "which channel is the abscissa" — not a guess from the name.</param>
+internal readonly record struct PsiaSpectroscopyLine(
+    string SourceName,
+    string Unit,
+    double DataGain,
+    bool IsXAxis,
+    bool IsYAxis);
+
+/// <summary>
+/// The spectroscopy header (tag 0xC506): eight channel slots followed by the sample counts. Read sequentially in
+/// struct field order, like <see cref="PsiaImageHeader"/>.
+/// <para>
+/// The payload (tag 0xC507) is <b>channel-planar</b>: all <see cref="DataPoints"/> samples of source 0, then all of
+/// source 1, and so on — <i>not</i> interleaved per point. Element width comes from the 2D header's
+/// <c>DataType</c>, and <see cref="ExpectedDataBytes"/> exists so a wrong reading is caught by arithmetic rather
+/// than producing plausible nonsense.
+/// </para>
+/// </summary>
+internal sealed record PsiaSpectroscopyHeader(
+    IReadOnlyList<PsiaSpectroscopyLine> Lines,
+    int SourceCount,
+    int DataPoints,
+    int SpectroscopyPoints,
+    IReadOnlyList<double> Offsets,
+    double ForceConstantNewtonPerMetre)
+{
+    /// <summary>Channel slots in the struct, always written whether or not they are used.</summary>
+    private const int LineSlots = 8;
+
+    /// <summary>Bytes needed to reach the end of the sample counts — the minimum a usable header must have.</summary>
+    private const int MinBytes = (LineSlots * 96) + (5 * sizeof(int));
+
+    /// <summary>Bytes needed to also reach <c>ForceConstantNewtonPerMeter</c>, which older writers may omit.</summary>
+    private const int ForceConstantBytes = 984;
+
+    public long ExpectedDataBytes(int bytesPerValue)
+        => (long)DataPoints * SourceCount * SpectroscopyPoints * bytesPerValue;
+
+    /// <summary>Parses tag 0xC506. Returns null when the payload is too short to hold the sample counts.</summary>
+    public static PsiaSpectroscopyHeader? TryParse(byte[] headerBytes)
+    {
+        if (headerBytes is null || headerBytes.Length < MinBytes)
+        {
+            return null;
+        }
+
+        using var ms = new MemoryStream(headerBytes, writable: false);
+        using var r = new BinaryReader(ms, Encoding.Unicode);
+
+        var lines = new PsiaSpectroscopyLine[LineSlots];
+        for (int i = 0; i < LineSlots; i++)
+        {
+            string sourceName = ReadFixedString(r, 32);  // SourceName[32*2]
+            string unit = ReadFixedString(r, 8);          // Unit[8*2]
+            double gain = r.ReadDouble();
+            bool isX = r.ReadInt32() != 0;
+            bool isY = r.ReadInt32() != 0;
+            lines[i] = new PsiaSpectroscopyLine(sourceName, unit, gain, isX, isY);
+        }
+
+        int sourceCount = r.ReadInt32();
+        _ = r.ReadInt32();                                // Average
+        int dataPoints = r.ReadInt32();
+        int spectPoints = r.ReadInt32();
+        _ = r.ReadInt32();                                // DrivingSourceIndex
+
+        var offsets = new double[LineSlots];
+        double forceConstant = 0;
+        if (headerBytes.Length >= ForceConstantBytes)
+        {
+            _ = r.ReadBytes(4 * sizeof(float));           // drive periods / speeds
+            _ = r.ReadInt32();                            // VolumeImage
+            for (int i = 0; i < LineSlots; i++)
+            {
+                offsets[i] = r.ReadDouble();
+            }
+
+            _ = r.ReadBytes(LineSlots * sizeof(int));     // LogScale[8]
+            _ = r.ReadBytes(LineSlots * sizeof(int));     // Square[8]
+            _ = r.ReadInt32();                            // PerXPoint
+            _ = r.ReadInt32();                            // ReferenceImage
+            _ = r.ReadBytes(4 * sizeof(double));          // scan size / offset
+            forceConstant = r.ReadDouble();
+        }
+
+        return new PsiaSpectroscopyHeader(lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant);
+    }
+
+    private static string ReadFixedString(BinaryReader r, int charCount)
+    {
+        string s = Encoding.Unicode.GetString(r.ReadBytes(charCount * 2));
+        int nul = s.IndexOf('\0');
+        return (nul >= 0 ? s[..nul] : s).Trim();
+    }
+}

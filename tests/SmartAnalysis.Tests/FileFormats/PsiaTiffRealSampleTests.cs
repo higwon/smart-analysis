@@ -75,7 +75,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task Profile_and_spectroscopy_samples_route_to_unsupported()
+    public async Task Profile_samples_route_to_unsupported()
     {
         var root = SamplesRoot();
         if (root is null)
@@ -84,29 +84,98 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
             return;
         }
 
-        var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
-        int checkedFiles = 0;
-        foreach (var sub in new[] { "Profile", "Spectroscopy" })
+        var dir = Path.Combine(root, "Profile");
+        if (!Directory.Exists(dir))
         {
-            var dir = Path.Combine(root, sub);
-            if (!Directory.Exists(dir))
+            output.WriteLine("No Profile samples — skipping.");
+            return;
+        }
+
+        var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
+        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
+        {
+            var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+            (result.Dataset as IDisposable)?.Dispose();
+
+            output.WriteLine($"[Profile] {Path.GetFileName(path)} -> {(result.IsSuccess ? "OK" : result.Error?.Kind.ToString())}");
+            Assert.False(result.IsSuccess, $"Profile/{Path.GetFileName(path)} should not read as a 2D image.");
+            Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
+        }
+    }
+
+    [Fact]
+    public async Task Spectroscopy_samples_read_as_force_curves()
+    {
+        var root = SamplesRoot();
+        if (root is null)
+        {
+            output.WriteLine("No samples directory available — skipping.");
+            return;
+        }
+
+        var dir = Path.Combine(root, "Spectroscopy");
+        if (!Directory.Exists(dir))
+        {
+            output.WriteLine("No Spectroscopy samples — skipping.");
+            return;
+        }
+
+        var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
+        int curves = 0;
+        foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
+        {
+            var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+            using var dataset = result.Dataset as IDisposable;
+            string name = Path.GetFileName(path);
+
+            if (result.Dataset is ForceCurveDataset curve)
             {
-                continue;
+                output.WriteLine($"[Spec] {name} -> curve of {curve.Length}: "
+                    + $"{curve.SeparationChannel.DisplayName} [{curve.SeparationChannel.Unit.Symbol}] vs "
+                    + $"{curve.ForceChannel.DisplayName} [{curve.ForceChannel.Unit.Symbol}]");
+
+                Assert.True(curve.Length > 1, $"{name}: a curve needs more than one sample.");
+                Assert.Equal(StandardUnits.Length, curve.SeparationChannel.Unit.Dimension);
+                Assert.Equal(StandardUnits.Force, curve.ForceChannel.Unit.Dimension);
+
+                var separation = curve.Separation.Span;
+                var force = curve.Force.Span;
+                for (int i = 0; i < curve.Length; i++)
+                {
+                    Assert.True(float.IsFinite(separation[i]), $"{name}: separation[{i}] is not finite.");
+                    Assert.True(float.IsFinite(force[i]), $"{name}: force[{i}] is not finite.");
+                }
+
+                // A ramp, not noise: a force curve sweeps Z away from where it started and comes back, so the travel
+                // has to be far larger than the step between neighbouring samples. Reading the payload with the wrong
+                // stride mixes channels together and collapses exactly this.
+                float min = separation[0], max = separation[0], biggestStep = 0;
+                for (int i = 1; i < curve.Length; i++)
+                {
+                    min = Math.Min(min, separation[i]);
+                    max = Math.Max(max, separation[i]);
+                    biggestStep = Math.Max(biggestStep, Math.Abs(separation[i] - separation[i - 1]));
+                }
+
+                Assert.True(max - min > biggestStep * 10,
+                    $"{name}: Z travel {max - min} is not a ramp — the largest single step is {biggestStep}.");
+                curves++;
             }
-
-            foreach (var path in Directory.EnumerateFiles(dir, "*.tiff").OrderBy(p => p))
+            else if (result.IsSuccess)
             {
-                var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
-                (result.Dataset as IDisposable)?.Dispose();
-
-                output.WriteLine($"[{sub}] {Path.GetFileName(path)} -> {(result.IsSuccess ? "OK" : result.Error?.Kind.ToString())}");
-                Assert.False(result.IsSuccess, $"{sub}/{Path.GetFileName(path)} should not read as a 2D image.");
-                Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
-                checkedFiles++;
+                // Some files under Spectroscopy/ are the companion 2D images captured alongside the spectra.
+                output.WriteLine($"[Spec] {name} -> {result.Dataset!.GetType().Name} (companion image)");
+                Assert.IsType<ScanImageDataset>(result.Dataset);
+            }
+            else
+            {
+                // A spectrum that is not force-versus-distance (an IR/PiFM wavenumber sweep) is a typed refusal.
+                output.WriteLine($"[Spec] {name} -> {result.Error!.Kind}: {result.Error.Message}");
+                Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error.Kind);
             }
         }
 
-        Assert.True(checkedFiles > 0, "Expected at least one Profile/Spectroscopy sample to assert on.");
+        Assert.True(curves > 0, "Expected at least one spectroscopy sample to read as a force curve.");
     }
 
     [Fact]

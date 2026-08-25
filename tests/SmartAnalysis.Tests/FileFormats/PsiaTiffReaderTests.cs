@@ -156,12 +156,12 @@ public sealed class PsiaTiffReaderTests : IDisposable
         Assert.Equal(FileReadErrorKind.Corrupt, result.Error!.Kind);
     }
 
-    [Theory]
-    [InlineData(1)] // line profile
-    [InlineData(2)] // spectroscopy
-    public async Task Non_2d_image_types_route_to_unsupported(int imageType)
+    [Fact]
+    public async Task A_line_profile_image_routes_to_unsupported()
     {
-        var path = WriteScan(width: 2, height: 2, dataType: 2, raw: [1, 2, 3, 4], imageType: imageType);
+        // Spectroscopy (type 2) is no longer here: it reads as a force curve, covered by
+        // PsiaTiffSpectroscopyTests. The line-profile type is still unmapped.
+        var path = WriteScan(width: 2, height: 2, dataType: 2, raw: [1, 2, 3, 4], imageType: 1);
 
         var result = await NewReader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
 

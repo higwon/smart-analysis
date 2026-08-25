@@ -145,6 +145,146 @@ internal static class PsiaTiffTestWriter
         return ms.ToArray();
     }
 
+
+    public const ushort TagSpectroscopyHeader = 0xC506;
+    public const ushort TagSpectroscopyData = 0xC507;
+
+    /// <summary>One channel slot for <see cref="BuildSpectroscopyHeader"/>.</summary>
+    internal readonly record struct SpectroscopyLine(
+        string SourceName, string Unit, double DataGain, bool IsXAxis, bool IsYAxis, double Offset = 0);
+
+    /// <summary>Bytes the writer emits for tag 0xC506 — through ForceConstant and Sensitivity.</summary>
+    public const int SpectroscopyHeaderBytes = 992;
+
+    /// <summary>Builds a spectroscopy header (tag 0xC506) with the eight fixed channel slots.</summary>
+    public static byte[] BuildSpectroscopyHeader(
+        SpectroscopyLine[] lines,
+        int dataPoints,
+        int spectroscopyPoints = 1,
+        double forceConstant = 0,
+        int? sourceCountOverride = null)
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms, Encoding.Unicode);
+
+        for (int i = 0; i < 8; i++)
+        {
+            var line = i < lines.Length ? lines[i] : default;
+            WriteFixedString(w, line.SourceName ?? string.Empty, 32);
+            WriteFixedString(w, line.Unit ?? string.Empty, 8);
+            w.Write(line.DataGain);
+            w.Write(line.IsXAxis ? 1 : 0);
+            w.Write(line.IsYAxis ? 1 : 0);
+        }
+
+        w.Write(sourceCountOverride ?? lines.Length); // SpectSources
+        w.Write(0);                                    // Average
+        w.Write(dataPoints);
+        w.Write(spectroscopyPoints);
+        w.Write(0);                                    // DrivingSourceIndex
+        for (int i = 0; i < 4; i++)
+        {
+            w.Write(0f);                               // drive periods / speeds
+        }
+
+        w.Write(0);                                    // VolumeImage
+        for (int i = 0; i < 8; i++)
+        {
+            w.Write(i < lines.Length ? lines[i].Offset : 0.0);
+        }
+
+        for (int i = 0; i < 16; i++)
+        {
+            w.Write(0);                                // LogScale[8] + Square[8]
+        }
+
+        w.Write(0);                                    // PerXPoint
+        w.Write(0);                                    // ReferenceImage
+        for (int i = 0; i < 4; i++)
+        {
+            w.Write(0.0);                              // scan size / offset
+        }
+
+        w.Write(forceConstant);
+        w.Write(0.0);                                  // SensitivityVoltPerMicroMeter
+
+        w.Flush();
+        var bytes = ms.ToArray();
+        if (bytes.Length != SpectroscopyHeaderBytes)
+        {
+            throw new InvalidOperationException($"Test spectroscopy header is {bytes.Length} bytes, expected {SpectroscopyHeaderBytes}.");
+        }
+
+        return bytes;
+    }
+
+    /// <summary>
+    /// Writes a PSIA spectroscopy TIFF: the 2D header (which carries the image type and the payload's element
+    /// width) plus tags 0xC506/0xC507. The payload is channel-planar, exactly as the instrument writes it.
+    /// </summary>
+    public static void WriteSpectroscopyFile(string path, byte[] imageHeader, byte[] spectroscopyHeader, byte[] data)
+    {
+        const int ifdOffset = 8;
+        const int entryCount = 4;
+        const int ifdSize = 2 + (entryCount * 12) + 4;
+        int imageHeaderOffset = ifdOffset + ifdSize;
+        int spectroscopyHeaderOffset = imageHeaderOffset + imageHeader.Length;
+        int dataOffset = spectroscopyHeaderOffset + spectroscopyHeader.Length;
+
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+
+        w.Write((byte)'I');
+        w.Write((byte)'I');
+        w.Write((ushort)42);
+        w.Write((uint)ifdOffset);
+
+        // Entries must be ascending by tag id (0xC500 < 0xC503 < 0xC506 < 0xC507).
+        w.Write((ushort)entryCount);
+        WriteEntry(w, TagMagicNumber, type: 4, count: 1, valueOrOffset: 0x0E031301);
+        WriteEntry(w, TagHeader, type: 1, count: (uint)imageHeader.Length, valueOrOffset: (uint)imageHeaderOffset);
+        WriteEntry(w, TagSpectroscopyHeader, type: 1, count: (uint)spectroscopyHeader.Length, valueOrOffset: (uint)spectroscopyHeaderOffset);
+        WriteEntry(w, TagSpectroscopyData, type: 1, count: (uint)data.Length, valueOrOffset: (uint)dataOffset);
+        w.Write((uint)0);
+
+        w.Write(imageHeader);
+        w.Write(spectroscopyHeader);
+        w.Write(data);
+
+        w.Flush();
+        File.WriteAllBytes(path, ms.ToArray());
+    }
+
+    /// <summary>Writes a spectroscopy TIFF without the 0xC506 tag, to exercise the missing-header path.</summary>
+    public static void WriteSpectroscopyFileWithoutHeader(string path, byte[] imageHeader, byte[] data)
+    {
+        const int ifdOffset = 8;
+        const int entryCount = 3;
+        const int ifdSize = 2 + (entryCount * 12) + 4;
+        int imageHeaderOffset = ifdOffset + ifdSize;
+        int dataOffset = imageHeaderOffset + imageHeader.Length;
+
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+
+        w.Write((byte)'I');
+        w.Write((byte)'I');
+        w.Write((ushort)42);
+        w.Write((uint)ifdOffset);
+
+        w.Write((ushort)entryCount);
+        WriteEntry(w, TagMagicNumber, type: 4, count: 1, valueOrOffset: 0x0E031301);
+        WriteEntry(w, TagHeader, type: 1, count: (uint)imageHeader.Length, valueOrOffset: (uint)imageHeaderOffset);
+        WriteEntry(w, TagSpectroscopyData, type: 1, count: (uint)data.Length, valueOrOffset: (uint)dataOffset);
+        w.Write((uint)0);
+
+        w.Write(imageHeader);
+        w.Write(data);
+
+        w.Flush();
+        File.WriteAllBytes(path, ms.ToArray());
+    }
+
     private static void WriteEntry(BinaryWriter w, ushort tag, ushort type, uint count, uint valueOrOffset)
     {
         w.Write(tag);
