@@ -130,9 +130,12 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
 
             if (result.Dataset is ForceCurveDataset curve)
             {
+                var derived = curve.Metadata.Extended.GetValueOrDefault("psia.spect.forceDerivedFrom");
                 output.WriteLine($"[Spec] {name} -> curve of {curve.Length}: "
                     + $"{curve.SeparationChannel.DisplayName} [{curve.SeparationChannel.Unit.Symbol}] vs "
-                    + $"{curve.ForceChannel.DisplayName} [{curve.ForceChannel.Unit.Symbol}]");
+                    + $"{curve.ForceChannel.DisplayName} [{curve.ForceChannel.Unit.Symbol}] "
+                    + $"force {curve.Force.Span.ToArray().Min():G4}..{curve.Force.Span.ToArray().Max():G4}"
+                    + (derived is null ? string.Empty : $" (derived from {derived})"));
 
                 Assert.True(curve.Length > 1, $"{name}: a curve needs more than one sample.");
                 Assert.Equal(StandardUnits.Length, curve.SeparationChannel.Unit.Dimension);

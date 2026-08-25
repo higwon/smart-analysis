@@ -158,6 +158,7 @@ internal sealed record PsiaSpectroscopyHeader(
     int SpectroscopyPoints,
     IReadOnlyList<double> Offsets,
     double ForceConstantNewtonPerMetre,
+    double SensitivityVoltPerMicrometre,
     int? DataType)
 {
     /// <summary>Channel slots in the struct, always written whether or not they are used.</summary>
@@ -171,6 +172,9 @@ internal sealed record PsiaSpectroscopyHeader(
 
     /// <summary>Bytes needed to also reach <c>ForceConstantNewtonPerMeter</c>, which older writers may omit.</summary>
     private const int ForceConstantBytes = 984;
+
+    /// <summary>Bytes needed to also reach <c>SensitivityVoltPerMicroMeter</c>, the field right after it.</summary>
+    private const int SensitivityBytes = 992;
 
     /// <summary>
     /// Absolute offset of the payload's element type. The fields between it and <c>Sensitivity</c> are not mapped,
@@ -211,6 +215,7 @@ internal sealed record PsiaSpectroscopyHeader(
 
         var offsets = new double[LineSlots];
         double forceConstant = 0;
+        double sensitivity = 0;
         // Each trailing field is gated on its own reach, so a header that stops short of ForceConstant still
         // yields the offsets that precede it rather than silently zeroing them.
         if (headerBytes.Length >= OffsetsEndBytes)
@@ -230,6 +235,11 @@ internal sealed record PsiaSpectroscopyHeader(
                 _ = r.ReadInt32();                        // ReferenceImage
                 _ = r.ReadBytes(4 * sizeof(double));      // scan size / offset
                 forceConstant = r.ReadDouble();
+
+                if (headerBytes.Length >= SensitivityBytes)
+                {
+                    sensitivity = r.ReadDouble();
+                }
             }
         }
 
@@ -237,7 +247,8 @@ internal sealed record PsiaSpectroscopyHeader(
             ? BinaryPrimitives.ReadInt32LittleEndian(headerBytes.AsSpan(DataTypeOffset))
             : null;
 
-        return new PsiaSpectroscopyHeader(lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant, dataType);
+        return new PsiaSpectroscopyHeader(
+            lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant, sensitivity, dataType);
     }
 
     private static string ReadFixedString(BinaryReader r, int charCount)
