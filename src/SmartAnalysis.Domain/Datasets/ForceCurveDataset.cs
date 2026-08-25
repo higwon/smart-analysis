@@ -12,8 +12,10 @@ namespace SmartAnalysis.Domain.Datasets;
 /// On success the ctor takes ownership of both buffers (dispose the dataset). If the ctor throws,
 /// ownership stays with the caller. Passing the <b>same</b> buffer instance for both roles is rejected
 /// so each buffer has exactly one owner. Units come from the channel descriptors
-/// (<c>SeparationChannel.Unit</c>, <c>ForceChannel.Unit</c>). The approach/retract segmentation is
-/// added in <b>D03 / EPIC-SPEC01</b> (doc 12 OPEN: stored vs recomputed).
+/// (<c>SeparationChannel.Unit</c>, <c>ForceChannel.Unit</c>). The approach/retract split is deliberately NOT
+/// stored here: it is the output of a classifier mode + parameters, so it is computed on demand by
+/// <c>ApproachRetractSegmentation</c> into a <c>CurveSegmentation</c> — a curve is never frozen to one
+/// classifier's opinion (<b>ADR-020</b>, D03 / EPIC-SPEC01).
 /// </para>
 /// </summary>
 public sealed class ForceCurveDataset : AfmDataset
