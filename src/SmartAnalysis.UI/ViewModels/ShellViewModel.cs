@@ -847,8 +847,13 @@ public sealed class ShellViewModel : ObservableObject
 
     /// <summary>
     /// The map's points laid out as a clickable grid, so a curve can be chosen by <b>where it was measured</b>
-    /// rather than by an index. Empty when the map has no grid — hand-placed points have no layout to draw,
-    /// and arranging them in a rectangle would imply a spatial arrangement the instrument never recorded.
+    /// rather than by an index. Empty when the map has no grid, because a rectangle would imply a regular
+    /// spacing that a hand-placed point set does not have.
+    /// <para>
+    /// Those points are <b>not</b> position-less, though: the file records each one's measured coordinates
+    /// (tag <c>0xC506</c>, after the header struct), and 25 of the sample files carry real ones — one is
+    /// literally a diagonal. Drawing them where they actually are is <b>FF13</b>; this grid is the regular case.
+    /// </para>
     /// </summary>
     public IReadOnlyList<MapCellViewModel> MapCells { get; private set; } = [];
 

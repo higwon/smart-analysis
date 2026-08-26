@@ -499,8 +499,8 @@ public sealed class ShellForceVolumeTests
     [Fact]
     public void A_map_with_no_grid_draws_no_picker()
     {
-        // Hand-placed points have no layout. Laying them out in a rectangle would imply a spatial arrangement
-        // the instrument never recorded — the same reason the geometry itself is nullable.
+        // A rectangle would imply a regular spacing a hand-placed point set does not have. Those points do
+        // have measured coordinates in the file, but drawing them where they are is FF13, not a grid.
         var ws = new Workspace();
         var vm = WithActiveMap(ws, Map(4));
 
