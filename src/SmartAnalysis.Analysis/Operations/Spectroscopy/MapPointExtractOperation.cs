@@ -85,7 +85,7 @@ public sealed class MapPointExtractOperation : IAnalysisOperation
         var (x, y) = ReadChannels(parameters);
         if (x < 0 && y < 0)
         {
-            return ValidationResult.Success; // the designated pair, which every map has
+            return CheckIsAForceCurve(map, x, y); // the designated pair still has to BE a force curve
         }
 
         // Naming a channel only means something when the map kept them. A derived map carries none, and an index
@@ -101,7 +101,51 @@ public sealed class MapPointExtractOperation : IAnalysisOperation
                 $"The map has {channels.ChannelCount} channels, so channel {Math.Max(x, y)} does not exist.");
         }
 
+        return CheckIsAForceCurve(map, x, y);
+    }
+
+    /// <summary>
+    /// A <see cref="ForceCurveDataset"/> is not a generic XY curve: in this domain it <b>means</b> a
+    /// force–distance curve, and anything typed as one is classified <c>DataKind.ForceCurve</c> and offered to
+    /// the spectroscopy pipeline. Extracting, say, Z against Current into that type would make the type itself
+    /// lie — downstream operations would list it as a candidate, and the ones that re-check dimensions would
+    /// only be catching a mistake made here. Plotting any two channels is fine (FF11); <i>typing</i> them as a
+    /// force curve is not.
+    /// </summary>
+    private static ValidationResult CheckIsAForceCurve(ForceVolumeDataset map, int x, int y)
+    {
+        var (_, abscissa) = ResolveChannel(map, x, abscissa: true);
+        var (_, ordinate) = ResolveChannel(map, y, abscissa: false);
+
+        if (abscissa.Unit.Dimension != StandardUnits.Length)
+        {
+            return ValidationResult.Fail(
+                $"A force curve needs a length abscissa; '{abscissa.DisplayName}' is "
+                + $"{abscissa.Unit.Dimension.Name} ({abscissa.Unit.Symbol}).");
+        }
+
+        if (ordinate.Unit.Dimension != StandardUnits.Force)
+        {
+            return ValidationResult.Fail(
+                $"A force curve needs a force ordinate; '{ordinate.DisplayName}' is "
+                + $"{ordinate.Unit.Dimension.Name} ({ordinate.Unit.Symbol}).");
+        }
+
         return ValidationResult.Success;
+    }
+
+    // The channel that will actually be used, and its index in the kept set when there is one. A designated
+    // channel still has an index, so provenance can name it rather than recording a bare -1.
+    private static (int Index, ChannelDescriptor Channel) ResolveChannel(
+        ForceVolumeDataset map, int requested, bool abscissa)
+    {
+        if (requested >= 0 && map.Channels is { } named && requested < named.ChannelCount)
+        {
+            return (requested, named.Channels[requested]);
+        }
+
+        var designated = abscissa ? map.SeparationChannel : map.ForceChannel;
+        return (map.Channels?.IndexOf(designated.Key) ?? -1, designated);
     }
 
     // -1 on either axis means "the pair the map designates". Naming one and not the other is not a partial
@@ -127,8 +171,10 @@ public sealed class MapPointExtractOperation : IAnalysisOperation
 
         progress?.Report(new OperationProgress(0.0, "Extracting curve..."));
 
-        var (separationSamples, separationChannel) = Take(map, xChannel, point, abscissa: true);
-        var (forceSamples, forceChannel) = Take(map, yChannel, point, abscissa: false);
+        var (xIndex, separationChannel) = ResolveChannel(map, xChannel, abscissa: true);
+        var (yIndex, forceChannel) = ResolveChannel(map, yChannel, abscissa: false);
+        var separationSamples = Take(map, xIndex, point, abscissa: true);
+        var forceSamples = Take(map, yIndex, point, abscissa: false);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -136,8 +182,10 @@ public sealed class MapPointExtractOperation : IAnalysisOperation
         var recorded = new Dictionary<string, PhysicalValue>
         {
             [PointParameter] = new(point, StandardUnits.One),
-            [XChannelParameter] = new(xChannel, StandardUnits.One),
-            [YChannelParameter] = new(yChannel, StandardUnits.One),
+            // The index actually used, not the -1 that asked for the designated pair — provenance should say
+            // which channel was read without needing the parent map to interpret it.
+            [XChannelParameter] = new(xIndex, StandardUnits.One),
+            [YChannelParameter] = new(yIndex, StandardUnits.One),
         };
 
         // Where on the sample, when the map knows. A curve pulled out of a map and then fitted is otherwise
@@ -192,16 +240,13 @@ public sealed class MapPointExtractOperation : IAnalysisOperation
         }
     }
 
-    private static (float[] Samples, ChannelDescriptor Channel) Take(
-        ForceVolumeDataset map, int channelIndex, int point, bool abscissa)
+    private static float[] Take(ForceVolumeDataset map, int channelIndex, int point, bool abscissa)
     {
         if (channelIndex >= 0 && map.Channels is { } channels)
         {
-            return (channels.At(channelIndex, point).ToArray(), channels.Channels[channelIndex]);
+            return channels.At(channelIndex, point).ToArray();
         }
 
-        return abscissa
-            ? (map.SeparationAt(point).ToArray(), map.SeparationChannel)
-            : (map.ForceAt(point).ToArray(), map.ForceChannel);
+        return abscissa ? map.SeparationAt(point).ToArray() : map.ForceAt(point).ToArray();
     }
 }

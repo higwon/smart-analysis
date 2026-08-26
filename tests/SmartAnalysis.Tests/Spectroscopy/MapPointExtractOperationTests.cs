@@ -39,14 +39,15 @@ public sealed class MapPointExtractOperationTests
         if (withChannels)
         {
             // Three channels: the designated pair plus a Current the map does not flag.
-            var all = new float[3 * points * Samples];
+            var all = new float[4 * points * Samples];
             separation.CopyTo(all, 0);
             force.CopyTo(all, points * Samples);
             for (int p = 0; p < points; p++)
             {
                 for (int i = 0; i < Samples; i++)
                 {
-                    all[(2 * points * Samples) + (p * Samples) + i] = 7000 + (p * 10) + i;
+                    all[(2 * points * Samples) + (p * Samples) + i] = 7000 + (p * 10) + i;   // Separation
+                    all[(3 * points * Samples) + (p * Samples) + i] = 5000 + (p * 10) + i;   // Current
                 }
             }
 
@@ -54,10 +55,11 @@ public sealed class MapPointExtractOperationTests
                 [
                     new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
                     new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+                    new ChannelDescriptor("Separation", ChannelKind.Topography, StandardUnits.Micrometre, "Separation"),
                     new ChannelDescriptor("Current", ChannelKind.Current, StandardUnits.Nanoampere, "Current"),
                 ],
                 points,
-                ScanBuffer<float>.TakeOwnership(all, Samples, 3 * points));
+                ScanBuffer<float>.TakeOwnership(all, Samples, 4 * points));
         }
 
         return new ForceVolumeDataset(
@@ -156,15 +158,32 @@ public sealed class MapPointExtractOperationTests
     [Fact]
     public async Task A_named_channel_pair_is_what_gets_extracted()
     {
-        // What the viewer is looking at (FF11) is what they can analyse.
+        // What the viewer is looking at (FF11) is what they can analyse — as long as it is a force curve.
+        // Separation against Force is the case this whole slice exists for: the instrument measured the true
+        // separation (FF10 keeps it), so extracting THAT pair reaches a modulus fit without needing A38 at all.
         using var map = Map(3, withChannels: true);
 
-        using var curve = await RunAsync(map, point: 1, x: 0, y: 2);   // Z Scan against Current
+        using var curve = await RunAsync(map, point: 1, x: 2, y: 1);   // Separation against Force
 
-        Assert.Equal([10f, 11f, 12f], curve.Separation.Memory.ToArray());
-        Assert.Equal([7010f, 7011f, 7012f], curve.Force.Memory.ToArray());
-        Assert.Equal("Current", curve.ForceChannel.DisplayName);
-        Assert.Equal("nA", curve.ForceChannel.Unit.Symbol);
+        Assert.Equal([7010f, 7011f, 7012f], curve.Separation.Memory.ToArray());
+        Assert.Equal([100f, 101f, 102f], curve.Force.Memory.ToArray());
+        Assert.Equal("Separation", curve.SeparationChannel.DisplayName);
+    }
+
+    [Theory]
+    [InlineData(0, 3)]   // Z Scan against Current — a fine chart, not a force curve
+    [InlineData(3, 1)]   // Current against Force — the abscissa is not a length
+    public void A_pair_that_is_not_a_force_curve_is_not_typed_as_one(int x, int y)
+    {
+        // ForceCurveDataset is not a generic XY curve: it MEANS force-against-distance, and anything typed as
+        // one is classified DataKind.ForceCurve and offered to the spectroscopy pipeline. Promoting an
+        // arbitrary pair would make the type itself lie, and the operations that re-check dimensions would
+        // only be catching a mistake made here. Plotting any two channels is FF11's job, not this one.
+        using var map = Map(3, withChannels: true);
+
+        var result = Operation().Validate(new OperationInput(map), Params(point: 0, x: x, y: y));
+
+        Assert.False(result.IsValid);
     }
 
     [Fact]
@@ -243,5 +262,18 @@ public sealed class MapPointExtractOperationTests
     private sealed class FixedEnvironment : IExecutionEnvironmentProvider
     {
         public ExecutionEnvironment Capture() => new("test", "1.0", "test", DateTimeOffset.UnixEpoch);
+    }
+    [Fact]
+    public async Task Provenance_names_the_channel_actually_read_not_the_request_for_a_default()
+    {
+        // -1 means "whatever the map designates", which only the parent map can interpret. Recording the
+        // resolved index means the step still says which channel was read when read on its own.
+        using var map = Map(3, withChannels: true);
+
+        using var curve = await RunAsync(map, point: 1);   // no channels named
+
+        var step = Assert.Single(curve.Provenance.Steps);
+        Assert.Equal(0.0, step.Parameters![MapPointExtractOperation.XChannelParameter].Value);   // Z Scan
+        Assert.Equal(1.0, step.Parameters[MapPointExtractOperation.YChannelParameter].Value);    // Force
     }
 }
