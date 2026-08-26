@@ -9,6 +9,7 @@ using SmartAnalysis.Application.Operations;
 using SmartAnalysis.Application.Workspaces;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Geometry;
+using SmartAnalysis.Domain.Spectroscopy;
 using SmartAnalysis.Domain.Units;
 using SmartAnalysis.UI.DesignSystem.Theming;
 using SmartAnalysis.UI.Mvvm;
@@ -60,6 +61,10 @@ public sealed class ShellViewModel : ObservableObject
     private ForceCurveDataset? _activeForceCurve;
     private ForceVolumeDataset? _activeForceVolume;
     private int _selectedMapPoint;
+    private int _selectedXChannel;
+    private int _selectedYChannel;
+    private int _designatedXChannel;
+    private int _designatedYChannel;
     private bool _is3D;
     private bool _isInteractiveImageEditing;
     private bool _roiEnabled;
@@ -772,6 +777,7 @@ public sealed class ShellViewModel : ObservableObject
             if (SetProperty(ref _selectedMapPoint, clamped))
             {
                 OnPropertyChanged(nameof(MapPointLabel));
+                OnPropertyChanged(nameof(SpectroscopyLabel));
                 OnPropertyChanged(nameof(CanStepMapPointBack));
                 OnPropertyChanged(nameof(CanStepMapPointForward));
                 MapPointChanged?.Invoke();
@@ -832,9 +838,136 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(MapPointCount));
         OnPropertyChanged(nameof(MapPointMaxIndex));
         OnPropertyChanged(nameof(MapPointLabel));
+        OnPropertyChanged(nameof(SpectroscopyLabel));
         OnPropertyChanged(nameof(CanStepMapPointBack));
         OnPropertyChanged(nameof(CanStepMapPointForward));
     }
+
+    /// <summary>Whether the stage shows spectroscopy at all — a single force curve or a map.</summary>
+    public bool IsSpectroscopy => IsSingleForceCurve || IsForceVolume;
+
+    /// <summary>
+    /// What the viewer is looking at. A map adds which curve and where; a plot of some pair other than the one
+    /// the file designated says so, because that curve is not the force curve the analysis operates on.
+    /// </summary>
+    public string SpectroscopyLabel
+    {
+        get
+        {
+            if (!IsSpectroscopy)
+            {
+                return string.Empty;
+            }
+
+            var parts = new List<string>();
+            if (IsForceVolume)
+            {
+                parts.Add(MapPointLabel);
+            }
+
+            if (!IsDesignatedChannelPair)
+            {
+                parts.Add("not the designated pair");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    /// <summary>
+    /// Every channel the active spectroscopy dataset measured, when it kept them. Both a single curve and a map
+    /// can carry a set; a derived dataset (an approach/retract phase) carries none, and then there is nothing to
+    /// choose between.
+    /// </summary>
+    public SpectroscopyChannelSet? SpectroscopyChannels
+        => _activeForceVolume?.Channels ?? _activeForceCurve?.Channels;
+
+    /// <summary>What a channel picker lists, in the order the instrument declared them.</summary>
+    public IReadOnlyList<string> ChannelChoices { get; private set; } = [];
+
+    /// <summary>Whether there is more than one channel to plot, and so anything worth choosing between.</summary>
+    public bool CanPickChannels => ChannelChoices.Count > 1;
+
+    /// <summary>Which channel is on the abscissa. Defaults to the pair the file designated.</summary>
+    public int SelectedXChannel
+    {
+        get => _selectedXChannel;
+        set => SetChannel(ref _selectedXChannel, value, nameof(SelectedXChannel));
+    }
+
+    /// <summary>Which channel is on the ordinate. Defaults to the pair the file designated.</summary>
+    public int SelectedYChannel
+    {
+        get => _selectedYChannel;
+        set => SetChannel(ref _selectedYChannel, value, nameof(SelectedYChannel));
+    }
+
+    /// <summary>
+    /// Whether the plotted pair is still the one the file designated. A curve plotted from some other pair is
+    /// not the force curve the analysis operates on, and the viewer should be told.
+    /// </summary>
+    public bool IsDesignatedChannelPair
+        => SpectroscopyChannels is null
+           || (_selectedXChannel == _designatedXChannel && _selectedYChannel == _designatedYChannel);
+
+    private void SetChannel(ref int field, int value, string name)
+    {
+        if (SpectroscopyChannels is not { } set)
+        {
+            return;
+        }
+
+        int clamped = Math.Clamp(value, 0, set.ChannelCount - 1);
+        if (SetProperty(ref field, clamped, name))
+        {
+            OnPropertyChanged(nameof(IsDesignatedChannelPair));
+            OnPropertyChanged(nameof(SpectroscopyLabel));
+            MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
+        }
+    }
+
+    // A channel selection belongs to one dataset. Carrying an index across would plot whatever channel happened
+    // to sit at that position in the next file — a different physical quantity, with no sign that it changed.
+    private void ResetChannelSelection()
+    {
+        var set = SpectroscopyChannels;
+        ChannelChoices = set is null
+            ? []
+            : [.. set.Channels.Select(c => $"{c.DisplayName} [{c.Unit.Symbol}]")];
+
+        // The file's own designated pair is the starting point; a set whose keys do not match falls back to the
+        // first two channels rather than to an arbitrary single one.
+        _designatedXChannel = FindDesignated(set, SeparationChannelKey(), 0);
+        _designatedYChannel = FindDesignated(set, ForceChannelKey(), Math.Min(1, (set?.ChannelCount ?? 1) - 1));
+        _selectedXChannel = _designatedXChannel;
+        _selectedYChannel = _designatedYChannel;
+
+        OnPropertyChanged(nameof(SpectroscopyChannels));
+        OnPropertyChanged(nameof(ChannelChoices));
+        OnPropertyChanged(nameof(CanPickChannels));
+        OnPropertyChanged(nameof(SelectedXChannel));
+        OnPropertyChanged(nameof(SelectedYChannel));
+        OnPropertyChanged(nameof(IsDesignatedChannelPair));
+        OnPropertyChanged(nameof(IsSpectroscopy));
+        OnPropertyChanged(nameof(SpectroscopyLabel));
+    }
+
+    private static int FindDesignated(SpectroscopyChannelSet? set, string? key, int fallback)
+    {
+        if (set is null)
+        {
+            return 0;
+        }
+
+        int found = key is null ? -1 : set.IndexOf(key);
+        return found >= 0 ? found : Math.Clamp(fallback, 0, set.ChannelCount - 1);
+    }
+
+    private string? SeparationChannelKey()
+        => _activeForceVolume?.SeparationChannel.Key ?? _activeForceCurve?.SeparationChannel.Key;
+
+    private string? ForceChannelKey()
+        => _activeForceVolume?.ForceChannel.Key ?? _activeForceCurve?.ForceChannel.Key;
 
     /// <summary>The source image an active line-profile curve was sampled from (to render beside the curve with the
     /// read-only line), or <c>null</c> when there is none / it is no longer in the workspace.</summary>
@@ -1210,6 +1343,7 @@ public sealed class ShellViewModel : ObservableObject
             ActiveCurve = dataset as LineProfileDataset;
             ActiveForceCurve = dataset as ForceCurveDataset;
             SetActiveForceVolume(dataset as ForceVolumeDataset);
+            ResetChannelSelection();
             BeforeImage = FirstComparisonImage(active);
             // A line-profile curve pairs with its source image + a read-only sampling line (when the source is still
             // in the workspace); any other curve (e.g. a PSD) has none and stays full-screen.
@@ -1227,6 +1361,7 @@ public sealed class ShellViewModel : ObservableObject
             ActiveCurve = null;
             ActiveForceCurve = null;
             SetActiveForceVolume(null);
+            ResetChannelSelection();
             BeforeImage = null;
             CurveSourceLine = null;
             CurveSourceImage = null;

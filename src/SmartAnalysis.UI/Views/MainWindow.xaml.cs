@@ -572,7 +572,7 @@ public partial class MainWindow : Window
         if (_viewModel.ActiveForceCurve is { } forceCurve)
         {
             // A force curve is force against separation — its own view, not the spatial curve stage.
-            SingleForceCurve.Render(RenderInputFactory.ForForceCurve(forceCurve));
+            SpectroscopyCurve.Render(SpectroscopyCurveInput() ?? RenderInputFactory.ForForceCurve(forceCurve));
             SingleCurve.Clear();
             SingleImage.Clear();
             SingleSurface.Clear();
@@ -584,8 +584,7 @@ public partial class MainWindow : Window
         if (_viewModel.ActiveForceVolume is { } map)
         {
             // A map is the same force-distance plot, one point at a time.
-            MapPointCurve.Render(RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
-            SingleForceCurve.Clear();
+            SpectroscopyCurve.Render(SpectroscopyCurveInput() ?? RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
             SingleCurve.Clear();
             SingleImage.Clear();
             SingleSurface.Clear();
@@ -594,9 +593,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        MapPointCurve.Clear();
-
-        SingleForceCurve.Clear();
+        SpectroscopyCurve.Clear();
         if (_viewModel.ActiveCurve is { } curve)
         {
             SingleSurface.Clear();
@@ -704,6 +701,16 @@ public partial class MainWindow : Window
 
         return IntPtr.Zero;
     }
+    // The plotted pair comes from the kept channel set when there is one, so a chosen pair and the designated
+    // one go through the same path. Null means the dataset kept no channels (a derived curve), and the caller
+    // falls back to the pair the dataset designates.
+    private CurveRenderInput? SpectroscopyCurveInput()
+        => _viewModel.SpectroscopyChannels is { } channels
+            ? RenderInputFactory.ForChannelPair(
+                channels, _viewModel.SelectedXChannel, _viewModel.SelectedYChannel,
+                _viewModel.IsForceVolume ? _viewModel.SelectedMapPoint : 0)
+            : null;
+
     private void MapPointBack_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(-1);
 
     private void MapPointForward_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(1);
@@ -711,9 +718,18 @@ public partial class MainWindow : Window
     // Only the plotted curve changes when the viewer steps through a map; the rest of the stage is untouched.
     private void RedrawMapPoint()
     {
-        if (_viewModel.ActiveForceVolume is { } map)
+        // A channel change redraws a single curve too, not only a map point.
+        if (SpectroscopyCurveInput() is { } input)
         {
-            MapPointCurve.Render(RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
+            SpectroscopyCurve.Render(input);
+        }
+        else if (_viewModel.ActiveForceVolume is { } map)
+        {
+            SpectroscopyCurve.Render(RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
+        }
+        else if (_viewModel.ActiveForceCurve is { } curve)
+        {
+            SpectroscopyCurve.Render(RenderInputFactory.ForForceCurve(curve));
         }
     }
 }

@@ -1,5 +1,6 @@
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Spectroscopy;
 using SmartAnalysis.Visualization.Colormaps;
 
 namespace SmartAnalysis.Visualization.Rendering;
@@ -85,6 +86,22 @@ public static class RenderInputFactory
         return ForForceCurve(
             map.SeparationAt(pointIndex).Span, map.ForceAt(pointIndex).Span,
             map.SeparationChannel, map.ForceChannel, seriesName ?? map.ForceChannel.DisplayName);
+    }
+
+    /// <summary>
+    /// Any two of an acquisition's channels, plotted against each other at one point. The axes are labelled
+    /// from the channel descriptors, so a pair that is not the designated force curve still says what it is.
+    /// </summary>
+    public static CurveRenderInput ForChannelPair(
+        SpectroscopyChannelSet channels, int xChannel, int yChannel, int pointIndex, string? seriesName = null)
+    {
+        ArgumentNullException.ThrowIfNull(channels);
+
+        var x = channels.Channels[xChannel];
+        var y = channels.Channels[yChannel];
+        return ForForceCurve(
+            channels.At(xChannel, pointIndex).Span, channels.At(yChannel, pointIndex).Span,
+            x, y, seriesName ?? y.DisplayName);
     }
 
     private static CurveRenderInput ForForceCurve(

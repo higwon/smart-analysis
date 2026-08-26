@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SmartAnalysis.Application.FileFormats;
@@ -291,5 +292,164 @@ public sealed class ShellForceVolumeTests
     private sealed class FakePrompt : IUnsavedChangesPrompt
     {
         public UnsavedChangesChoice Ask(string workspaceName) => UnsavedChangesChoice.Cancel;
+    }
+    /// <summary>Three channels over <paramref name="points"/> points; channel c at point p is all c*100+p.</summary>
+    private static SpectroscopyChannelSet ChannelSet(int points)
+    {
+        var samples = new float[3 * points * Samples];
+        for (int c = 0; c < 3; c++)
+        {
+            for (int p = 0; p < points; p++)
+            {
+                for (int i = 0; i < Samples; i++)
+                {
+                    samples[((((c * points) + p) * Samples)) + i] = (c * 100) + p;
+                }
+            }
+        }
+
+        return new SpectroscopyChannelSet(
+            [
+                new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+                new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+                new ChannelDescriptor("Current", ChannelKind.Current, StandardUnits.Nanoampere, "Current"),
+            ],
+            points,
+            ScanBuffer<float>.TakeOwnership(samples, Samples, 3 * points));
+    }
+
+    private static ForceVolumeDataset MapWithChannels(int points)
+    {
+        var separation = new float[points * Samples];
+        var force = new float[points * Samples];
+        return new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(separation, Samples, points),
+            ScanBuffer<float>.TakeOwnership(force, Samples, points),
+            new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+            new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            null, ScanMetadata.Unknown, ProvenanceRecord.Root, ChannelSet(points));
+    }
+
+    [Fact]
+    public void The_picker_starts_on_the_pair_the_file_designated()
+    {
+        // Not channel 0 and 1 by position — the pair the FILE flagged, found by key. Starting anywhere else
+        // would show a different quantity than the one the analysis operates on, with nothing saying so.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        Assert.True(vm.CanPickChannels);
+        Assert.Equal(3, vm.ChannelChoices.Count);
+        Assert.Equal(0, vm.SelectedXChannel);   // Z Scan
+        Assert.Equal(1, vm.SelectedYChannel);   // Force
+        Assert.True(vm.IsDesignatedChannelPair);
+    }
+
+    [Fact]
+    public void A_pair_other_than_the_designated_one_says_so()
+    {
+        // A plot of Current against Z is a perfectly good chart and is NOT the force curve A12/A13 fit. The
+        // viewer has to be able to tell, because the axes alone look just as authoritative.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        vm.SelectedYChannel = 2;   // Current
+
+        Assert.False(vm.IsDesignatedChannelPair);
+        Assert.Contains("not the designated pair", vm.SpectroscopyLabel);
+    }
+
+    [Fact]
+    public void Choosing_a_channel_asks_the_stage_to_redraw()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+        int redraws = 0;
+        vm.MapPointChanged += () => redraws++;
+
+        vm.SelectedYChannel = 2;
+        Assert.Equal(1, redraws);
+
+        vm.SelectedYChannel = 2;   // the same channel again
+        Assert.Equal(1, redraws);
+    }
+
+    [Fact]
+    public void A_channel_choice_belongs_to_one_dataset()
+    {
+        // Index 2 in one file is a different physical quantity than index 2 in the next. Carrying the choice
+        // over would silently plot something else under the same selection.
+        var ws = new Workspace();
+        var first = MapWithChannels(2);
+        var second = MapWithChannels(2);
+        var vm = NewShell(ws);
+        ws.Add(first);
+        ws.Add(second);
+
+        ws.SetActive(first.Id);
+        vm.SelectedYChannel = 2;
+        Assert.False(vm.IsDesignatedChannelPair);
+
+        ws.SetActive(second.Id);
+
+        Assert.Equal(1, vm.SelectedYChannel);
+        Assert.True(vm.IsDesignatedChannelPair);
+    }
+
+    [Fact]
+    public void A_dataset_that_kept_no_channels_offers_no_choice()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(3));   // no channel set
+
+        Assert.Null(vm.SpectroscopyChannels);
+        Assert.False(vm.CanPickChannels);
+        Assert.Empty(vm.ChannelChoices);
+        Assert.True(vm.IsDesignatedChannelPair);   // nothing to diverge from
+    }
+
+    [Fact]
+    public void A_channel_index_can_never_leave_the_set()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        vm.SelectedXChannel = 99;
+        Assert.Equal(2, vm.SelectedXChannel);
+
+        vm.SelectedXChannel = -5;
+        Assert.Equal(0, vm.SelectedXChannel);
+    }
+    [Fact]
+    public void The_designated_pair_is_found_by_key_not_by_position()
+    {
+        // Real files do not put the flagged pair first: this one declares Current, then Z Scan, then Force.
+        // Defaulting to positions 0 and 1 would open on Current-against-Z and call it the designated pair.
+        var points = 2;
+        var samples = new float[3 * points * Samples];
+        var set = new SpectroscopyChannelSet(
+            [
+                new ChannelDescriptor("Current", ChannelKind.Current, StandardUnits.Nanoampere, "Current"),
+                new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+                new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            ],
+            points,
+            ScanBuffer<float>.TakeOwnership(samples, Samples, 3 * points));
+
+        var map = new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(new float[points * Samples], Samples, points),
+            ScanBuffer<float>.TakeOwnership(new float[points * Samples], Samples, points),
+            new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+            new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            null, ScanMetadata.Unknown, ProvenanceRecord.Root, set);
+
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, map);
+
+        Assert.Equal(1, vm.SelectedXChannel);   // Z Scan, not position 0
+        Assert.Equal(2, vm.SelectedYChannel);   // Force, not position 1
+        Assert.True(vm.IsDesignatedChannelPair);
     }
 }
