@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Linq;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -365,6 +366,9 @@ public sealed class PsiaTiffReader : IScanFileReader
         // the 2D scan sits in the SAME IFD as the spectroscopy tags, in the tag the image path already reads.
         var reference = ReadReferenceImage(path, ifd, fieldReader, header, contentHash, ct);
 
+        // Where each curve was measured, as the file recorded it — not reconstructed from the grid.
+        var layout = BuildPointLayout(header, spectroscopy);
+
         // Everything the acquisition measured, not just the two the file flagged as axes. Half of a typical
         // file is other channels, and some of them — a populated Separation, say — are better than the flagged
         // ones for the analysis that follows.
@@ -380,10 +384,10 @@ public sealed class PsiaTiffReader : IScanFileReader
             // curve case repeated — so the only thing that changes is which type the caller receives.
             AfmDataset dataset = points == 1
                 ? new ForceCurveDataset(
-                    DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root, channelSet, reference)
+                    DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root, channelSet, reference, layout)
                 : new ForceVolumeDataset(
                     DatasetId.New(), source, separation, force, separationChannel, forceChannel,
-                    BuildGeometry(spectroscopy), metadata, ProvenanceRecord.Root, channelSet, reference);
+                    BuildGeometry(spectroscopy), metadata, ProvenanceRecord.Root, channelSet, reference, layout);
 
             return FileReadResult.Success(dataset);
         }
@@ -431,6 +435,51 @@ public sealed class PsiaTiffReader : IScanFileReader
             header.OffsetX,
             header.OffsetY,
             _units.GetUnit(StandardUnits.Micrometre.Symbol)); // scan extents are µm, as in the 2D header
+    }
+
+    /// <summary>
+    /// The positions the file recorded for its points, mapped into the surface's frame.
+    /// <para>
+    /// The file stores each position relative to the scan <b>offset</b>; the surface's own axes start at its
+    /// corner. Legacy performs the same conversion — rotate by the scan angle about the centre, then shift by
+    /// half the scan size (<c>SpectroscopyScanData.CalulateSpectroscopyPoints</c>) — so a rotated scan puts its
+    /// points where the pixels actually are rather than on an unrotated grid.
+    /// </para>
+    /// </summary>
+    private MapPointLayout? BuildPointLayout(PsiaImageHeader header, PsiaSpectroscopyHeader spectroscopy)
+    {
+        if (spectroscopy.RawPoints.Count != spectroscopy.SpectroscopyPoints)
+        {
+            return null; // the header stopped before the point records
+        }
+
+        // All-zero is how a file says it recorded no positions. Placing every curve at the same corner would
+        // be a layout, and a wrong one — it has to be absent instead.
+        if (spectroscopy.RawPoints.All(p => p.X == 0 && p.Y == 0))
+        {
+            return null;
+        }
+
+        double radians = -header.Angle * Math.PI / 180.0;
+        double sin = Math.Sin(radians);
+        double cos = Math.Cos(radians);
+
+        var positions = new List<MapPointPosition>(spectroscopy.RawPoints.Count);
+        foreach (var raw in spectroscopy.RawPoints)
+        {
+            double dx = raw.X - header.XOffset;
+            double dy = raw.Y - header.YOffset;
+            double x = (header.XScanSize / 2) + (dx * cos) - (dy * sin);
+            double y = (header.YScanSize / 2) + (dx * sin) + (dy * cos);
+            if (!double.IsFinite(x) || !double.IsFinite(y))
+            {
+                return null; // one undefined position makes the whole layout untrustworthy
+            }
+
+            positions.Add(new MapPointPosition(x, y));
+        }
+
+        return new MapPointLayout(positions, _units.GetUnit(StandardUnits.Micrometre.Symbol));
     }
 
     /// <summary>

@@ -1052,4 +1052,99 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
         Assert.True(result.IsSuccess);
         Assert.Null(curve.ReferenceImage);
     }
+    [Fact]
+    public async Task The_positions_the_file_recorded_are_mapped_into_the_surface_frame()
+    {
+        // The file stores positions relative to the scan offset; the surface's axes start at its corner. A
+        // point at the scan offset is therefore the surface's centre, not its origin.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            SurfaceHeader(2, 2, scan: 4.0),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 2,
+                points: [(0f, 0f), (1f, 2f)],
+                payloadDataType: Float,
+                scanSizeX: 4.0,
+                scanSizeY: 4.0),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1), Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        var layout = map.PointLayout;
+        Assert.NotNull(layout);
+        Assert.Equal(2, layout!.Count);
+        Assert.Equal("um", layout.LengthUnit.Symbol);
+
+        // ImageHeader() has no scan offset, so (0,0) lands on the surface centre and (1,2) is offset from it.
+        Assert.Equal(2.0, layout[0].X, 6);
+        Assert.Equal(2.0, layout[0].Y, 6);
+        Assert.Equal(3.0, layout[1].X, 6);
+        Assert.Equal(4.0, layout[1].Y, 6);
+    }
+
+    [Fact]
+    public async Task A_rotated_scan_puts_its_points_where_the_pixels_are()
+    {
+        // The surface is rotated by the scan angle, so an unrotated position would mark the wrong pixel —
+        // and the mark would look just as convincing as a correct one. Legacy applies the same rotation.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            PsiaTiffTestWriter.BuildHeader(
+                imageType: 2, sourceName: "Z Height", imageMode: "FD", width: 2, height: 2,
+                xScanSize: 4.0, yScanSize: 4.0, xOffset: 0, yOffset: 0,
+                dataGain: 1, zOffset: 0, unit: "um", dataType: Float, angle: 90.0),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                points: [(1f, 0f)],
+                payloadDataType: Float,
+                scanSizeX: 4.0,
+                scanSizeY: 4.0),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        var layout = curve.PointLayout!;
+
+        // A 90 deg scan turns (+1, 0) into (0, -1) about the centre.
+        Assert.Equal(2.0, layout[0].X, 6);
+        Assert.Equal(1.0, layout[0].Y, 6);
+    }
+
+    [Fact]
+    public async Task All_zero_positions_mean_the_file_recorded_none()
+    {
+        // Placing every curve at the same corner would be a layout, and a wrong one. Absent is the truth.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            SurfaceHeader(2, 2, scan: 4.0),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 2,
+                points: [(0f, 0f), (0f, 0f)],
+                payloadDataType: Float),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1), Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        Assert.Null(map.PointLayout);
+    }
 }

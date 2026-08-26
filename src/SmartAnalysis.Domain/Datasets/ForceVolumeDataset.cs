@@ -38,7 +38,8 @@ public sealed class ForceVolumeDataset : AfmDataset
         ScanMetadata metadata,
         ProvenanceRecord provenance,
         SpectroscopyChannelSet? channels = null,
-        ScanImageDataset? referenceImage = null)
+        ScanImageDataset? referenceImage = null,
+        MapPointLayout? pointLayout = null)
         : base(id, source, metadata, provenance)
     {
         DomainGuard.NotNull(separation, nameof(separation));
@@ -78,6 +79,7 @@ public sealed class ForceVolumeDataset : AfmDataset
         }
 
         ReferenceImage = referenceImage;
+        AttachLayout(pointLayout, separation.Height);
         AttachChannels(channels, separation.Height, separation.Width);
 
         _separation = separation;
@@ -120,6 +122,32 @@ public sealed class ForceVolumeDataset : AfmDataset
     /// instrument showed while the points were placed. Owned by this dataset, so it lives and dies with it.
     /// </summary>
     public ScanImageDataset? ReferenceImage { get; }
+
+    /// <summary>
+    /// Where each curve was measured, as the file recorded it — in the same frame as
+    /// <see cref="ReferenceImage"/>, so a point can be drawn on the surface directly. Null when the file
+    /// recorded no positions, which is a real case and not a failure.
+    /// </summary>
+    public MapPointLayout? PointLayout { get; private set; }
+
+    private void AttachLayout(MapPointLayout? layout, int pointCount)
+    {
+        if (layout is null)
+        {
+            return;
+        }
+
+        // One position per curve. A layout of a different length would mark the wrong place for every point
+        // past the mismatch, and each mark would look just as authoritative as a correct one.
+        if (layout.Count != pointCount)
+        {
+            throw new ArgumentException(
+                $"The layout describes {layout.Count} points but this dataset holds {pointCount}.",
+                nameof(layout));
+        }
+
+        PointLayout = layout;
+    }
 
     private void AttachChannels(SpectroscopyChannelSet? channels, int pointCount, int sampleCount)
     {

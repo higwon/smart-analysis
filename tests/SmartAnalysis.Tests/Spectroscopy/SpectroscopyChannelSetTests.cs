@@ -1,4 +1,7 @@
 using SmartAnalysis.Domain.Buffers;
+using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Metadata;
+using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Spectroscopy;
 using SmartAnalysis.Domain.Units;
@@ -109,4 +112,39 @@ public sealed class SpectroscopyChannelSetTests
             buffer.Dispose();
         }
     }
+    [Fact]
+    public void A_layout_that_does_not_describe_every_curve_is_refused()
+    {
+        // One position per curve. A shorter or longer layout marks the wrong place for every point past the
+        // mismatch, and each mark looks exactly as authoritative as a correct one.
+        var separation = ScanBuffer<float>.TakeOwnership(new float[3 * 4], 3, 4);
+        var force = ScanBuffer<float>.TakeOwnership(new float[3 * 4], 3, 4);
+        var layout = new MapPointLayout(
+            [new MapPointPosition(0, 0), new MapPointPosition(1, 1)], StandardUnits.Micrometre);
+
+        try
+        {
+            var ex = Assert.Throws<ArgumentException>(() => new ForceVolumeDataset(
+                DatasetId.New(), new DataSource("test", null), separation, force,
+                new ChannelDescriptor("Z", ChannelKind.Topography, StandardUnits.Micrometre),
+                new ChannelDescriptor("F", ChannelKind.Force, StandardUnits.Nanonewton),
+                null, ScanMetadata.Unknown, ProvenanceRecord.Root, null, null, layout));
+            Assert.Contains("2 points", ex.Message);
+        }
+        finally
+        {
+            separation.Dispose();
+            force.Dispose();
+        }
+    }
+
+    [Fact]
+    public void A_non_finite_position_is_refused()
+        => Assert.Throws<ArgumentException>(() => new MapPointLayout(
+            [new MapPointPosition(0, 0), new MapPointPosition(double.NaN, 1)], StandardUnits.Micrometre));
+
+    [Fact]
+    public void A_position_is_measured_in_a_length()
+        => Assert.Throws<ArgumentException>(() => new MapPointLayout(
+            [new MapPointPosition(0, 0)], StandardUnits.Volt));
 }
