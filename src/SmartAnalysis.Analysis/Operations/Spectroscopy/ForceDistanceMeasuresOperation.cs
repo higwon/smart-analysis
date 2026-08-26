@@ -1,3 +1,4 @@
+using SmartAnalysis.Analysis.Spectroscopy;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Units;
@@ -102,43 +103,24 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Measuring the curve."));
 
-        var force = curve.Force.Memory.Span;
-        var separation = curve.Separation.Memory.Span;
         var warnings = new List<OperationWarning>();
+        var m = ForceDistanceMeasures.Of(curve.Force.Memory.Span, curve.Separation.Memory.Span, threshold);
 
-        int peak = -1, valley = -1, finite = 0;
-        double maxForce = double.NegativeInfinity, minForce = double.PositiveInfinity;
-        for (int i = 0; i < curve.Length; i++)
-        {
-            if (!double.IsFinite(force[i]) || !double.IsFinite(separation[i]))
-            {
-                continue;
-            }
-
-            finite++;
-            if (force[i] > maxForce)
-            {
-                maxForce = force[i];
-                peak = i;
-            }
-
-            if (force[i] < minForce)
-            {
-                minForce = force[i];
-                valley = i;
-            }
-        }
-
-        if (finite < curve.Length)
+        if (m.HasNonFiniteSamples)
         {
             warnings.Add(new OperationWarning("fd.non-finite", "The curve contains non-finite samples; they are excluded from the measures."));
         }
 
         // A full round trip mixes the push and the pull-off: its "max force" and "adhesion" belong to different
         // phases, so the stiffness window spans a turn and means little. Measure a half (A23) instead.
-        if (IsRoundTrip(separation))
+        if (m.LooksLikeRoundTrip)
         {
             warnings.Add(new OperationWarning("fd.round-trip", "This looks like a full round trip; split it into approach/retract (A23) before measuring."));
+        }
+
+        if (!m.HasWindow)
+        {
+            warnings.Add(new OperationWarning("fd.no-window", "The threshold window has no separation travel; stiffness and deformation are undefined."));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -146,34 +128,13 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
         var forceUnit = curve.ForceChannel.Unit;
         var lengthUnit = curve.SeparationChannel.Unit;
 
-        // Adhesion is the depth of the pull-off below zero: a curve that never goes negative has no adhesion (0),
-        // rather than a misleading "smallest force".
-        double adhesion = valley >= 0 && minForce < 0 ? -minForce : 0.0;
-
-        // The stiffness/deformation window runs between EXACTLY TWO points: the peak (maxForce, z[peak]) and the
-        // threshold edge. Both measures are read off that one pair — deformation is its separation span and stiffness
-        // its force drop over that span — so they can never describe different geometries.
-        double targetForce = maxForce * threshold / 100.0;
-        var edge = FindThresholdEdge(force, separation, peak, targetForce);
-        double deltaForce = edge is { } e ? maxForce - e.Force : double.NaN;
-        double deltaZ = edge is { } e2 ? separation[peak] - e2.Separation : double.NaN;
-
-        double deformation = double.IsFinite(deltaZ) ? Math.Abs(deltaZ) : double.NaN;
-        double stiffness = double.IsFinite(deltaZ) && double.IsFinite(deltaForce) && deltaZ != 0.0
-            ? Math.Abs(deltaForce / deltaZ)
-            : double.NaN;
-        if (!double.IsFinite(stiffness))
-        {
-            warnings.Add(new OperationWarning("fd.no-window", "The threshold window has no separation travel; stiffness and deformation are undefined."));
-        }
-
         var scalars = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)
         {
-            ["MaxForce"] = new(maxForce, forceUnit),
-            ["Adhesion"] = new(adhesion, forceUnit),
-            ["Stiffness"] = new(stiffness, StiffnessUnit(forceUnit, lengthUnit)),
-            ["Deformation"] = new(deformation, lengthUnit),
-            ["PeakSeparation"] = new(separation[peak], lengthUnit),
+            ["MaxForce"] = new(m.MaxForce, forceUnit),
+            ["Adhesion"] = new(m.Adhesion, forceUnit),
+            ["Stiffness"] = new(m.Stiffness, StiffnessUnit(forceUnit, lengthUnit)),
+            ["Deformation"] = new(m.Deformation, lengthUnit),
+            ["PeakSeparation"] = new(m.PeakSeparation, lengthUnit),
         };
 
         var artifactId = DatasetId.New();
@@ -226,98 +187,5 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
         return false;
     }
 
-    /// <summary>The far end of the threshold window: a force and the separation it occurs at.</summary>
-    private readonly record struct WindowEdge(double Force, double Separation);
 
-    // The outer edge of the threshold window, as an exact (force, separation) pair so ΔF and Δz describe the SAME two
-    // points. Preferred form: the curve's crossing of targetForce, with the separation interpolated between the two
-    // bracketing samples — that keeps the "% of max force" meaning exact rather than snapping to whichever sample
-    // happens to sit nearby. When the curve never crosses (it stays at or above the threshold throughout), the edge is
-    // the farthest qualifying sample and its OWN force is used, so the pair still comes from one geometry.
-    private static WindowEdge? FindThresholdEdge(ReadOnlySpan<float> force, ReadOnlySpan<float> separation, int peak, double targetForce)
-    {
-        double peakZ = separation[peak];
-        WindowEdge? crossing = null;
-        WindowEdge? farthestAbove = null;
-
-        int previous = -1;
-        for (int i = 0; i < force.Length; i++)
-        {
-            if (!double.IsFinite(force[i]) || !double.IsFinite(separation[i]))
-            {
-                continue; // a dropout breaks the bracket; the next finite pair starts a new one
-            }
-
-            if (force[i] >= targetForce && i != peak
-                && (farthestAbove is not { } fa || Math.Abs(separation[i] - peakZ) > Math.Abs(fa.Separation - peakZ)))
-            {
-                farthestAbove = new WindowEdge(force[i], separation[i]);
-            }
-
-            if (previous >= 0)
-            {
-                double a = force[previous], b = force[i];
-                if ((a >= targetForce && b < targetForce) || (a < targetForce && b >= targetForce))
-                {
-                    // Linear interpolation of the separation at the exact threshold force.
-                    double span = b - a;
-                    double fraction = span == 0.0 ? 0.0 : (targetForce - a) / span;
-                    double z = separation[previous] + (fraction * (separation[i] - separation[previous]));
-                    if (crossing is not { } c || Math.Abs(z - peakZ) > Math.Abs(c.Separation - peakZ))
-                    {
-                        crossing = new WindowEdge(targetForce, z);
-                    }
-                }
-            }
-
-            previous = i;
-        }
-
-        return crossing ?? farthestAbove;
-    }
-
-    // A round trip turns around: separation falls then rises (or the reverse). One half is monotone in intent, so a
-    // clear reversal that is not a small wobble means the caller has not split the curve yet.
-    private static bool IsRoundTrip(ReadOnlySpan<float> separation)
-    {
-        double first = double.NaN, last = double.NaN, extreme = double.NaN;
-        for (int i = 0; i < separation.Length; i++)
-        {
-            if (!double.IsFinite(separation[i]))
-            {
-                continue;
-            }
-
-            if (double.IsNaN(first))
-            {
-                first = separation[i];
-            }
-
-            last = separation[i];
-        }
-
-        if (double.IsNaN(first) || double.IsNaN(last))
-        {
-            return false;
-        }
-
-        // The travel a one-directional ramp would show, versus how far the curve actually reaches beyond both ends.
-        double span = Math.Abs(last - first);
-        double lowest = double.PositiveInfinity, highest = double.NegativeInfinity;
-        for (int i = 0; i < separation.Length; i++)
-        {
-            if (!double.IsFinite(separation[i]))
-            {
-                continue;
-            }
-
-            lowest = Math.Min(lowest, separation[i]);
-            highest = Math.Max(highest, separation[i]);
-        }
-
-        extreme = highest - lowest;
-
-        // A monotone half has extreme == span; a round trip overshoots both ends, so its extent is clearly larger.
-        return extreme > span * 1.5 && extreme > 0.0;
-    }
 }

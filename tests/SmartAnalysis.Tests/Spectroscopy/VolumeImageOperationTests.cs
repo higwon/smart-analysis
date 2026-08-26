@@ -1,0 +1,267 @@
+using SmartAnalysis.Analysis.Operations;
+using SmartAnalysis.Analysis.Operations.Spectroscopy;
+using SmartAnalysis.Domain.Buffers;
+using SmartAnalysis.Domain.Channels;
+using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Metadata;
+using SmartAnalysis.Domain.Provenance;
+using SmartAnalysis.Domain.Spectroscopy;
+using SmartAnalysis.Domain.Units;
+using Xunit;
+
+namespace SmartAnalysis.Tests.Spectroscopy;
+
+/// <summary>
+/// TASK-FF15: a map is many curves measured at places, so a measure laid out on its grid is a picture of how the
+/// sample varies. The picture must agree with the number the same point gives when it is inspected alone.
+/// </summary>
+public sealed class VolumeImageOperationTests
+{
+    private const int Samples = 20;
+
+    private sealed class FixedEnvironment : IExecutionEnvironmentProvider
+    {
+        public ExecutionEnvironment Capture() => new("test", "1.0", "test", DateTimeOffset.UnixEpoch);
+    }
+
+    private static VolumeImageOperation Operation() => new(new FixedEnvironment());
+
+    private static ForceVolumeGeometry Grid(int columns, int rows)
+        => new(columns, rows, scanSizeX: 3.0, scanSizeY: 1.0, offsetX: -1.5, offsetY: -0.5, StandardUnits.Micrometre);
+
+    /// <summary>
+    /// A map whose every point is a round trip: separation ramps 10 → 1 and back, and the force rises as the tip
+    /// pushes. Point p pushes (p+1)x as hard, so each pixel is distinguishable. The retract dips below zero, so
+    /// there is a real adhesion to find on that half and not on the other.
+    /// </summary>
+    private static ForceVolumeDataset Map(int points, ForceVolumeGeometry? geometry = null, bool oneWay = false)
+    {
+        var separation = new float[points * Samples];
+        var force = new float[points * Samples];
+        int half = Samples / 2;
+
+        for (int p = 0; p < points; p++)
+        {
+            for (int i = 0; i < Samples; i++)
+            {
+                // Approach: 10 down to 1. Retract: 1 back up to 10 — unless the curve is one-way.
+                float z = i < half ? half - i : (oneWay ? half - i : i - half + 1);
+                separation[(p * Samples) + i] = z;
+                // Quadratic, so the threshold edge actually moves the chord: a linear push would make stiffness
+                // the same slope at every threshold and the cross-check below could not see a divergence.
+                float push = (half - z) * (half - z) * (p + 1) / 4f;
+                force[(p * Samples) + i] = i < half ? push : push - 5;
+            }
+        }
+
+        return new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(separation, Samples, points),
+            ScanBuffer<float>.TakeOwnership(force, Samples, points),
+            new ChannelDescriptor("separation", ChannelKind.Topography, StandardUnits.Nanometre, "Z"),
+            new ChannelDescriptor("force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            geometry, ScanMetadata.Unknown, ProvenanceRecord.Root);
+    }
+
+    private static ParameterSet Params(
+        VolumeMeasure measure = VolumeMeasure.MaxForce,
+        CurvePhase phase = CurvePhase.Retract,
+        double threshold = 50.0)
+        => new(new Dictionary<string, object?>
+        {
+            [VolumeImageOperation.MeasureParameter] = measure,
+            [VolumeImageOperation.PhaseParameter] = phase,
+            [VolumeImageOperation.ThresholdParameter] = threshold,
+        });
+
+    private static async Task<ScanImageDataset> RunAsync(
+        ForceVolumeDataset map,
+        VolumeMeasure measure = VolumeMeasure.MaxForce,
+        CurvePhase phase = CurvePhase.Retract,
+        double threshold = 50.0)
+    {
+        var result = await Operation()
+            .RunAsync(new OperationInput(map), Params(measure, phase, threshold), null, CancellationToken.None);
+        return (ScanImageDataset)result.DerivedDataset!;
+    }
+
+    [Fact]
+    public async Task The_picture_is_the_map_laid_out_on_its_own_grid()
+    {
+        using var map = Map(6, Grid(3, 2));
+
+        using var image = await RunAsync(map);
+
+        Assert.Equal(3, image.X.Count);
+        Assert.Equal(2, image.Y.Count);
+        Assert.Equal(-1.5, image.X.Origin);
+        Assert.Equal(-0.5, image.Y.Origin);
+        Assert.Equal(StandardUnits.Micrometre, image.X.Unit);
+
+        // Same rule as the map's own positions: the scan size spans first point to last, so three columns over
+        // 3.0 um step by 1.5 — not by 1.0. Pixels that disagree with the markers would put the picture off the
+        // surface it was measured on.
+        Assert.Equal(1.5, image.X.Step);
+    }
+
+    [Fact]
+    public async Task A_pixel_is_the_number_the_same_point_reports_on_its_own()
+    {
+        // The whole risk of a second implementation: the picture saying one thing and the point's own measure
+        // saying another. This walks the real per-curve path — extract, split, measure — and compares.
+        // Stiffness, because it depends on BOTH the half chosen and the threshold: a divergence in either shows.
+        using var map = Map(6, Grid(3, 2));
+        using var image = await RunAsync(map, VolumeMeasure.Stiffness);
+
+        const int point = 4;
+        var extract = await new MapPointExtractOperation(new FixedEnvironment()).RunAsync(
+            new OperationInput(map),
+            new ParameterSet(new Dictionary<string, object?> { [MapPointExtractOperation.PointParameter] = point }),
+            null,
+            CancellationToken.None);
+        using var curve = (ForceCurveDataset)extract.DerivedDataset!;
+
+        var split = await new ApproachRetractSplitOperation(new FixedEnvironment()).RunAsync(
+            new OperationInput(curve),
+            new ParameterSet(new Dictionary<string, object?>
+            {
+                [ApproachRetractSplitOperation.PhaseParameter] = CurvePhase.Retract,
+            }),
+            null,
+            CancellationToken.None);
+        using var retract = (ForceCurveDataset)split.DerivedDataset!;
+
+        var measured = await new ForceDistanceMeasuresOperation(new FixedEnvironment()).RunAsync(
+            new OperationInput(retract), new ParameterSet(new Dictionary<string, object?>()), null, CancellationToken.None);
+
+        double onItsOwn = measured.Artifact!.Scalars["Stiffness"].Value;
+        Assert.Equal(onItsOwn, image.Data.Memory.Span[point], precision: 4);
+    }
+
+    [Fact]
+    public async Task Each_point_is_measured_on_one_half_not_on_the_whole_round_trip()
+    {
+        // A round trip's peak belongs to the push and its adhesion to the pull-off. Measuring the whole would mix
+        // them; here the approach never dips below zero, so an unsplit measure could not report this adhesion.
+        using var map = Map(4, Grid(2, 2));
+
+        using var onRetract = await RunAsync(map, VolumeMeasure.Adhesion, CurvePhase.Retract);
+        using var onApproach = await RunAsync(map, VolumeMeasure.Adhesion, CurvePhase.Approach);
+
+        Assert.Equal(5.0, onRetract.Data.Memory.Span[0], precision: 4);
+        Assert.Equal(0.0, onApproach.Data.Memory.Span[0], precision: 4);
+    }
+
+    [Fact]
+    public async Task A_point_with_no_run_of_the_asked_for_half_is_a_hole_not_a_number()
+    {
+        // Painting the round trip's number there instead would put a mixed-phase measure in the picture with
+        // nothing on screen saying so.
+        using var map = Map(2, Grid(2, 1), oneWay: true);
+
+        using var image = await RunAsync(map, VolumeMeasure.MaxForce, CurvePhase.Retract);
+
+        Assert.True(float.IsNaN(image.Data.Memory.Span[0]));
+        Assert.True(float.IsNaN(image.Data.Memory.Span[1]));
+    }
+
+    [Fact]
+    public void A_map_with_no_grid_is_refused_rather_than_laid_out_in_an_invented_shape()
+    {
+        using var map = Map(4);   // hand-placed points: positions, but no shape
+
+        var result = Operation().Validate(new OperationInput(map), Params());
+
+        Assert.False(result.IsValid);
+        Assert.False(Operation().IsApplicableTo(map));
+    }
+
+    [Fact]
+    public void A_grid_that_does_not_match_the_curve_count_never_reaches_the_operation()
+    {
+        // The pairing is a Domain invariant, so there is no such map to refuse. Recorded here because the
+        // operation reads Columns x Rows as the picture's shape and relies on it matching PointCount.
+        Assert.Throws<ArgumentException>(() => Map(5, Grid(3, 2)));
+    }
+
+    [Fact]
+    public async Task A_line_of_points_is_still_a_picture()
+    {
+        // One row derives no Y spacing, but the pixel still covers the extent it was measured over — and an axis
+        // cannot have a zero step, so the naive grid step would throw here.
+        using var map = Map(2, Grid(2, 1));
+
+        using var image = await RunAsync(map);
+
+        Assert.Equal(2, image.X.Count);
+        Assert.Equal(1, image.Y.Count);
+        Assert.Equal(1.0, image.Y.Step);   // the whole scan size: the one pixel spans it
+    }
+
+    [Theory]
+    [InlineData(VolumeMeasure.MaxForce)]
+    [InlineData(VolumeMeasure.Adhesion)]
+    public async Task A_force_measure_carries_the_maps_own_force_unit(VolumeMeasure measure)
+    {
+        using var map = Map(4, Grid(2, 2));
+
+        using var image = await RunAsync(map, measure);
+
+        Assert.Equal(StandardUnits.Nanonewton, image.Channel.Unit);
+    }
+
+    [Fact]
+    public async Task Deformation_carries_the_maps_own_length_unit()
+    {
+        using var map = Map(4, Grid(2, 2));
+
+        using var image = await RunAsync(map, VolumeMeasure.Deformation);
+
+        Assert.Equal(StandardUnits.Nanometre, image.Channel.Unit);
+    }
+
+    [Fact]
+    public async Task Stiffness_is_force_per_length_in_the_maps_own_units()
+    {
+        // Not an assumed N/m: a nN/nm map must say nN/nm. The dimension still has to be a stiffness, so the value
+        // converts against N/m like any other.
+        using var map = Map(4, Grid(2, 2));
+
+        using var image = await RunAsync(map, VolumeMeasure.Stiffness);
+
+        Assert.Equal("nN/nm", image.Channel.Unit.Symbol);
+        Assert.Equal(StandardUnits.NewtonPerMetre.Dimension, image.Channel.Unit.Dimension);
+    }
+
+    [Fact]
+    public void A_map_whose_channels_are_not_a_force_and_a_length_is_refused()
+    {
+        // The stiffness unit is built as force-per-length and carries the Stiffness dimension. A map of volts
+        // would otherwise produce a "V/nm" claiming to be a stiffness — a corrupted measurement, not a label bug.
+        using var volts = new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(new float[2 * Samples], Samples, 2),
+            ScanBuffer<float>.TakeOwnership(new float[2 * Samples], Samples, 2),
+            new ChannelDescriptor("z", ChannelKind.Topography, StandardUnits.Nanometre, "Z"),
+            new ChannelDescriptor("bias", ChannelKind.Voltage, StandardUnits.Volt, "Bias"),
+            Grid(2, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        Assert.False(Operation().Validate(new OperationInput(volts), Params()).IsValid);
+    }
+
+    [Fact]
+    public async Task The_picture_records_what_made_it()
+    {
+        // A stiffness map at 30% and one at 70% are different pictures of the same map. A step that does not say
+        // which is a step that cannot be reproduced.
+        using var map = Map(4, Grid(2, 2));
+
+        using var image = await RunAsync(map, VolumeMeasure.Stiffness, CurvePhase.Approach, threshold: 30.0);
+
+        var step = Assert.Single(image.Provenance.Steps);
+        Assert.Equal("force-volume.volume-image", step.OperationId);
+        Assert.Equal((int)VolumeMeasure.Stiffness, step.Parameters[VolumeImageOperation.MeasureParameter].Value);
+        Assert.Equal((int)CurvePhase.Approach, step.Parameters[VolumeImageOperation.PhaseParameter].Value);
+        Assert.Equal(30.0, step.Parameters[VolumeImageOperation.ThresholdParameter].Value);
+    }
+}
