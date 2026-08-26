@@ -794,8 +794,10 @@ public sealed class ShellViewModel : ObservableObject
     public bool CanStepMapPointForward => MapPointCount > 0 && _selectedMapPoint < MapPointCount - 1;
 
     /// <summary>
-    /// What the viewer is looking at: which curve, and where on the sample it was measured when the map has a
-    /// grid. A map without one says so rather than showing a position it does not have.
+    /// What the viewer is looking at: which curve, and where it was measured. The position comes from the
+    /// recorded layout whenever the file kept one, because that is the frame the markers on the stage are drawn
+    /// in — a toolbar quoting a different frame would have the stage contradict itself about one point. The
+    /// reconstructed grid is a fallback, and the label names whichever frame it is speaking in.
     /// </summary>
     public string MapPointLabel
     {
@@ -806,20 +808,33 @@ public sealed class ShellViewModel : ObservableObject
                 return string.Empty;
             }
 
-            string ordinal = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
-            if (map.Geometry is not { } grid)
+            string label = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
+            if (map.Geometry is { } cells)
             {
-                return $"{ordinal} · no grid";
+                int column = (_selectedMapPoint % cells.Columns) + 1;
+                int row = (_selectedMapPoint / cells.Columns) + 1;
+                label += $" · col {column}/{cells.Columns}, row {row}/{cells.Rows}";
             }
 
-            var (x, y) = grid.PositionOf(_selectedMapPoint);
-            int column = (_selectedMapPoint % grid.Columns) + 1;
-            int row = (_selectedMapPoint / grid.Columns) + 1;
-            return $"{ordinal} · col {column}/{grid.Columns}, row {row}/{grid.Rows} · "
-                + $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
-                + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {grid.LengthUnit.Symbol}";
+            if (map.PointLayout is { } layout && _selectedMapPoint < layout.Count)
+            {
+                var p = layout[_selectedMapPoint];
+                return $"{label} · surface {Position(p.X, p.Y, layout.LengthUnit)}";
+            }
+
+            if (map.Geometry is { } grid)
+            {
+                var (x, y) = grid.PositionOf(_selectedMapPoint);
+                return $"{label} · scan {Position(x, y, grid.LengthUnit)}";
+            }
+
+            return $"{label} · no recorded position";
         }
     }
+
+    private static string Position(double x, double y, Unit unit)
+        => $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
+            + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {unit.Symbol}";
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
 

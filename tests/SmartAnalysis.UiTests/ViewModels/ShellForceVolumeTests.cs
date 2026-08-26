@@ -167,7 +167,7 @@ public sealed class ShellForceVolumeTests
         Assert.Contains("Point 5 of 6", vm.MapPointLabel);
         Assert.Contains("col 2/3", vm.MapPointLabel);
         Assert.Contains("row 2/2", vm.MapPointLabel);
-        Assert.Contains("(0, 0.5)", vm.MapPointLabel);
+        Assert.Contains("scan (0, 0.5)", vm.MapPointLabel);
         Assert.Contains("um", vm.MapPointLabel);
     }
 
@@ -178,7 +178,7 @@ public sealed class ShellForceVolumeTests
         var vm = WithActiveMap(ws, Map(4)); // hand-placed points: no geometry
 
         Assert.Contains("Point 1 of 4", vm.MapPointLabel);
-        Assert.Contains("no grid", vm.MapPointLabel);
+        Assert.Contains("no recorded position", vm.MapPointLabel);
     }
 
     [Fact]
@@ -505,14 +505,15 @@ public sealed class ShellForceVolumeTests
         => new([.. points.Select(p => new MapPointPosition(p.X, p.Y))], StandardUnits.Micrometre);
 
     /// <summary>A map with a 4x4-pixel surface over 4x4 um, so one pixel is exactly 1 um.</summary>
-    private static ForceVolumeDataset MapOnSurface(MapPointLayout? layout, int points = 2)
+    private static ForceVolumeDataset MapOnSurface(
+        MapPointLayout? layout, int points = 2, ForceVolumeGeometry? geometry = null)
         => new(
             DatasetId.New(), new DataSource("test", null),
             ScanBuffer<float>.TakeOwnership(new float[points * Samples], Samples, points),
             ScanBuffer<float>.TakeOwnership(new float[points * Samples], Samples, points),
             new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
             new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
-            null, ScanMetadata.Unknown, ProvenanceRecord.Root, null,
+            geometry, ScanMetadata.Unknown, ProvenanceRecord.Root, null,
             new ScanImageDataset(
                 DatasetId.New(), new DataSource("test", null),
                 new Axis("X", StandardUnits.Micrometre, 0.0, 1.0, 4),
@@ -581,5 +582,41 @@ public sealed class ShellForceVolumeTests
         var vm = WithActiveMap(new Workspace(), map);
 
         Assert.Empty(vm.PointMarkers);
+    }
+
+    [Fact]
+    public void The_toolbar_names_the_place_the_marker_is_drawn()
+    {
+        // The stage draws the RECORDED position; a toolbar quoting the reconstructed grid instead would put two
+        // coordinates on screen for one point, in two frames, with no way to tell which is which.
+        var ws = new Workspace();
+        var vm = WithActiveMap(
+            ws,
+            MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1)));
+
+        vm.SelectedMapPoint = 1;
+
+        var surface = vm.SpectroscopyReferenceImage!;
+        var (markerX, markerY) = vm.PointMarkers[1];
+        string place = FormattableString.Invariant(
+            $"({markerX * surface.X.Step:0.###}, {markerY * surface.Y.Step:0.###})");
+
+        Assert.Contains(place, vm.MapPointLabel);
+        Assert.Contains("surface", vm.MapPointLabel);
+
+        // The grid puts point 1 at (1.5, -0.5). That number must not reach the label.
+        Assert.DoesNotContain("1.5", vm.MapPointLabel);
+    }
+
+    [Fact]
+    public void Without_recorded_positions_the_label_says_which_frame_it_fell_back_to()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
+
+        vm.SelectedMapPoint = 4;
+
+        Assert.Contains("scan", vm.MapPointLabel);
+        Assert.DoesNotContain("surface", vm.MapPointLabel);
     }
 }
