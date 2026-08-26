@@ -360,6 +360,37 @@
                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </DockPanel>
                             </Border>
+                            <!-- Pick a curve by where it was measured, not by an index. Only drawn when the
+                                 map has a grid: hand-placed points have no layout, and laying them out in a
+                                 rectangle would imply an arrangement the instrument never recorded. -->
+                            <Border DockPanel.Dock="Right" Margin="{DynamicResource SA.Gap.Left2}"
+                                    VerticalAlignment="Top"
+                                    Visibility="{Binding HasMapGrid, Converter={StaticResource Bool2Vis}}">
+                                <ItemsControl ItemsSource="{Binding MapCells}" Width="140">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="{Binding DataContext.MapGridColumns, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Width="14" Height="14" Margin="{DynamicResource SA.Gap.Cell}" Padding="0"
+                                                    Tag="{Binding Index}" Click="MapCell_Click"
+                                                    ToolTip="{Binding Tooltip}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource SA.Brush.Accent.Primary}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
                             <ctl:AfmCurveView x:Name="SpectroscopyCurve"/>
                         </DockPanel>
                         <!-- Two equal panes; each frames its image exactly like the single stage (same Gap.2 margin

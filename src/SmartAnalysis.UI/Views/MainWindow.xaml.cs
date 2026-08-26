@@ -711,6 +711,14 @@ public partial class MainWindow : Window
                 _viewModel.IsForceVolume ? _viewModel.SelectedMapPoint : 0)
             : null;
 
+    private void MapCell_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: int index })
+        {
+            _viewModel.SelectedMapPoint = index;
+        }
+    }
+
     private void MapPointBack_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(-1);
 
     private void MapPointForward_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(1);

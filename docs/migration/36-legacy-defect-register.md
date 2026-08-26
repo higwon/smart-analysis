@@ -79,6 +79,7 @@ Where the two touch, entries here name the 07 theme they instantiate:
 | **M3** Host-endian assumptions | LD-09 |
 | **M5** Incomplete / silently-wrong algorithm paths | LD-01, LD-02, LD-07, LD-12 |
 | **C3** No reproducibility / no provenance persistence | LD-13 |
+| **L1** Dead / orphan code | LD-14 |
 | **L2** Naming / hygiene | LD-10 |
 | *(no theme — found during implementation)* | LD-06, LD-08, **LD-11**, LI-01, LI-02, LI-03 |
 
@@ -636,6 +637,41 @@ history, which is read but never carried forward, so saving downgrades provenanc
 **In the new product.** Provenance is mandatory and persisted — every dataset carries a `ProvenanceRecord`
 lineage that survives save and reopen (**ADR-004**, **ADR-013**), which is one of the three reasons the product
 is being rebuilt rather than ported (07 C3).
+
+---
+
+## LD-14 · An orphan property and a branch whose condition changes nothing
+
+**Severity:** Low
+**Lens:** Code
+**Files:** `Framework/UI/FW.UI.Controls/SpectroscopyImage/SpectroscopyImageViewModel.cs`,
+`Framework/UI/FW.UI.Controls/SpectroscopyImage/PointsGrid/PointsGridViewModel.cs`
+**07 theme:** L1 — dead / orphan code
+
+```csharp
+// SpectroscopyImageViewModel
+public InteractiveImageModel ReferenceImageModel { get; set; }
+```
+
+That declaration is the **only** reference to the property in the whole solution: nothing ever assigns it.
+The flag that would drive it is read — `HasReferenceImage = ScanData.SpectroscopyHeader.ReferenceImage == 1`
+— and then used like this:
+
+```csharp
+if (Model.HasReferenceImage)   { SetPointsForReference(Model); }
+else if (Model.HasVolumeImage) { SetPointsForVolume(Model); }
+else                           { SetPointsForReference(Model); }
+```
+
+The first branch and the final `else` call the same method, so the `HasReferenceImage` test decides nothing.
+
+**Consequence.** None to a user: the reference image is rendered through a different path
+(`ReferenceImagePointCoordinateSystem`, fed from `ScanData.PhysicalZDataCollection`), so the feature works.
+The cost is to the reader — an unassigned property sitting beside the ones that are used, and a branch whose
+condition changes nothing, both suggest the code does something it does not.
+
+**In the new product.** Not carried over. The reference image itself is real and worth reading (**FF14**); this
+entry is only about the orphan property and the no-op branch.
 
 ---
 

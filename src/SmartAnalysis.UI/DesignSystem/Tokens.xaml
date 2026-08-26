@@ -59,7 +59,11 @@
     <Thickness x:Key="SA.Gap.Left2">8,0,0,0</Thickness>
     <Thickness x:Key="SA.Gap.Bottom1">0,0,0,4</Thickness>
     <Thickness x:Key="SA.Gap.Bottom2">0,0,0,8</Thickness>
+    <Thickness x:Key="SA.Gap.Left1">4,0,0,0</Thickness>
+    <Thickness x:Key="SA.Gap.Top1">0,4,0,0</Thickness>
     <Thickness x:Key="SA.Gap.Top2">0,8,0,0</Thickness>
+    <!-- The gutter between cells of a dense picker grid, where a 4px gap would dwarf the cells. -->
+    <Thickness x:Key="SA.Gap.Cell">1</Thickness>
 
     <!-- ===== Sizing ===== -->
     <sys:Double x:Key="SA.Size.Control.Sm">24</sys:Double>
