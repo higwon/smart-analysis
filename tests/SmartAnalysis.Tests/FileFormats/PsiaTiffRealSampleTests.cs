@@ -122,7 +122,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
         }
 
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
-        int curves = 0, maps = 0;
+        int curves = 0, maps = 0, withSurface = 0;
         foreach (var path in Directory.EnumerateFiles(dir, "*.tiff", SearchOption.AllDirectories).OrderBy(p => p))
         {
             var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
@@ -198,6 +198,15 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
                 Assert.Equal(map.PointCount, kept!.PointCount);
                 Assert.Equal(map.SampleCount, kept.SampleCount);
                 output.WriteLine("        channels: " + string.Join(", ", kept.Channels.Select(c => c.DisplayName + "[" + c.Unit.Symbol + "]")));
+                if (map.ReferenceImage is { } surface)
+                {
+                    output.WriteLine("        reference: " + surface.X.Count + "x" + surface.Y.Count
+                        + " over " + (surface.X.Step * surface.X.Count).ToString("G3") + "x"
+                        + (surface.Y.Step * surface.Y.Count).ToString("G3") + " " + surface.X.Unit.Symbol
+                        + " [" + surface.Channel.DisplayName + "]");
+                    withSurface++;
+                }
+
                 maps++;
             }
             else if (result.IsSuccess)
@@ -214,7 +223,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
             }
         }
 
-        output.WriteLine($"--- {curves} curves, {maps} maps ---");
+        output.WriteLine($"--- {curves} curves, {maps} maps, {withSurface} with a reference surface ---");
         // Whether a map is present depends on which sample set is mounted, so requiring one would assert about
         // the folder rather than the reader. What must hold is that spectroscopy reads as force data at all.
         Assert.True(curves + maps > 0, "Expected at least one spectroscopy sample to read as a force curve or map.");

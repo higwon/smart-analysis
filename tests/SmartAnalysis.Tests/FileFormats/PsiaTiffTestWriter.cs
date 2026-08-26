@@ -278,6 +278,47 @@ internal static class PsiaTiffTestWriter
         File.WriteAllBytes(path, ms.ToArray());
     }
 
+    /// <summary>
+    /// A spectroscopy TIFF that also carries the 2D scan the points were placed on — tag 0xC502 in the SAME
+    /// IFD, which is how real files store the reference image.
+    /// </summary>
+    public static void WriteSpectroscopyFileWithSurface(
+        string path, byte[] imageHeader, byte[] spectroscopyHeader, byte[] data, byte[] surfacePixels)
+    {
+        const int ifdOffset = 8;
+        const int entryCount = 5;
+        const int ifdSize = 2 + (entryCount * 12) + 4;
+        int surfaceOffset = ifdOffset + ifdSize;
+        int imageHeaderOffset = surfaceOffset + surfacePixels.Length;
+        int spectroscopyHeaderOffset = imageHeaderOffset + imageHeader.Length;
+        int dataOffset = spectroscopyHeaderOffset + spectroscopyHeader.Length;
+
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+
+        w.Write((byte)'I');
+        w.Write((byte)'I');
+        w.Write((ushort)42);
+        w.Write((uint)ifdOffset);
+
+        // Ascending by tag id: 0xC500 < 0xC502 < 0xC503 < 0xC506 < 0xC507.
+        w.Write((ushort)entryCount);
+        WriteEntry(w, TagMagicNumber, type: 4, count: 1, valueOrOffset: 0x0E031301);
+        WriteEntry(w, TagData, type: 1, count: (uint)surfacePixels.Length, valueOrOffset: (uint)surfaceOffset);
+        WriteEntry(w, TagHeader, type: 1, count: (uint)imageHeader.Length, valueOrOffset: (uint)imageHeaderOffset);
+        WriteEntry(w, TagSpectroscopyHeader, type: 1, count: (uint)spectroscopyHeader.Length, valueOrOffset: (uint)spectroscopyHeaderOffset);
+        WriteEntry(w, TagSpectroscopyData, type: 1, count: (uint)data.Length, valueOrOffset: (uint)dataOffset);
+        w.Write((uint)0);
+
+        w.Write(surfacePixels);
+        w.Write(imageHeader);
+        w.Write(spectroscopyHeader);
+        w.Write(data);
+
+        w.Flush();
+        File.WriteAllBytes(path, ms.ToArray());
+    }
+
     /// <summary>Writes a spectroscopy TIFF without the 0xC506 tag, to exercise the missing-header path.</summary>
     public static void WriteSpectroscopyFileWithoutHeader(string path, byte[] imageHeader, byte[] data)
     {

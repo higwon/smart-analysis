@@ -361,6 +361,10 @@ public sealed class PsiaTiffReader : IScanFileReader
             header, spectroscopy, xLine, yLine, dataType, calibration, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
+        // The surface the points were placed on, when the file carries one. Most spectroscopy files do:
+        // the 2D scan sits in the SAME IFD as the spectroscopy tags, in the tag the image path already reads.
+        var reference = ReadReferenceImage(path, ifd, fieldReader, header, contentHash, ct);
+
         // Everything the acquisition measured, not just the two the file flagged as axes. Half of a typical
         // file is other channels, and some of them — a populated Separation, say — are better than the flagged
         // ones for the analysis that follows.
@@ -376,10 +380,10 @@ public sealed class PsiaTiffReader : IScanFileReader
             // curve case repeated — so the only thing that changes is which type the caller receives.
             AfmDataset dataset = points == 1
                 ? new ForceCurveDataset(
-                    DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root, channelSet)
+                    DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root, channelSet, reference)
                 : new ForceVolumeDataset(
                     DatasetId.New(), source, separation, force, separationChannel, forceChannel,
-                    BuildGeometry(spectroscopy), metadata, ProvenanceRecord.Root, channelSet);
+                    BuildGeometry(spectroscopy), metadata, ProvenanceRecord.Root, channelSet, reference);
 
             return FileReadResult.Success(dataset);
         }
@@ -388,6 +392,7 @@ public sealed class PsiaTiffReader : IScanFileReader
             separation.Dispose(); // ownership only transfers on a successful ctor (ADR-011/012)
             force?.Dispose();
             channelSet?.Dispose();
+            reference?.Dispose();
             throw;
         }
     }
@@ -426,6 +431,75 @@ public sealed class PsiaTiffReader : IScanFileReader
             header.OffsetX,
             header.OffsetY,
             _units.GetUnit(StandardUnits.Micrometre.Symbol)); // scan extents are µm, as in the 2D header
+    }
+
+    /// <summary>
+    /// The 2D scan a spectroscopy file carries alongside its curves — the reference image the instrument
+    /// showed while the points were placed. It lives in the <b>same</b> IFD, in the same tag the 2D path reads,
+    /// so nothing new is decoded; only the routing was missing. Null when the file has none, which is a real
+    /// case: about a third of the sample files record curves without a surface.
+    /// </summary>
+    private ScanImageDataset? ReadReferenceImage(
+        string path,
+        TiffImageFileDirectory ifd,
+        TiffFieldReader fieldReader,
+        PsiaImageHeader header,
+        string contentHash,
+        CancellationToken ct)
+    {
+        var dataEntry = ifd.FindEntry((TiffTag)PsiaTiff.TagData);
+        if (dataEntry.Tag == TiffTag.None || dataEntry.ValueCount == 0)
+        {
+            return null;
+        }
+
+        // The 2D header describes the surface even in a spectroscopy file, but a spectroscopy file may leave
+        // those fields unset. A surface with no extent or no pixels is not one, and inventing either would put
+        // the curves somewhere on a picture that means nothing.
+        if (header.Width <= 0 || header.Height <= 0
+            || !(header.XScanSize > 0) || !(header.YScanSize > 0)
+            || !double.IsFinite(header.XScanSize) || !double.IsFinite(header.YScanSize)
+            || !System.Enum.IsDefined(typeof(PsiaTiff.DataType), header.DataType))
+        {
+            return null;
+        }
+
+        int count = header.Width * header.Height;
+        int bytesPerValue = header.DataType switch
+        {
+            (int)PsiaTiff.DataType.Short => sizeof(short),
+            (int)PsiaTiff.DataType.Int => sizeof(int),
+            _ => sizeof(float),
+        };
+
+        if (dataEntry.ValueCount < (long)count * bytesPerValue)
+        {
+            return null; // a truncated surface is no surface; the curves are still perfectly readable
+        }
+
+        ct.ThrowIfCancellationRequested();
+
+        var values = ToPhysicalFloats(
+            ReadByteField(fieldReader, dataEntry), count, header.DataType, header.DataGain, header.ZOffset);
+
+        var lengthUnit = _units.GetUnit(StandardUnits.Micrometre.Symbol);
+        var xAxis = new Axis("X", lengthUnit, header.XOffset, header.XScanSize / header.Width, header.Width);
+        var yAxis = new Axis("Y", lengthUnit, header.YOffset, header.YScanSize / header.Height, header.Height);
+
+        var buffer = ScanBuffer<float>.TakeOwnership(values, header.Width, header.Height);
+        try
+        {
+            return new ScanImageDataset(
+                DatasetId.New(),
+                new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash),
+                xAxis, yAxis, BuildChannel(header), buffer,
+                BuildMetadata(header, contentHash), ProvenanceRecord.Root);
+        }
+        catch
+        {
+            buffer.Dispose(); // ownership only transfers on a successful ctor (ADR-011/012)
+            throw;
+        }
     }
 
     /// <summary>

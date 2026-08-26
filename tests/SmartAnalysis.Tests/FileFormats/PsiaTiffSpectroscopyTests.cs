@@ -967,4 +967,89 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
         Assert.All(channels.At(current, 0).ToArray(), v => Assert.Equal(70f, v));
         Assert.All(channels.At(current, 1).ToArray(), v => Assert.Equal(80f, v));
     }
+    /// <summary>The 2D header a spectroscopy file carries, describing the surface the points sit on.</summary>
+    private static byte[] SurfaceHeader(int width, int height, double scan)
+        => PsiaTiffTestWriter.BuildHeader(
+            imageType: 2, sourceName: "Z Height", imageMode: "FD", width: width, height: height,
+            xScanSize: scan, yScanSize: scan, xOffset: 0, yOffset: 0,
+            dataGain: 1, zOffset: 0, unit: "um", dataType: Float);
+
+    [Fact]
+    public async Task The_surface_the_points_were_placed_on_comes_back_with_the_curves()
+    {
+        // A spectroscopy file commonly embeds the 2D scan in the SAME IFD, in the tag the image path already
+        // reads — 56 of the 82 real samples do. Ignoring it left the map with no surface to be drawn on.
+        var path = NewPath();
+        var pixels = PsiaTiffTestWriter.PackPixels([1, 2, 3, 4], Float);
+        PsiaTiffTestWriter.WriteSpectroscopyFileWithSurface(
+            path,
+            SurfaceHeader(2, 2, scan: 4.0),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)),
+            pixels);
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        var surface = curve.ReferenceImage;
+        Assert.NotNull(surface);
+        Assert.Equal(2, surface!.X.Count);
+        Assert.Equal(2, surface.Y.Count);
+        Assert.Equal(2.0, surface.X.Step, 9);            // 4 um across 2 pixels
+        Assert.Equal("um", surface.X.Unit.Symbol);
+        Assert.Equal([1f, 2f, 3f, 4f], surface.Data.Memory.ToArray());
+    }
+
+    [Fact]
+    public async Task A_file_with_no_surface_still_reads_its_curves()
+    {
+        // About a third of the real files record curves without a surface. That is not a failure.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        Assert.Null(curve.ReferenceImage);
+    }
+
+    [Fact]
+    public async Task A_surface_with_no_extent_is_no_surface()
+    {
+        // A spectroscopy file may leave the 2D scan size unset. Pixels with no physical extent cannot be
+        // placed on the sample, and inventing one would put the curves somewhere on a picture that means
+        // nothing — the curves themselves are still perfectly readable.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFileWithSurface(
+            path,
+            SurfaceHeader(2, 2, scan: 0.0),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)),
+            PsiaTiffTestWriter.PackPixels([1, 2, 3, 4], Float));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        Assert.True(result.IsSuccess);
+        Assert.Null(curve.ReferenceImage);
+    }
 }
