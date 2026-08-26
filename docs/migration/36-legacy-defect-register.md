@@ -513,9 +513,18 @@ separation = z − d          where d is the cantilever deflection (force / k)
 indentation δ = (z − z_contact) − (d − d_contact)
 ```
 
-Searching the entire legacy solution for that subtraction finds nothing — there is no `z - deflection` anywhere,
-and no channel in any of our 124 real sample files carries a pre-computed separation. The correction is
-therefore never applied, by the file or by the code.
+Searching the entire legacy solution for that subtraction finds nothing — there is no `z - deflection`
+anywhere in the code.
+
+**Worse: for many files the instrument already did it.** 17 of the sample files declare a `Separation`
+channel and 16 of those have it **populated**. On `Spectroscopy(1).tiff` it tracks `Z Height` to within
+0.02 nm away from contact and departs from it by 4.3 nm at the turnaround — exactly the signature of a
+deflection correction. The right quantity is sitting in the same file, measured, and the analysis uses the
+other one, because the file's own X-axis flag points at `Z Height`.
+
+*(Correction: an earlier revision of this entry stated that no sample file carried a pre-computed separation.
+That was wrong — it was written before the non-axis channels were read. Finding it strengthens the entry
+rather than weakening it: the correction is available and unused.)*
 
 **Consequence.** The fitted slope is `dF/dz` instead of `dF/dδ`, so the measured stiffness is the **series
 combination of the cantilever and the sample** rather than the sample alone. The error scales with sample
@@ -530,7 +539,9 @@ stiffness:
 This is the same regime **LD-08** degrades in, and the two compound: one understates the tip-compliance
 correction, the other omits the cantilever-compliance correction entirely.
 
-**In the new product.** Not yet corrected either — A12 currently fits against the separation channel as read.
+**In the new product.** Not yet corrected either, and until FF10 the reader **discarded** the channel that
+would have fixed it: only the two axis-flagged channels were read, so a populated `Separation` went in the bin
+with 52% of every file's measured data. A12 currently fits against whatever the file flags as the abscissa.
 `ForceCurveDataset.Separation` is populated straight from the file's Z channel by `PsiaTiffReader`, so the same
 caveat applies to our Hertz and Sneddon fits. Recorded as **also open**: the deflection subtraction needs the
 spring constant, which FF08 now recovers from the header, so the pieces are in place.

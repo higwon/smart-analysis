@@ -198,6 +198,7 @@ public sealed class ApproachRetractSplitOperation : IAnalysisOperation
                 forceBuffer,
                 curve.SeparationChannel,
                 curve.ForceChannel,
+
                 curve.Metadata,
                 ProvenanceRecord.DerivedFrom(curve.Id, [step]));
 

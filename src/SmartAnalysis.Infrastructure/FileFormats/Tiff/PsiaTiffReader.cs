@@ -361,6 +361,11 @@ public sealed class PsiaTiffReader : IScanFileReader
             header, spectroscopy, xLine, yLine, dataType, calibration, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
+        // Everything the acquisition measured, not just the two the file flagged as axes. Half of a typical
+        // file is other channels, and some of them — a populated Separation, say — are better than the flagged
+        // ones for the analysis that follows.
+        var channelSet = ReadChannelSet(dataBytes, spectroscopy, dataType, bytesPerValue, calibration, ordinateUnit, yIndex);
+
         var separation = ScanBuffer<float>.TakeOwnership(separationValues, count, points);
         ScanBuffer<float>? force = null;
         try
@@ -371,10 +376,10 @@ public sealed class PsiaTiffReader : IScanFileReader
             // curve case repeated — so the only thing that changes is which type the caller receives.
             AfmDataset dataset = points == 1
                 ? new ForceCurveDataset(
-                    DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root)
+                    DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root, channelSet)
                 : new ForceVolumeDataset(
                     DatasetId.New(), source, separation, force, separationChannel, forceChannel,
-                    BuildGeometry(spectroscopy), metadata, ProvenanceRecord.Root);
+                    BuildGeometry(spectroscopy), metadata, ProvenanceRecord.Root, channelSet);
 
             return FileReadResult.Success(dataset);
         }
@@ -382,6 +387,7 @@ public sealed class PsiaTiffReader : IScanFileReader
         {
             separation.Dispose(); // ownership only transfers on a successful ctor (ADR-011/012)
             force?.Dispose();
+            channelSet?.Dispose();
             throw;
         }
     }
@@ -420,6 +426,61 @@ public sealed class PsiaTiffReader : IScanFileReader
             header.OffsetX,
             header.OffsetY,
             _units.GetUnit(StandardUnits.Micrometre.Symbol)); // scan extents are µm, as in the 2D header
+    }
+
+    /// <summary>
+    /// Reads every declared channel into one set. The ordinate is converted the same way it is for the
+    /// designated pair, so a deflection channel reads in force whichever way the caller reaches it.
+    /// </summary>
+    private SpectroscopyChannelSet? ReadChannelSet(
+        byte[] data,
+        PsiaSpectroscopyHeader header,
+        int dataType,
+        int bytesPerValue,
+        CantileverCalibration? calibration,
+        Unit ordinateUnit,
+        int ordinateIndex)
+    {
+        int count = header.DataPoints;
+        int points = header.SpectroscopyPoints;
+        var descriptors = new ChannelDescriptor[header.SourceCount];
+        var samples = new float[checked(header.SourceCount * points * count)];
+
+        for (int c = 0; c < header.SourceCount; c++)
+        {
+            var line = header.Lines[c];
+            var unit = ResolveUnit(line.Unit, out bool known);
+            var plane = ReadPlanes(data, header, c, dataType, bytesPerValue, line.DataGain, header.Offsets[c]);
+
+            if (c == ordinateIndex && calibration is { } probe)
+            {
+                for (int i = 0; i < plane.Length; i++)
+                {
+                    plane[i] = (float)probe.ForceNanonewtons(plane[i] * ordinateUnit.ScaleToBase);
+                }
+
+                unit = _units.GetUnit(StandardUnits.Nanonewton.Symbol);
+                known = true;
+            }
+
+            plane.CopyTo(samples, c * points * count);
+            descriptors[c] = new ChannelDescriptor(
+                Key(line.SourceName, $"channel{c}"),
+                known ? KindFromDimension(unit.Dimension.Name) : ChannelKind.Unknown,
+                unit,
+                displayName: line.SourceName);
+        }
+
+        var buffer = ScanBuffer<float>.TakeOwnership(samples, count, header.SourceCount * points);
+        try
+        {
+            return new SpectroscopyChannelSet(descriptors, points, buffer);
+        }
+        catch
+        {
+            buffer.Dispose();
+            throw;
+        }
     }
 
     /// <summary>

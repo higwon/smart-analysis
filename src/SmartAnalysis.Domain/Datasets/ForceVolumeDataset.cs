@@ -36,7 +36,8 @@ public sealed class ForceVolumeDataset : AfmDataset
         ChannelDescriptor forceChannel,
         ForceVolumeGeometry? geometry,
         ScanMetadata metadata,
-        ProvenanceRecord provenance)
+        ProvenanceRecord provenance,
+        SpectroscopyChannelSet? channels = null)
         : base(id, source, metadata, provenance)
     {
         DomainGuard.NotNull(separation, nameof(separation));
@@ -75,6 +76,8 @@ public sealed class ForceVolumeDataset : AfmDataset
                 nameof(geometry));
         }
 
+        AttachChannels(channels, separation.Height, separation.Width);
+
         _separation = separation;
         _force = force;
         Geometry = geometry;
@@ -102,10 +105,37 @@ public sealed class ForceVolumeDataset : AfmDataset
     /// <summary>The force samples of one curve.</summary>
     public ReadOnlyMemory<float> ForceAt(int pointIndex) => _force.Slice(Offset(pointIndex), SampleCount);
 
+    /// <summary>
+    /// Every channel the acquisition measured, when the reader kept them. The designated separation/force
+    /// pair is what the analysis uses; this is what the <i>file</i> contained, so nothing measured is lost and
+    /// a different pair can be chosen later.
+    /// </summary>
+    public SpectroscopyChannelSet? Channels { get; private set; }
+
+    private void AttachChannels(SpectroscopyChannelSet? channels, int pointCount, int sampleCount)
+    {
+        if (channels is null)
+        {
+            return;
+        }
+
+        // The channels must describe THIS acquisition. A set of a different shape would let a caller read a
+        // curve that has nothing to do with the one the dataset designates.
+        if (channels.PointCount != pointCount || channels.SampleCount != sampleCount)
+        {
+            throw new ArgumentException(
+                $"The channel set covers {channels.PointCount}x{channels.SampleCount}, but this dataset is "
+                + $"{pointCount}x{sampleCount}.", nameof(channels));
+        }
+
+        Channels = channels;
+    }
+
     public override void Dispose()
     {
         _separation.Dispose();
         _force.Dispose(); // distinct instances guaranteed at construction
+        Channels?.Dispose();
     }
 
     private int Offset(int pointIndex)

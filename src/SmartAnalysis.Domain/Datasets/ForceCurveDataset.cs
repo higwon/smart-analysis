@@ -2,6 +2,7 @@ using SmartAnalysis.Domain.Buffers;
 using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Metadata;
 using SmartAnalysis.Domain.Provenance;
+using SmartAnalysis.Domain.Spectroscopy;
 
 namespace SmartAnalysis.Domain.Datasets;
 
@@ -28,7 +29,8 @@ public sealed class ForceCurveDataset : AfmDataset
         ChannelDescriptor separationChannel,
         ChannelDescriptor forceChannel,
         ScanMetadata metadata,
-        ProvenanceRecord provenance)
+        ProvenanceRecord provenance,
+        SpectroscopyChannelSet? channels = null)
         : base(id, source, metadata, provenance)
     {
         DomainGuard.NotNull(separation, nameof(separation));
@@ -52,6 +54,8 @@ public sealed class ForceCurveDataset : AfmDataset
                 $"Separation and force must have equal length (was {separation.Length} vs {force.Length}).");
         }
 
+        AttachChannels(channels, 1, separation.Width);
+
         Separation = separation;
         Force = force;
     }
@@ -67,9 +71,36 @@ public sealed class ForceCurveDataset : AfmDataset
     /// <summary>Number of samples in the curve.</summary>
     public int Length => Force.Length;
 
+    /// <summary>
+    /// Every channel the acquisition measured, when the reader kept them. The designated separation/force
+    /// pair is what the analysis uses; this is what the <i>file</i> contained, so nothing measured is lost and
+    /// a different pair can be chosen later.
+    /// </summary>
+    public SpectroscopyChannelSet? Channels { get; private set; }
+
+    private void AttachChannels(SpectroscopyChannelSet? channels, int pointCount, int sampleCount)
+    {
+        if (channels is null)
+        {
+            return;
+        }
+
+        // The channels must describe THIS acquisition. A set of a different shape would let a caller read a
+        // curve that has nothing to do with the one the dataset designates.
+        if (channels.PointCount != pointCount || channels.SampleCount != sampleCount)
+        {
+            throw new ArgumentException(
+                $"The channel set covers {channels.PointCount}x{channels.SampleCount}, but this dataset is "
+                + $"{pointCount}x{sampleCount}.", nameof(channels));
+        }
+
+        Channels = channels;
+    }
+
     public override void Dispose()
     {
         Separation.Dispose();
         Force.Dispose(); // distinct instances guaranteed at construction
+        Channels?.Dispose();
     }
 }
