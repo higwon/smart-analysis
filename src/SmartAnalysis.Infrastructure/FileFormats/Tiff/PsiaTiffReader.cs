@@ -246,14 +246,6 @@ public sealed class PsiaTiffReader : IScanFileReader
                 + $"{spectroscopy.Lines.Count} channel slots.");
         }
 
-        if (spectroscopy.SpectroscopyPoints != 1)
-        {
-            // Several spectra in one file is a map, not a curve; its inter-spectrum layout is unverified, so it is
-            // refused rather than read on a guess.
-            return FileReadResult.Failure(FileReadErrorKind.UnsupportedImageType,
-                $"Multi-point spectroscopy ({spectroscopy.SpectroscopyPoints} spectra in one file) is not supported yet.");
-        }
-
         // The spectroscopy payload carries its OWN element type: a processed file (an offset-adjusted curve, say)
         // is written as float while the 2D header it inherited still says short. The 2D header is only a fallback for
         // a header too short to hold the field.
@@ -341,10 +333,11 @@ public sealed class PsiaTiffReader : IScanFileReader
 
         byte[] dataBytes = ReadByteField(fieldReader, dataEntry);
         int count = spectroscopy.DataPoints;
-        float[] separationValues = ReadPlane(
-            dataBytes, count, xIndex, dataType, bytesPerValue, xLine.DataGain, spectroscopy.Offsets[xIndex]);
-        float[] forceValues = ReadPlane(
-            dataBytes, count, yIndex, dataType, bytesPerValue, yLine.DataGain, spectroscopy.Offsets[yIndex]);
+        int points = spectroscopy.SpectroscopyPoints;
+        float[] separationValues = ReadPlanes(
+            dataBytes, spectroscopy, xIndex, dataType, bytesPerValue, xLine.DataGain, spectroscopy.Offsets[xIndex]);
+        float[] forceValues = ReadPlanes(
+            dataBytes, spectroscopy, yIndex, dataType, bytesPerValue, yLine.DataGain, spectroscopy.Offsets[yIndex]);
 
         var forceUnit = ordinateUnit;
         if (calibration is { } probe)
@@ -368,13 +361,21 @@ public sealed class PsiaTiffReader : IScanFileReader
             header, spectroscopy, xLine, yLine, dataType, calibration, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
-        var separation = ScanBuffer<float>.TakeOwnership(separationValues, count, 1);
+        var separation = ScanBuffer<float>.TakeOwnership(separationValues, count, points);
         ScanBuffer<float>? force = null;
         try
         {
-            force = ScanBuffer<float>.TakeOwnership(forceValues, count, 1);
-            var dataset = new ForceCurveDataset(
-                DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root);
+            force = ScanBuffer<float>.TakeOwnership(forceValues, count, points);
+
+            // One spectrum is a curve; several are a map. The layout is the same either way — the map is just the
+            // curve case repeated — so the only thing that changes is which type the caller receives.
+            AfmDataset dataset = points == 1
+                ? new ForceCurveDataset(
+                    DatasetId.New(), source, separation, force, separationChannel, forceChannel, metadata, ProvenanceRecord.Root)
+                : new ForceVolumeDataset(
+                    DatasetId.New(), source, separation, force, separationChannel, forceChannel,
+                    BuildGeometry(spectroscopy), metadata, ProvenanceRecord.Root);
+
             return FileReadResult.Success(dataset);
         }
         catch
@@ -383,6 +384,42 @@ public sealed class PsiaTiffReader : IScanFileReader
             force?.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// The map's grid, or null when the file did not record one. `VolumeImage` is the instrument's own answer to
+    /// "was this a grid": a set of hand-placed points leaves it clear and writes sentinel extents, and turning
+    /// those into a grid would place curves where nothing was measured.
+    /// </summary>
+    private ForceVolumeGeometry? BuildGeometry(PsiaSpectroscopyHeader header)
+    {
+        if (!header.IsVolumeImage || header.PointsPerX <= 0)
+        {
+            return null;
+        }
+
+        // A grid has to account for exactly the spectra present; a width that does not divide them means the
+        // header and the payload disagree about the shape, and a partial last row would misplace every point in it.
+        if (header.SpectroscopyPoints % header.PointsPerX != 0)
+        {
+            return null;
+        }
+
+        if (!(header.ScanSizeX > 0) || !(header.ScanSizeY > 0)
+            || !double.IsFinite(header.ScanSizeX) || !double.IsFinite(header.ScanSizeY)
+            || !double.IsFinite(header.OffsetX) || !double.IsFinite(header.OffsetY))
+        {
+            return null;
+        }
+
+        return new ForceVolumeGeometry(
+            header.PointsPerX,
+            header.SpectroscopyPoints / header.PointsPerX,
+            header.ScanSizeX,
+            header.ScanSizeY,
+            header.OffsetX,
+            header.OffsetY,
+            _units.GetUnit(StandardUnits.Micrometre.Symbol)); // scan extents are µm, as in the 2D header
     }
 
     /// <summary>
@@ -411,25 +448,42 @@ public sealed class PsiaTiffReader : IScanFileReader
         return -1;
     }
 
-    /// <summary>Lifts one channel plane out of the planar payload and converts it to physical units.</summary>
-    private static float[] ReadPlane(
-        byte[] data, int count, int planeIndex, int dataType, int bytesPerValue, double gain, double offset)
+    /// <summary>
+    /// Lifts one channel out of the payload for every spectrum, converted to physical units and laid out one
+    /// curve after another. The payload is a sequence of spectra, each channel-planar, so the samples of one
+    /// channel for spectrum k start at ((k * sources) + channel) * points — which for a single spectrum is
+    /// just that channel plane.
+    /// </summary>
+    private static float[] ReadPlanes(
+        byte[] data, PsiaSpectroscopyHeader header, int planeIndex, int dataType, int bytesPerValue, double gain, double offset)
     {
-        var values = new float[count];
-        int origin = planeIndex * count * bytesPerValue;
-        for (int i = 0; i < count; i++)
+        int count = header.DataPoints;
+        var values = new float[checked(count * header.SpectroscopyPoints)];
+        for (int k = 0; k < header.SpectroscopyPoints; k++)
         {
-            var span = data.AsSpan(origin + (i * bytesPerValue), bytesPerValue);
+            int origin = ((k * header.SourceCount) + planeIndex) * count * bytesPerValue;
+            int target = k * count;
+            for (int i = 0; i < count; i++)
+            {
+                values[target + i] = ToPhysical(data, origin + (i * bytesPerValue), bytesPerValue, dataType, gain, offset);
+            }
+        }
+
+        return values;
+    }
+
+    private static float ToPhysical(byte[] data, int at, int bytesPerValue, int dataType, double gain, double offset)
+    {
+        {
+            var span = data.AsSpan(at, bytesPerValue);
             double raw = dataType switch
             {
                 (int)PsiaTiff.DataType.Short => BinaryPrimitives.ReadInt16LittleEndian(span),
                 (int)PsiaTiff.DataType.Int => BinaryPrimitives.ReadInt32LittleEndian(span),
                 _ => BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(span)),
             };
-            values[i] = (float)((raw * gain) + offset);
+            return (float)((raw * gain) + offset);
         }
-
-        return values;
     }
 
     private static string Key(string sourceName, string fallback)

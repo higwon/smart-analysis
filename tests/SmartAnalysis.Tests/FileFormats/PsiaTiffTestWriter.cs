@@ -169,6 +169,12 @@ internal static class PsiaTiffTestWriter
         int spectroscopyPoints = 1,
         double forceConstant = 0,
         double sensitivity = 0,
+        bool volumeImage = false,
+        int pointsPerX = 0,
+        double scanSizeX = 0,
+        double scanSizeY = 0,
+        double offsetX = 0,
+        double offsetY = 0,
         int? sourceCountOverride = null,
         int? payloadDataType = null)
     {
@@ -195,7 +201,7 @@ internal static class PsiaTiffTestWriter
             w.Write(0f);                               // drive periods / speeds
         }
 
-        w.Write(0);                                    // VolumeImage
+        w.Write(volumeImage ? 1 : 0);
         for (int i = 0; i < 8; i++)
         {
             w.Write(i < lines.Length ? lines[i].Offset : 0.0);
@@ -206,12 +212,12 @@ internal static class PsiaTiffTestWriter
             w.Write(0);                                // LogScale[8] + Square[8]
         }
 
-        w.Write(0);                                    // PerXPoint
+        w.Write(pointsPerX);
         w.Write(0);                                    // ReferenceImage
-        for (int i = 0; i < 4; i++)
-        {
-            w.Write(0.0);                              // scan size / offset
-        }
+        w.Write(scanSizeX);
+        w.Write(scanSizeY);
+        w.Write(offsetX);
+        w.Write(offsetY);
 
         w.Write(forceConstant);
         w.Write(sensitivity);

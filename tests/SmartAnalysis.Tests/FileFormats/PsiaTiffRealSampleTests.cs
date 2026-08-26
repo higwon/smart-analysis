@@ -121,7 +121,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
         }
 
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
-        int curves = 0;
+        int curves = 0, maps = 0;
         foreach (var path in Directory.EnumerateFiles(dir, "*.tiff", SearchOption.AllDirectories).OrderBy(p => p))
         {
             var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
@@ -164,6 +164,36 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
                     $"{name}: Z travel {max - min} is not a ramp — the largest single step is {biggestStep}.");
                 curves++;
             }
+            else if (result.Dataset is ForceVolumeDataset map)
+            {
+                output.WriteLine($"[Spec] {name} -> map of {map.PointCount} x {map.SampleCount}: "
+                    + $"{map.SeparationChannel.DisplayName} vs {map.ForceChannel.DisplayName} "
+                    + (map.Geometry is { } grid ? $"grid {grid.Columns}x{grid.Rows} over {grid.ScanSizeX:G3}x{grid.ScanSizeY:G3} {grid.LengthUnit.Symbol}" : "no grid"));
+
+                if (map.Geometry is { } g)
+                {
+                    // The scan size spans first point to last, so a centred scan (Offset = -ScanSize / 2)
+                    // must come out symmetric about zero. Reading the extent as a cell grid would leave the
+                    // last point one spacing short and shift every point inward.
+                    var (lastX, lastY) = g.PositionOf(g.PointCount - 1);
+                    Assert.Equal(g.OffsetX + g.ScanSizeX, lastX, 6);
+                    Assert.Equal(g.OffsetY + g.ScanSizeY, lastY, 6);
+                }
+
+                Assert.Equal(StandardUnits.Length, map.SeparationChannel.Unit.Dimension);
+                Assert.Equal(StandardUnits.Force, map.ForceChannel.Unit.Dimension);
+                for (int point = 0; point < map.PointCount; point++)
+                {
+                    var z = map.SeparationAt(point).Span;
+                    var f = map.ForceAt(point).Span;
+                    for (int i = 0; i < map.SampleCount; i++)
+                    {
+                        Assert.True(float.IsFinite(z[i]) && float.IsFinite(f[i]), $"{name}: point {point} sample {i} is not finite.");
+                    }
+                }
+
+                maps++;
+            }
             else if (result.IsSuccess)
             {
                 // Some files under Spectroscopy/ are the companion 2D images captured alongside the spectra.
@@ -178,7 +208,10 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
             }
         }
 
-        Assert.True(curves > 0, "Expected at least one spectroscopy sample to read as a force curve.");
+        output.WriteLine($"--- {curves} curves, {maps} maps ---");
+        // Whether a map is present depends on which sample set is mounted, so requiring one would assert about
+        // the folder rather than the reader. What must hold is that spectroscopy reads as force data at all.
+        Assert.True(curves + maps > 0, "Expected at least one spectroscopy sample to read as a force curve or map.");
     }
 
     [Fact]
