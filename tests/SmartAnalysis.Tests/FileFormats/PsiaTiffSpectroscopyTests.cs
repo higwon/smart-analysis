@@ -459,8 +459,10 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
     }
 
     [Fact]
-    public async Task More_than_one_spectrum_in_a_file_is_refused_rather_than_read_as_the_first()
+    public async Task Several_spectra_in_a_file_read_as_a_map_of_curves()
     {
+        // The payload is a sequence of spectra, each channel-planar. Three points, each a distinct pair of ramps,
+        // so a stride that mixed spectra together could not produce these.
         var path = NewPath();
         PsiaTiffTestWriter.WriteSpectroscopyFile(
             path,
@@ -472,12 +474,198 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
                 ],
                 dataPoints: Points,
                 spectroscopyPoints: 3),
-            Planar(Float, Ramp(0, 1), Ramp(1000, 1), Ramp(0, 1), Ramp(1000, 1), Ramp(0, 1), Ramp(1000, 1)));
+            Planar(Float,
+                Ramp(0, 1), Ramp(1000, 1),      // point 0
+                Ramp(100, 1), Ramp(2000, 1),    // point 1
+                Ramp(200, 1), Ramp(3000, 1)));  // point 2
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        Assert.Equal(3, map.PointCount);
+        Assert.Equal(Points, map.SampleCount);
+
+        for (int point = 0; point < 3; point++)
+        {
+            Assert.Equal(Ramp(point * 100, 1).Select(v => (float)v).ToArray(), map.SeparationAt(point).ToArray());
+            Assert.Equal(Ramp(1000 + (point * 1000), 1).Select(v => (float)v).ToArray(), map.ForceAt(point).ToArray());
+        }
+    }
+
+    [Fact]
+    public async Task A_single_spectrum_is_still_a_curve_not_a_one_point_map()
+    {
+        // The layouts are the same and the map is just the curve case repeated, so the only thing that may differ
+        // is the type handed back. A one-curve map would break every caller that takes a ForceCurveDataset.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 1),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        Assert.IsType<ForceCurveDataset>(result.Dataset);
+        result.Dataset!.Dispose();
+    }
+
+    [Fact]
+    public async Task A_volume_map_carries_the_grid_the_instrument_recorded()
+    {
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 6,
+                volumeImage: true,
+                pointsPerX: 3,
+                scanSizeX: 3.0,
+                scanSizeY: 2.0,
+                offsetX: -1.5,
+                offsetY: -1.0),
+            Planar(Float, Enumerable.Repeat(Ramp(0, 1), 12).ToArray()));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        Assert.True(map.IsGrid);
+        var grid = map.Geometry!;
+        Assert.Equal(3, grid.Columns);
+        Assert.Equal(2, grid.Rows);   // 6 spectra across a 3-wide grid
+        Assert.Equal("um", grid.LengthUnit.Symbol);
+
+        // Points run along X first, and a position is the centre of its cell.
+        Assert.Equal((-1.0, -0.5), grid.PositionOf(0));
+        Assert.Equal((0.0, -0.5), grid.PositionOf(1));
+        Assert.Equal((-1.0, 0.5), grid.PositionOf(3)); // first point of the second row
+    }
+
+    [Fact]
+    public async Task Points_the_instrument_placed_by_hand_get_no_invented_grid()
+    {
+        // A non-volume acquisition writes sentinel extents. Turning those into a grid would place curves at
+        // positions on the sample where nothing was measured — and they would look like real coordinates.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 4,
+                volumeImage: false,     // the instrument says this was not a grid...
+                pointsPerX: 0,
+                scanSizeX: -1,          // ...and writes the sentinel extents that go with it
+                scanSizeY: -1),
+            Planar(Float, Enumerable.Repeat(Ramp(0, 1), 8).ToArray()));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        Assert.Equal(4, map.PointCount);
+        Assert.False(map.IsGrid);
+        Assert.Null(map.Geometry);
+    }
+
+    [Fact]
+    public async Task A_grid_width_that_does_not_divide_the_points_is_no_grid_at_all()
+    {
+        // 7 spectra across a 3-wide grid leaves a partial last row. Rounding it up or down would misplace every
+        // point in that row, so the geometry is dropped rather than guessed — the curves are still all there.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 7,
+                volumeImage: true,
+                pointsPerX: 3,
+                scanSizeX: 3.0,
+                scanSizeY: 3.0),
+            Planar(Float, Enumerable.Repeat(Ramp(0, 1), 14).ToArray()));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        Assert.Equal(7, map.PointCount);
+        Assert.False(map.IsGrid);
+    }
+
+    [Fact]
+    public async Task A_deflection_map_is_converted_point_by_point()
+    {
+        // The calibration is the probe's, so it applies to every curve in the acquisition, not just the first.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Height", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Vertical (A-B)", "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 2,
+                forceConstant: 2.0,
+                sensitivity: 100.0),
+            Planar(Float, Ramp(0, 1), Ramp(5, 0), Ramp(0, 1), Ramp(5, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        Assert.Equal(StandardUnits.Nanonewton.Symbol, map.ForceChannel.Unit.Symbol);
+        for (int point = 0; point < 2; point++)
+        {
+            foreach (var force in map.ForceAt(point).ToArray())
+            {
+                Assert.Equal(100f, force, 3);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_map_payload_must_hold_every_spectrum_it_declares()
+    {
+        // The size check counts spectra too: two points declared, one written.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 2),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1)));
 
         var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(FileReadErrorKind.UnsupportedImageType, result.Error!.Kind);
+        Assert.Equal(FileReadErrorKind.Truncated, result.Error!.Kind);
     }
 
     [Fact]

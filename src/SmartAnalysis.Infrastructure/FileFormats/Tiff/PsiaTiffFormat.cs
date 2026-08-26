@@ -159,6 +159,12 @@ internal sealed record PsiaSpectroscopyHeader(
     IReadOnlyList<double> Offsets,
     double ForceConstantNewtonPerMetre,
     double SensitivityVoltPerMicrometre,
+    bool IsVolumeImage,
+    int PointsPerX,
+    double ScanSizeX,
+    double ScanSizeY,
+    double OffsetX,
+    double OffsetY,
     int? DataType)
 {
     /// <summary>Channel slots in the struct, always written whether or not they are used.</summary>
@@ -216,12 +222,15 @@ internal sealed record PsiaSpectroscopyHeader(
         var offsets = new double[LineSlots];
         double forceConstant = 0;
         double sensitivity = 0;
+        bool volumeImage = false;
+        int pointsPerX = 0;
+        double scanX = 0, scanY = 0, offsetX = 0, offsetY = 0;
         // Each trailing field is gated on its own reach, so a header that stops short of ForceConstant still
         // yields the offsets that precede it rather than silently zeroing them.
         if (headerBytes.Length >= OffsetsEndBytes)
         {
             _ = r.ReadBytes(4 * sizeof(float));           // drive periods / speeds
-            _ = r.ReadInt32();                            // VolumeImage
+            volumeImage = r.ReadInt32() != 0;
             for (int i = 0; i < LineSlots; i++)
             {
                 offsets[i] = r.ReadDouble();
@@ -231,9 +240,12 @@ internal sealed record PsiaSpectroscopyHeader(
             {
                 _ = r.ReadBytes(LineSlots * sizeof(int)); // LogScale[8]
                 _ = r.ReadBytes(LineSlots * sizeof(int)); // Square[8]
-                _ = r.ReadInt32();                        // PerXPoint
+                pointsPerX = r.ReadInt32();
                 _ = r.ReadInt32();                        // ReferenceImage
-                _ = r.ReadBytes(4 * sizeof(double));      // scan size / offset
+                scanX = r.ReadDouble();
+                scanY = r.ReadDouble();
+                offsetX = r.ReadDouble();
+                offsetY = r.ReadDouble();
                 forceConstant = r.ReadDouble();
 
                 if (headerBytes.Length >= SensitivityBytes)
@@ -248,7 +260,8 @@ internal sealed record PsiaSpectroscopyHeader(
             : null;
 
         return new PsiaSpectroscopyHeader(
-            lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant, sensitivity, dataType);
+            lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant, sensitivity,
+            volumeImage, pointsPerX, scanX, scanY, offsetX, offsetY, dataType);
     }
 
     private static string ReadFixedString(BinaryReader r, int charCount)
