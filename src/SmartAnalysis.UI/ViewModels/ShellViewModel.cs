@@ -38,6 +38,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IWorkspacePathPicker _workspacePicker;
     private readonly IUnsavedChangesPrompt _unsavedPrompt;
     private readonly AsyncRelayCommand _runStatistics;
+    private readonly AsyncRelayCommand _extractPoint;
     private readonly RelayCommand _save;
     private string? _workspacePath;   // where this workspace was last saved/opened (Save writes here silently)
     private bool _suppressDirty;      // guards the dirty flag during an in-place Open
@@ -128,6 +129,7 @@ public sealed class ShellViewModel : ObservableObject
         // registry opens the launcher with no shell edits (the U08 goal); an empty launcher stays disabled.
         ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => LauncherItems.Count > 0);
         _runStatistics = new AsyncRelayCommand(RunStatisticsAsync, () => HasActiveImage, OnCommandError);
+        _extractPoint = new AsyncRelayCommand(ExtractPointAsync, () => IsForceVolume, OnCommandError);
         ExitCompareCommand = new RelayCommand(() => _workspace.SetComparison([]), () => IsBeforeAfter);
 
         // Topology changes (datasets added/removed) rebuild the tree; an active/comparison change only
@@ -881,6 +883,65 @@ public sealed class ShellViewModel : ObservableObject
     /// </summary>
     public bool ShowCurveOnStage => IsSpectroscopy && !HasReferenceSurface;
 
+    /// <summary>
+    /// The Inspector previews the selected point's curve only when the stage is showing the surface instead —
+    /// a map with no surface already has the curve on the stage, and drawing it twice says nothing new.
+    /// </summary>
+    public bool ShowCurveInInspector => IsForceVolume && !ShowCurveOnStage;
+
+    /// <summary>
+    /// The placeholder is for having nothing to inspect, not for the active dataset being something other than
+    /// an image. A map or a curve has properties; telling its viewer to "select an image" is just wrong.
+    /// </summary>
+    public bool HasNothingToInspect => !HasActiveImage && !IsSpectroscopy;
+
+    /// <summary>
+    /// Derives a force curve from the point the viewer has selected (A39) — the explicit step from inspecting a
+    /// curve to working on it. The Inspector holds the selection, so nothing has to be typed into a form; the
+    /// channel pair goes along, so what was on screen is what gets analysed. A map that kept no channels sends
+    /// the sentinel instead of an index into a set that does not exist.
+    /// </summary>
+    public ICommand ExtractPointCommand => _extractPoint;
+
+    private async Task ExtractPointAsync()
+    {
+        if (_activeForceVolume is null)
+        {
+            return;
+        }
+
+        bool kept = SpectroscopyChannels is not null;
+        var result = await _launcher.RunAsync(
+            "force-volume.extract-point",
+            new Dictionary<string, object?>
+            {
+                ["point"] = _selectedMapPoint,
+                ["xChannel"] = kept ? _selectedXChannel : -1,
+                ["yChannel"] = kept ? _selectedYChannel : -1,
+            }).ConfigureAwait(true);
+
+        if (!result.Success)
+        {
+            StatusMessage = result.Error;
+            OnPropertyChanged(nameof(HasStatus));
+        }
+    }
+
+    /// <summary>How much of the sample the map covers, in its own terms: the grid when it has one, else points.</summary>
+    public string MapSummary
+    {
+        get
+        {
+            if (_activeForceVolume is not { } map)
+            {
+                return string.Empty;
+            }
+
+            string points = $"{map.PointCount} point{(map.PointCount == 1 ? string.Empty : "s")}";
+            return map.Geometry is { } grid ? $"{grid.Columns} × {grid.Rows} grid · {points}" : $"{points} · no grid";
+        }
+    }
+
     /// <summary>An empty bar is worse than no bar: a plain curve of the designated pair has nothing to say.</summary>
     public bool ShowSpectroscopyToolbar => IsSpectroscopy && (IsForceVolume || SpectroscopyLabel.Length > 0);
 
@@ -1024,6 +1085,9 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(SpectroscopyReferenceImage));
         OnPropertyChanged(nameof(HasReferenceSurface));
         OnPropertyChanged(nameof(ShowCurveOnStage));
+        OnPropertyChanged(nameof(ShowCurveInInspector));
+        OnPropertyChanged(nameof(HasNothingToInspect));
+        OnPropertyChanged(nameof(MapSummary));
         OnPropertyChanged(nameof(PointMarkers));
         OnPropertyChanged(nameof(SpectroscopyLabel));
         OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
@@ -1471,6 +1535,7 @@ public sealed class ShellViewModel : ObservableObject
         RoiChanged?.Invoke(this, EventArgs.Empty);
         (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
         _runStatistics.RaiseCanExecuteChanged();
+        _extractPoint.RaiseCanExecuteChanged();
         (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
         ImagesChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1589,14 +1654,27 @@ public sealed class ShellViewModel : ObservableObject
         if (dataset is ScanImageDataset image)
         {
             var subtitle = $"2D scan · {image.X.Count} × {image.Y.Count} · {image.Channel.DisplayName}";
-            var instrument = dataset.Metadata.InstrumentModel;
-            var meta = string.IsNullOrWhiteSpace(instrument) || instrument == "unknown"
-                ? dataset.Source.FormatId
-                : instrument;
-            return (subtitle, meta);
+            return (subtitle, Instrument(dataset));
+        }
+
+        if (dataset is ForceVolumeDataset map)
+        {
+            string extent = map.Geometry is { } grid ? $"{grid.Columns} × {grid.Rows}" : $"{map.PointCount} points";
+            return ($"Force volume · {extent} · {map.ForceChannel.DisplayName}", Instrument(dataset));
+        }
+
+        if (dataset is ForceCurveDataset curve)
+        {
+            return ($"Force curve · {curve.Length} samples · {curve.ForceChannel.DisplayName}", Instrument(dataset));
         }
 
         return (dataset.GetType().Name, dataset.Source.FormatId);
+    }
+
+    private static string Instrument(AfmDataset dataset)
+    {
+        var model = dataset.Metadata.InstrumentModel;
+        return string.IsNullOrWhiteSpace(model) || model == "unknown" ? dataset.Source.FormatId : model;
     }
 
     private static string FriendlyOp(string operationId)
