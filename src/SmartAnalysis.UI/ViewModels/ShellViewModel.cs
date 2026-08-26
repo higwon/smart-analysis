@@ -852,7 +852,9 @@ public sealed class ShellViewModel : ObservableObject
     /// <para>
     /// Those points are <b>not</b> position-less, though: the file records each one's measured coordinates
     /// (tag <c>0xC506</c>, after the header struct), and 25 of the sample files carry real ones — one is
-    /// literally a diagonal. Drawing them where they actually are is <b>FF13</b>; this grid is the regular case.
+    /// literally a diagonal. Most files also embed the <b>reference image</b> the map was measured on (tag
+    /// <c>0xC502</c>, same IFD). Drawing the points where they are is <b>FF13</b>, over that surface is
+    /// <b>FF14</b>; this grid is the regular case, standing in until then.
     /// </para>
     /// </summary>
     public IReadOnlyList<MapCellViewModel> MapCells { get; private set; } = [];
