@@ -122,7 +122,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
         }
 
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
-        int curves = 0, maps = 0, withSurface = 0;
+        int curves = 0, maps = 0, withSurface = 0, withLayout = 0;
         foreach (var path in Directory.EnumerateFiles(dir, "*.tiff", SearchOption.AllDirectories).OrderBy(p => p))
         {
             var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
@@ -207,6 +207,17 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
                     withSurface++;
                 }
 
+                if (map.PointLayout is { } layout)
+                {
+                    var xs = layout.Positions.Select(p => p.X).ToArray();
+                    var ys = layout.Positions.Select(p => p.Y).ToArray();
+                    output.WriteLine("        points: " + layout.Count + " at x " + xs.Min().ToString("G4")
+                        + ".." + xs.Max().ToString("G4") + ", y " + ys.Min().ToString("G4") + ".."
+                        + ys.Max().ToString("G4") + " " + layout.LengthUnit.Symbol);
+                    Assert.Equal(map.PointCount, layout.Count);
+                    withLayout++;
+                }
+
                 maps++;
             }
             else if (result.IsSuccess)
@@ -223,7 +234,7 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
             }
         }
 
-        output.WriteLine($"--- {curves} curves, {maps} maps, {withSurface} with a reference surface ---");
+        output.WriteLine($"--- {curves} curves, {maps} maps, {withSurface} with a reference surface, {withLayout} with recorded positions ---");
         // Whether a map is present depends on which sample set is mounted, so requiring one would assert about
         // the folder rather than the reader. What must hold is that spectroscopy reads as force data at all.
         Assert.True(curves + maps > 0, "Expected at least one spectroscopy sample to read as a force curve or map.");

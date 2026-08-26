@@ -31,7 +31,8 @@ internal static class PsiaTiffTestWriter
         string unit,
         string sourceName,
         string imageMode,
-        int dataType)
+        int dataType,
+        double angle = 0)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms, Encoding.Unicode);
@@ -44,7 +45,7 @@ internal static class PsiaTiffTestWriter
         w.Write(0);              // FlattenOrder
         w.Write(width);
         w.Write(height);
-        w.Write(0.0);            // Angle
+        w.Write(angle);
         w.Write(0);              // SineScan
         w.Write(0.0);            // OverScan
         w.Write(0);              // FastScanDir
@@ -162,6 +163,9 @@ internal static class PsiaTiffTestWriter
     /// <summary>Where the payload's element type sits in a full header.</summary>
     public const int PayloadDataTypeOffset = 1108;
 
+    /// <summary>Where the per-point (PosX, PosY, Time) records begin — right after the header struct.</summary>
+    public const int PointRecordsOffset = 1208;
+
     /// <summary>Builds a spectroscopy header (tag 0xC506) with the eight fixed channel slots.</summary>
     public static byte[] BuildSpectroscopyHeader(
         SpectroscopyLine[] lines,
@@ -176,7 +180,8 @@ internal static class PsiaTiffTestWriter
         double offsetX = 0,
         double offsetY = 0,
         int? sourceCountOverride = null,
-        int? payloadDataType = null)
+        int? payloadDataType = null,
+        (float X, float Y)[]? points = null)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms, Encoding.Unicode);
@@ -229,15 +234,31 @@ internal static class PsiaTiffTestWriter
             throw new InvalidOperationException($"Test spectroscopy header is {bytes.Length} bytes, expected {SpectroscopyHeaderBytes}.");
         }
 
-        if (payloadDataType is not { } dataType)
+        // A real header runs on past Sensitivity, and the per-point records sit at a known offset inside it.
+        if (payloadDataType is null && points is null)
         {
             return bytes;
         }
 
         // A real header runs on past Sensitivity; the payload's element type sits at a known offset inside that tail.
-        var full = new byte[FullSpectroscopyHeaderBytes];
+        int needed = points is null
+            ? FullSpectroscopyHeaderBytes
+            : Math.Max(FullSpectroscopyHeaderBytes, PointRecordsOffset + (points.Length * 12));
+        var full = new byte[needed];
         bytes.CopyTo(full, 0);
-        BitConverter.GetBytes(dataType).CopyTo(full, PayloadDataTypeOffset);
+
+        if (payloadDataType is { } dataType)
+        {
+            BitConverter.GetBytes(dataType).CopyTo(full, PayloadDataTypeOffset);
+        }
+
+        for (int p = 0; points is not null && p < points.Length; p++)
+        {
+            int at = PointRecordsOffset + (p * 12);
+            BitConverter.GetBytes(points[p].X).CopyTo(full, at);
+            BitConverter.GetBytes(points[p].Y).CopyTo(full, at + 4);
+        }
+
         return full;
     }
 
