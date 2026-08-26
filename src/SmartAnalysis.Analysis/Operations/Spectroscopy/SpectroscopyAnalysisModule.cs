@@ -17,6 +17,7 @@ public static class SpectroscopyAnalysisModule
         services.AddExecutionEnvironment();
         services.AddAnalysisOperation<ApproachRetractSplitOperation>();   // A23 — the half every FD measure builds on
         services.AddAnalysisOperation<ForceDistanceMeasuresOperation>();  // A13
+        services.AddAnalysisOperation<SeparationCorrectionOperation>(); // A38 — what a contact fit should see (LD-11)
         services.AddAnalysisOperation<ModulusOperation>();                // A12
         return services;
     }
