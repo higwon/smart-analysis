@@ -36,6 +36,10 @@ public sealed class ShellForceVolumeTests
         => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
+    private static ShellViewModel NewShell(Workspace ws, IOperationLauncher launcher)
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+               launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
+
     /// <summary>A map of <paramref name="points"/> curves; point k has force samples all equal to k.</summary>
     private static ForceVolumeDataset Map(int points, ForceVolumeGeometry? geometry = null)
     {
@@ -273,6 +277,24 @@ public sealed class ShellForceVolumeTests
 
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromException<OperationRunResult>(new NotImplementedException());
+    }
+
+    private sealed class RecordingLauncher : IOperationLauncher
+    {
+        public string? RanOperation { get; private set; }
+
+        public IReadOnlyDictionary<string, object?>? RanWith { get; private set; }
+
+        public IReadOnlyList<OperationLauncherItem> ApplicableToActive() => Array.Empty<OperationLauncherItem>();
+
+        public OperationForm? GetForm(string operationId) => null;
+
+        public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+        {
+            RanOperation = operationId;
+            RanWith = values;
+            return Task.FromResult(OperationRunResult.Derived(DatasetId.New(), []));
+        }
     }
 
     private sealed class FakePersistence : IWorkspacePersistence
@@ -618,5 +640,92 @@ public sealed class ShellForceVolumeTests
 
         Assert.Contains("scan", vm.MapPointLabel);
         Assert.DoesNotContain("surface", vm.MapPointLabel);
+    }
+
+    [Fact]
+    public void A_spectroscopy_dataset_is_never_told_to_select_an_image()
+    {
+        // doc 26 §22.2: a map and a curve both have properties. The placeholder is for having nothing to
+        // inspect, not for the active dataset being something other than a 2D image.
+        var empty = NewShell(new Workspace());
+        Assert.True(empty.HasNothingToInspect);
+
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
+        Assert.False(vm.HasNothingToInspect);
+    }
+
+    [Fact]
+    public void The_map_props_say_how_much_of_the_sample_the_map_covers()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
+
+        Assert.Equal("3 × 2 grid · 6 points", vm.MapSummary);
+    }
+
+    [Fact]
+    public void A_map_with_no_grid_counts_its_points_rather_than_inventing_a_shape()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(4));
+
+        Assert.Equal("4 points · no grid", vm.MapSummary);
+    }
+
+    [Fact]
+    public void The_inspector_previews_the_curve_only_when_the_stage_is_showing_the_surface()
+    {
+        // Drawing the same curve on the stage AND in the Inspector says nothing the stage did not already say.
+        var onSurface = WithActiveMap(new Workspace(), MapOnSurface(Layout((1, 1), (3, 2))));
+        Assert.True(onSurface.ShowCurveInInspector);
+
+        var noSurface = WithActiveMap(new Workspace(), Map(3));
+        Assert.True(noSurface.ShowCurveOnStage);
+        Assert.False(noSurface.ShowCurveInInspector);
+    }
+
+    [Fact]
+    public void Extracting_a_point_carries_the_selection_and_the_pair_on_screen()
+    {
+        // The Inspector holds the selection (§22.2), so the point index is never typed into a form — and the
+        // curve that comes out is the one the viewer was looking at, channels included.
+        var launcher = new RecordingLauncher();
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = MapWithChannels(4);
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.SelectedMapPoint = 2;
+        vm.SelectedYChannel = 2;
+
+        // The recording launcher completes synchronously, so the command has run by the time Execute returns.
+        vm.ExtractPointCommand.Execute(null);
+
+        Assert.Equal("force-volume.extract-point", launcher.RanOperation);
+        Assert.Equal(2, launcher.RanWith!["point"]);
+        Assert.Equal(vm.SelectedXChannel, launcher.RanWith["xChannel"]);
+        Assert.Equal(2, launcher.RanWith["yChannel"]);
+    }
+
+    [Fact]
+    public void A_map_that_kept_no_channels_extracts_the_pair_it_designates()
+    {
+        // -1 is the operation's sentinel for "keep the designated pair". Sending 0 would be an index into a
+        // channel set the map does not have.
+        var launcher = new RecordingLauncher();
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = Map(4);
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        // The recording launcher completes synchronously, so the command has run by the time Execute returns.
+        vm.ExtractPointCommand.Execute(null);
+
+        Assert.Null(vm.SpectroscopyChannels);
+        Assert.Equal(-1, launcher.RanWith!["xChannel"]);
+        Assert.Equal(-1, launcher.RanWith["yChannel"]);
     }
 }

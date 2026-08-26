@@ -421,7 +421,7 @@
                 <Grid>
                     <!-- placeholder when no image -->
                     <StackPanel Margin="{DynamicResource SA.Pad.Panel}" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                Visibility="{Binding HasActiveImage, Converter={StaticResource NotBool2Vis}}">
+                                Visibility="{Binding HasNothingToInspect, Converter={StaticResource Bool2Vis}}">
                         <ds:IconPresenter Data="{StaticResource SA.Icon.Parameters}" Width="20" Height="20"
                                           HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Bottom2}"/>
                         <TextBlock Text="Select an image" HorizontalAlignment="Center" Style="{StaticResource SA.Text.Secondary}"/>
@@ -468,6 +468,46 @@
                             </Border>
                         </StackPanel>
                     </StackPanel>
+
+                    <!-- Map props / Curve props (doc 26 §22.2). The Inspector carries the selection: what the
+                         point measured, on which channel pair, and the one step that turns it into a dataset. -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding RoleIsDataset, Converter={StaticResource Bool2Vis}}">
+                        <StackPanel Margin="{DynamicResource SA.Pad.Panel}"
+                                    Visibility="{Binding IsSpectroscopy, Converter={StaticResource Bool2Vis}}">
+                            <TextBlock Text="DATASET" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="{Binding ActiveTitle}" Style="{StaticResource SA.Text.Title}"/>
+                            <TextBlock Text="{Binding ActiveSubtitle}" Style="{StaticResource SA.Text.Secondary}"/>
+
+                            <StackPanel Visibility="{Binding IsForceVolume, Converter={StaticResource Bool2Vis}}">
+                                <TextBlock Text="MAP" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                                <TextBlock Text="{Binding MapSummary}" Style="{StaticResource SA.Text.Numeric}"/>
+                                <TextBlock Text="{Binding MapPointLabel}" Style="{StaticResource SA.Text.Caption}"
+                                           TextWrapping="Wrap" Margin="{DynamicResource SA.Gap.Top1}"/>
+                            </StackPanel>
+
+                            <!-- The pair is a property of what you are looking at, so it lives here, not on the
+                                 viewer toolbar (§9). Hidden when the file kept no channels to choose between. -->
+                            <StackPanel Visibility="{Binding CanPickChannels, Converter={StaticResource Bool2Vis}}">
+                                <TextBlock Text="CHANNEL PAIR" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                                <TextBlock Text="X" Style="{StaticResource SA.Text.Caption}"/>
+                                <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedXChannel}"/>
+                                <TextBlock Text="Y" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Top1}"/>
+                                <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedYChannel}"/>
+                            </StackPanel>
+
+                            <!-- What this point measured. Inspection, not the Stage's subject. -->
+                            <StackPanel Visibility="{Binding ShowCurveInInspector, Converter={StaticResource Bool2Vis}}">
+                                <TextBlock Text="CURVE" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                                <ctl:AfmCurveView x:Name="InspectorCurve" Height="180"/>
+                            </StackPanel>
+
+                            <Button Content="Extract this point" Style="{StaticResource SA.Button.Primary}"
+                                    Margin="{DynamicResource SA.Gap.Top2}" HorizontalAlignment="Stretch"
+                                    Visibility="{Binding IsForceVolume, Converter={StaticResource Bool2Vis}}"
+                                    Command="{Binding ExtractPointCommand}"/>
+                        </StackPanel>
+                    </ScrollViewer>
 
                     <!-- Operation config: a semantic editor (Flatten) or the generic schema form (U08) -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto"

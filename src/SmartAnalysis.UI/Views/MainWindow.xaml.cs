@@ -575,7 +575,7 @@ public partial class MainWindow : Window
         if (_viewModel.ActiveForceCurve is { } forceCurve)
         {
             // A force curve is force against separation — its own view, not the spatial curve stage.
-            SpectroscopyCurve.Render(SpectroscopyCurveInput() ?? RenderInputFactory.ForForceCurve(forceCurve));
+            RenderSpectroscopyCurve(SpectroscopyCurveInput() ?? RenderInputFactory.ForForceCurve(forceCurve));
             SingleCurve.Clear();
             SingleImage.Clear();
             SingleSurface.Clear();
@@ -587,7 +587,7 @@ public partial class MainWindow : Window
         if (_viewModel.ActiveForceVolume is { } map)
         {
             // A map is the same force-distance plot, one point at a time.
-            SpectroscopyCurve.Render(SpectroscopyCurveInput() ?? RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
+            RenderSpectroscopyCurve(SpectroscopyCurveInput() ?? RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
             SingleCurve.Clear();
             SingleImage.Clear();
             SingleSurface.Clear();
@@ -596,7 +596,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SpectroscopyCurve.Clear();
+        ClearSpectroscopyCurve();
         if (_viewModel.ActiveCurve is { } curve)
         {
             SingleSurface.Clear();
@@ -729,6 +729,19 @@ public partial class MainWindow : Window
         }
     }
 
+    // The stage view and the Inspector preview are the same curve seen in two roles, so they never disagree.
+    private void RenderSpectroscopyCurve(CurveRenderInput input)
+    {
+        SpectroscopyCurve.Render(input);
+        InspectorCurve.Render(input);
+    }
+
+    private void ClearSpectroscopyCurve()
+    {
+        SpectroscopyCurve.Clear();
+        InspectorCurve.Clear();
+    }
+
     private void SurfacePointMarker_Clicked(object? sender, int index)
         => _viewModel.SelectedMapPoint = index;
 
@@ -744,15 +757,15 @@ public partial class MainWindow : Window
         // A channel change redraws a single curve too, not only a map point.
         if (SpectroscopyCurveInput() is { } input)
         {
-            SpectroscopyCurve.Render(input);
+            RenderSpectroscopyCurve(input);
         }
         else if (_viewModel.ActiveForceVolume is { } map)
         {
-            SpectroscopyCurve.Render(RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
+            RenderSpectroscopyCurve(RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
         }
         else if (_viewModel.ActiveForceCurve is { } curve)
         {
-            SpectroscopyCurve.Render(RenderInputFactory.ForForceCurve(curve));
+            RenderSpectroscopyCurve(RenderInputFactory.ForForceCurve(curve));
         }
     }
 }
