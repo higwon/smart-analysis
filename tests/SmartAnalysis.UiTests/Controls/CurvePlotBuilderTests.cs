@@ -81,4 +81,54 @@ public sealed class CurvePlotBuilderTests
 
         Assert.Single(plot.GetPlottables<ScottPlot.Plottables.SignalXY>()); // not accumulated
     }
+    /// <summary>A force curve: Z sweeps down and back up, so the abscissa returns on itself.</summary>
+    private static CurveRenderInput ForceCurveInput()
+    {
+        var x = new double[] { 0.6, 0.5, 0.4, 0.5, 0.6 };
+        var y = new double[] { 0, 1, 40, 1, 0 };
+        return new CurveRenderInput(
+            [new XySeries("Force", x, y)],
+            new AxisView("Z Height", "um", 0.4, 0.6, x.Length),
+            new AxisView("Force", "nN", 0, 40, x.Length));
+    }
+
+    [Fact]
+    public void A_curve_whose_abscissa_returns_on_itself_is_drawn_without_throwing()
+    {
+        // SignalXY indexes by position and REQUIRES ascending X — it throws outright on a force curve, whose Z
+        // sweeps down and back up. Every force-distance plot in the product has this shape.
+        var plot = new ScottPlot.Plot();
+
+        CurvePlotBuilder.Configure(plot, ForceCurveInput(), Theme());
+
+        Assert.Empty(plot.GetPlottables<ScottPlot.Plottables.SignalXY>());
+        Assert.Single(plot.GetPlottables<ScottPlot.Plottables.Scatter>());
+    }
+
+    [Fact]
+    public void A_non_monotonic_curve_scales_to_its_real_extent()
+    {
+        // SignalXY takes the data range from the FIRST and LAST sample. On a curve that returns to where it
+        // started that range is empty or backwards, and the trace ends up squeezed into a corner of the plot.
+        var plot = new ScottPlot.Plot();
+
+        CurvePlotBuilder.Configure(plot, ForceCurveInput(), Theme());
+        var limits = plot.Axes.GetLimits();
+
+        Assert.True(limits.Left <= 0.4 && limits.Right >= 0.6, $"X limits {limits.Left}..{limits.Right} miss the data.");
+        Assert.True(limits.Bottom <= 0 && limits.Top >= 40, $"Y limits {limits.Bottom}..{limits.Top} miss the data.");
+    }
+
+    [Fact]
+    public void An_ascending_curve_still_takes_the_fast_path()
+    {
+        // A spatial profile or a spectrum IS ascending, and SignalXY is much faster for it. The choice is made
+        // from the data, not from the caller.
+        var plot = new ScottPlot.Plot();
+
+        CurvePlotBuilder.Configure(plot, Input(1), Theme());
+
+        Assert.Single(plot.GetPlottables<ScottPlot.Plottables.SignalXY>());
+        Assert.Empty(plot.GetPlottables<ScottPlot.Plottables.Scatter>());
+    }
 }

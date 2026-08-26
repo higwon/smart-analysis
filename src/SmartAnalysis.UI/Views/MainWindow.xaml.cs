@@ -76,6 +76,8 @@ public partial class MainWindow : Window
             RefreshLineProfileChart();
         };
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        _viewModel.MapPointChanged += RedrawMapPoint;
+
         RenderImages();
     }
 
@@ -579,6 +581,21 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_viewModel.ActiveForceVolume is { } map)
+        {
+            // A map is the same force-distance plot, one point at a time.
+            MapPointCurve.Render(RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
+            SingleForceCurve.Clear();
+            SingleCurve.Clear();
+            SingleImage.Clear();
+            SingleSurface.Clear();
+            BeforeImageView.Clear();
+            AfterImageView.Clear();
+            return;
+        }
+
+        MapPointCurve.Clear();
+
         SingleForceCurve.Clear();
         if (_viewModel.ActiveCurve is { } curve)
         {
@@ -686,5 +703,17 @@ public partial class MainWindow : Window
         }
 
         return IntPtr.Zero;
+    }
+    private void MapPointBack_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(-1);
+
+    private void MapPointForward_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(1);
+
+    // Only the plotted curve changes when the viewer steps through a map; the rest of the stage is untouched.
+    private void RedrawMapPoint()
+    {
+        if (_viewModel.ActiveForceVolume is { } map)
+        {
+            MapPointCurve.Render(RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint));
+        }
     }
 }

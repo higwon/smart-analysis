@@ -325,6 +325,28 @@
                         <!-- Spectroscopy: a force-distance plot (force against separation), not a spatial curve. -->
                         <ctl:AfmCurveView x:Name="SingleForceCurve" Margin="{DynamicResource SA.Gap.2}"
                                           Visibility="{Binding IsSingleForceCurve, Converter={StaticResource Bool2Vis}}"/>
+                        <!-- A force-volume map: the same force-distance plot, one point at a time, with the
+                             point selector docked above it so the viewer always knows WHICH curve is shown. -->
+                        <DockPanel x:Name="ForceVolumePanel" Margin="{DynamicResource SA.Gap.2}"
+                                   Visibility="{Binding IsForceVolume, Converter={StaticResource Bool2Vis}}">
+                            <Border DockPanel.Dock="Top" Background="{DynamicResource SA.Brush.Surface.Raised}"
+                                    Padding="{DynamicResource SA.Gap.2}" Margin="{DynamicResource SA.Gap.Bottom1}">
+                                <DockPanel>
+                                    <Button x:Name="MapPointBack" DockPanel.Dock="Left" Content="&#x25C0;" Width="28"
+                                            IsEnabled="{Binding CanStepMapPointBack}" Click="MapPointBack_Click"/>
+                                    <Button x:Name="MapPointForward" DockPanel.Dock="Left" Content="&#x25B6;" Width="28" Margin="{DynamicResource SA.Gap.Left1}"
+                                            IsEnabled="{Binding CanStepMapPointForward}" Click="MapPointForward_Click"/>
+                                    <Slider x:Name="MapPointSlider" DockPanel.Dock="Right" Width="220" Margin="{DynamicResource SA.Gap.Left2}"
+                                            VerticalAlignment="Center" Minimum="0" SmallChange="1" LargeChange="1"
+                                            IsSnapToTickEnabled="True" TickFrequency="1"
+                                            Maximum="{Binding MapPointMaxIndex}"
+                                            Value="{Binding SelectedMapPoint, Mode=TwoWay}"/>
+                                    <TextBlock Text="{Binding MapPointLabel}" Margin="{DynamicResource SA.Gap.Left2}"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                            </Border>
+                            <ctl:AfmCurveView x:Name="MapPointCurve"/>
+                        </DockPanel>
                         <!-- Two equal panes; each frames its image exactly like the single stage (same Gap.2 margin
                              on the AfmImageView) so the before/after images and their fixed-width palettes line up. -->
                         <Grid x:Name="CompareContent" Visibility="{Binding ShowComparePanes, Converter={StaticResource Bool2Vis}}">

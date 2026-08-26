@@ -58,6 +58,8 @@ public sealed class ShellViewModel : ObservableObject
     private ScanImageDataset? _beforeImage;
     private LineProfileDataset? _activeCurve;
     private ForceCurveDataset? _activeForceCurve;
+    private ForceVolumeDataset? _activeForceVolume;
+    private int _selectedMapPoint;
     private bool _is3D;
     private bool _isInteractiveImageEditing;
     private bool _roiEnabled;
@@ -745,6 +747,95 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>Whether the stage shows a force–distance plot (force against separation).</summary>
     public bool IsSingleForceCurve => _activeForceCurve is not null;
 
+    /// <summary>The active dataset when it is a force–volume map; the stage shows one of its curves at a time.</summary>
+    public ForceVolumeDataset? ActiveForceVolume { get => _activeForceVolume; private set => SetProperty(ref _activeForceVolume, value); }
+
+    /// <summary>Whether the stage shows a curve taken from a force–volume map.</summary>
+    public bool IsForceVolume => _activeForceVolume is not null;
+
+    /// <summary>How many curves the active map holds; zero when the active dataset is not a map.</summary>
+    public int MapPointCount => _activeForceVolume?.PointCount ?? 0;
+
+    /// <summary>The largest valid point index — what a selector's upper bound must be, not the count.</summary>
+    public int MapPointMaxIndex => Math.Max(0, MapPointCount - 1);
+
+    /// <summary>
+    /// Which curve of the active map is on the stage. Clamped to the map, so a stale index from a previous
+    /// dataset can never index past the current one.
+    /// </summary>
+    public int SelectedMapPoint
+    {
+        get => _selectedMapPoint;
+        set
+        {
+            int clamped = MapPointCount == 0 ? 0 : Math.Clamp(value, 0, MapPointCount - 1);
+            if (SetProperty(ref _selectedMapPoint, clamped))
+            {
+                OnPropertyChanged(nameof(MapPointLabel));
+                OnPropertyChanged(nameof(CanStepMapPointBack));
+                OnPropertyChanged(nameof(CanStepMapPointForward));
+                MapPointChanged?.Invoke();
+            }
+        }
+    }
+
+    /// <summary>Raised when the stage should redraw because a different curve of the map was selected.</summary>
+    public event Action? MapPointChanged;
+
+    public bool CanStepMapPointBack => MapPointCount > 0 && _selectedMapPoint > 0;
+
+    public bool CanStepMapPointForward => MapPointCount > 0 && _selectedMapPoint < MapPointCount - 1;
+
+    /// <summary>
+    /// What the viewer is looking at: which curve, and where on the sample it was measured when the map has a
+    /// grid. A map without one says so rather than showing a position it does not have.
+    /// </summary>
+    public string MapPointLabel
+    {
+        get
+        {
+            if (_activeForceVolume is not { } map)
+            {
+                return string.Empty;
+            }
+
+            string ordinal = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
+            if (map.Geometry is not { } grid)
+            {
+                return $"{ordinal} · no grid";
+            }
+
+            var (x, y) = grid.PositionOf(_selectedMapPoint);
+            int column = (_selectedMapPoint % grid.Columns) + 1;
+            int row = (_selectedMapPoint / grid.Columns) + 1;
+            return $"{ordinal} · col {column}/{grid.Columns}, row {row}/{grid.Rows} · "
+                + $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
+                + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {grid.LengthUnit.Symbol}";
+        }
+    }
+
+    public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
+
+    // Switching maps resets the selection: point 7 of the map you were looking at has nothing to do with
+    // point 7 of the next one, and a stale index would silently show an unrelated curve.
+    private void SetActiveForceVolume(ForceVolumeDataset? map)
+    {
+        bool changed = !ReferenceEquals(_activeForceVolume, map);
+        ActiveForceVolume = map;
+        if (changed)
+        {
+            _selectedMapPoint = 0;
+            OnPropertyChanged(nameof(SelectedMapPoint));
+        }
+
+        OnPropertyChanged(nameof(IsForceVolume));
+        OnPropertyChanged(nameof(MapPointCount));
+        OnPropertyChanged(nameof(MapPointMaxIndex));
+        OnPropertyChanged(nameof(MapPointLabel));
+        OnPropertyChanged(nameof(CanStepMapPointBack));
+        OnPropertyChanged(nameof(CanStepMapPointForward));
+    }
+
     /// <summary>The source image an active line-profile curve was sampled from (to render beside the curve with the
     /// read-only line), or <c>null</c> when there is none / it is no longer in the workspace.</summary>
     public ScanImageDataset? CurveSourceImage { get => _curveSourceImage; private set => SetProperty(ref _curveSourceImage, value); }
@@ -1118,6 +1209,7 @@ public sealed class ShellViewModel : ObservableObject
             ActiveImage = dataset as ScanImageDataset;
             ActiveCurve = dataset as LineProfileDataset;
             ActiveForceCurve = dataset as ForceCurveDataset;
+            SetActiveForceVolume(dataset as ForceVolumeDataset);
             BeforeImage = FirstComparisonImage(active);
             // A line-profile curve pairs with its source image + a read-only sampling line (when the source is still
             // in the workspace); any other curve (e.g. a PSD) has none and stays full-screen.
@@ -1134,6 +1226,7 @@ public sealed class ShellViewModel : ObservableObject
             ActiveImage = null;
             ActiveCurve = null;
             ActiveForceCurve = null;
+            SetActiveForceVolume(null);
             BeforeImage = null;
             CurveSourceLine = null;
             CurveSourceImage = null;

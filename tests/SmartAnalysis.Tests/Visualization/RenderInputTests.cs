@@ -276,4 +276,46 @@ public sealed class RenderInputTests
         => Assert.Throws<ArgumentException>(() =>
             new ImageRenderInput(new float[3], 2, 2, new ValueRange(0, 1), Colormap.Grayscale,
                 new AxisView("X", "um", 0, 1, 2), new AxisView("Y", "um", 0, 1, 2), "nm"));
+    [Fact]
+    public void A_map_point_plots_that_point_and_keeps_the_map_axes()
+    {
+        // Every point shares the map channels, so stepping through a map must not relabel or rescale the axes
+        // from underneath the viewer — only the samples change.
+        using var map = Map();
+
+        var second = RenderInputFactory.ForForceVolumePoint(map, 1);
+
+        Assert.Equal("Z Scan", second.X.Title);
+        Assert.Equal("um", second.X.Unit);
+        Assert.Equal("Force", second.Y.Title);
+        Assert.Equal("nN", second.Y.Unit);
+        Assert.Equal(new[] { 100.0, 101.0, 102.0 }, second.Series[0].Y);
+        Assert.Equal(new[] { 0.0, 1.0, 2.0 }, second.Series[0].X);
+    }
+
+    [Fact]
+    public void Each_map_point_plots_its_own_samples()
+    {
+        using var map = Map();
+
+        Assert.Equal(new[] { 0.0, 1.0, 2.0 }, RenderInputFactory.ForForceVolumePoint(map, 0).Series[0].Y);
+        Assert.Equal(new[] { 100.0, 101.0, 102.0 }, RenderInputFactory.ForForceVolumePoint(map, 1).Series[0].Y);
+    }
+
+    [Fact]
+    public void A_point_past_the_map_is_refused()
+        => Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            using var map = Map();
+            RenderInputFactory.ForForceVolumePoint(map, 2);
+        });
+
+    private static ForceVolumeDataset Map()
+        => new(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership([0f, 1f, 2f, 0f, 1f, 2f], 3, 2),
+            ScanBuffer<float>.TakeOwnership([0f, 1f, 2f, 100f, 101f, 102f], 3, 2),
+            new ChannelDescriptor("separation", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+            new ChannelDescriptor("force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            null, ScanMetadata.Unknown, ProvenanceRecord.Root);
 }

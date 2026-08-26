@@ -37,10 +37,28 @@ public static class CurvePlotBuilder
         {
             var s = input.Series[i];
             // ToArray copies the borrowed ReadOnlyMemory — ScottPlot owns the copy; we retain nothing (V02/ADR-011).
-            var line = plot.Add.SignalXY(s.X.ToArray(), s.Y.ToArray());
-            line.LegendText = s.Name;
-            line.Color = palette[i % palette.Length];
-            line.LineWidth = 1.5f;
+            var xs = s.X.ToArray();
+            var ys = s.Y.ToArray();
+
+            // SignalXY is the fast path, but it REQUIRES ascending X: it indexes by position and takes the data
+            // range from the first and last sample. A force curve sweeps Z down and back up, so its abscissa is
+            // never ascending — SignalXY throws on it, and where it does not it would report a range running
+            // backwards. Anything non-monotonic gets the general scatter line instead.
+            if (IsAscending(xs))
+            {
+                var signal = plot.Add.SignalXY(xs, ys);
+                signal.LegendText = s.Name;
+                signal.Color = palette[i % palette.Length];
+                signal.LineWidth = 1.5f;
+            }
+            else
+            {
+                var scatter = plot.Add.ScatterLine(xs, ys);
+                scatter.LegendText = s.Name;
+                scatter.Color = palette[i % palette.Length];
+                scatter.LineWidth = 1.5f;
+            }
+
         }
 
         if (input.Series.Count > 1)
@@ -59,5 +77,19 @@ public static class CurvePlotBuilder
             marker.LineWidth = 1.5f;
             marker.LinePattern = ScottPlot.LinePattern.Dashed;
         }
+    }
+    // Strictly ascending, which is what SignalXY needs. A single non-finite sample makes the answer false,
+    // because SignalXY cannot order what it cannot compare.
+    private static bool IsAscending(IReadOnlyList<double> xs)
+    {
+        for (int i = 1; i < xs.Count; i++)
+        {
+            if (!(xs[i] > xs[i - 1]))
+            {
+                return false;
+            }
+        }
+
+        return xs.Count == 0 || double.IsFinite(xs[0]);
     }
 }
