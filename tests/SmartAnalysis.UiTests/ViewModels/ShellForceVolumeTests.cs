@@ -452,4 +452,80 @@ public sealed class ShellForceVolumeTests
         Assert.Equal(2, vm.SelectedYChannel);   // Force, not position 1
         Assert.True(vm.IsDesignatedChannelPair);
     }
+    [Fact]
+    public void A_grid_map_offers_a_cell_for_every_point()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
+
+        Assert.True(vm.HasMapGrid);
+        Assert.Equal(6, vm.MapCells.Count);
+        Assert.Equal(3, vm.MapGridColumns);
+
+        // Cells run along X first, the same order the payload stores its spectra in.
+        Assert.Equal((1, 1), (vm.MapCells[0].Column, vm.MapCells[0].Row));
+        Assert.Equal((3, 1), (vm.MapCells[2].Column, vm.MapCells[2].Row));
+        Assert.Equal((1, 2), (vm.MapCells[3].Column, vm.MapCells[3].Row));
+    }
+
+    [Fact]
+    public void A_cell_says_where_on_the_sample_it_is()
+    {
+        // The whole point of picking spatially: the cell has to mean a place, not just an ordinal.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
+
+        Assert.Contains("(0, 0.5)", vm.MapCells[4].Tooltip);
+        Assert.Contains("um", vm.MapCells[4].Tooltip);
+    }
+
+    [Fact]
+    public void Exactly_one_cell_is_selected_and_it_is_the_one_on_the_stage()
+    {
+        // A picker highlighting a different point than the plot is worse than no picker.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
+
+        Assert.Equal(0, vm.MapCells.Count(c => c.IsSelected) - 1);
+        Assert.True(vm.MapCells[0].IsSelected);
+
+        vm.SelectedMapPoint = 4;
+
+        Assert.Single(vm.MapCells.Where(c => c.IsSelected));
+        Assert.True(vm.MapCells[4].IsSelected);
+        Assert.False(vm.MapCells[0].IsSelected);
+    }
+
+    [Fact]
+    public void A_map_with_no_grid_draws_no_picker()
+    {
+        // Hand-placed points have no layout. Laying them out in a rectangle would imply a spatial arrangement
+        // the instrument never recorded — the same reason the geometry itself is nullable.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(4));
+
+        Assert.False(vm.HasMapGrid);
+        Assert.Empty(vm.MapCells);
+        Assert.Equal(0, vm.MapGridColumns);
+    }
+
+    [Fact]
+    public void The_picker_is_rebuilt_for_the_next_map()
+    {
+        var ws = new Workspace();
+        var first = Map(6, Grid(3, 2));
+        var second = Map(4, Grid(2, 2));
+        var vm = NewShell(ws);
+        ws.Add(first);
+        ws.Add(second);
+
+        ws.SetActive(first.Id);
+        Assert.Equal(6, vm.MapCells.Count);
+
+        ws.SetActive(second.Id);
+
+        Assert.Equal(4, vm.MapCells.Count);
+        Assert.Equal(2, vm.MapGridColumns);
+        Assert.True(vm.MapCells[0].IsSelected);
+    }
 }

@@ -283,4 +283,47 @@ public sealed class DesignSystemStyleTests
         Assert.True(missing.Count == 0,
             "Referenced brush tokens with no palette definition:\n" + string.Join("\n", missing));
     }
+    [Fact]
+    public void Every_referenced_design_token_actually_exists()
+    {
+        // A DynamicResource whose key is not defined resolves to NOTHING, silently: the margin, brush or size
+        // simply does not apply and the element renders with a default. Nothing throws, nothing logs, and the
+        // no-hardcoded-values guard above is happy because the value IS a token reference — it just does not
+        // exist. `SA.Gap.Left1` and `SA.Gap.Top1` were referenced this way and never defined.
+        var defined = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(UiProjectDir(), "DesignSystem"), "*.xaml", SearchOption.AllDirectories))
+        {
+            foreach (var element in XDocument.Load(file).Descendants())
+            {
+                var key = element.Attributes().FirstOrDefault(a => a.Name.LocalName == "Key")?.Value;
+                if (key is { Length: > 0 })
+                {
+                    defined.Add(key);
+                }
+            }
+        }
+
+        var reference = new Regex(@"{(?:Dynamic|Static)Resources+(SA.[A-Za-z0-9._]+)s*}");
+        var missing = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(UiProjectDir(), "*.xaml", SearchOption.AllDirectories))
+        {
+            foreach (var element in XDocument.Load(file).Descendants())
+            {
+                foreach (var attr in element.Attributes())
+                {
+                    foreach (Match m in reference.Matches(attr.Value))
+                    {
+                        if (!defined.Contains(m.Groups[1].Value))
+                        {
+                            missing.Add($"{Path.GetFileName(file)}: {attr.Name.LocalName} references '{m.Groups[1].Value}'");
+                        }
+                    }
+                }
+            }
+        }
+
+        Assert.True(missing.Count == 0,
+            "These SA.* resource keys are referenced but never defined, so they resolve to nothing:" +
+            Environment.NewLine + string.Join(Environment.NewLine, missing.Distinct()));
+    }
 }

@@ -780,6 +780,7 @@ public sealed class ShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(SpectroscopyLabel));
                 OnPropertyChanged(nameof(CanStepMapPointBack));
                 OnPropertyChanged(nameof(CanStepMapPointForward));
+                MarkSelectedCell();
                 MapPointChanged?.Invoke();
             }
         }
@@ -841,6 +842,54 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(SpectroscopyLabel));
         OnPropertyChanged(nameof(CanStepMapPointBack));
         OnPropertyChanged(nameof(CanStepMapPointForward));
+        RebuildMapCells();
+    }
+
+    /// <summary>
+    /// The map's points laid out as a clickable grid, so a curve can be chosen by <b>where it was measured</b>
+    /// rather than by an index. Empty when the map has no grid — hand-placed points have no layout to draw,
+    /// and arranging them in a rectangle would imply a spatial arrangement the instrument never recorded.
+    /// </summary>
+    public IReadOnlyList<MapCellViewModel> MapCells { get; private set; } = [];
+
+    /// <summary>Whether there is a grid worth drawing.</summary>
+    public bool HasMapGrid => MapCells.Count > 0;
+
+    /// <summary>How wide to lay the picker out.</summary>
+    public int MapGridColumns => _activeForceVolume?.Geometry?.Columns ?? 0;
+
+    private void RebuildMapCells()
+    {
+        var cells = new List<MapCellViewModel>();
+        if (_activeForceVolume is { Geometry: { } grid })
+        {
+            for (int i = 0; i < grid.PointCount; i++)
+            {
+                var (x, y) = grid.PositionOf(i);
+                cells.Add(new MapCellViewModel(
+                    i,
+                    (i % grid.Columns) + 1,
+                    (i / grid.Columns) + 1,
+                    $"Point {i + 1} · ({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
+                    + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {grid.LengthUnit.Symbol}"));
+            }
+        }
+
+        MapCells = cells;
+        OnPropertyChanged(nameof(MapCells));
+        OnPropertyChanged(nameof(HasMapGrid));
+        OnPropertyChanged(nameof(MapGridColumns));
+        MarkSelectedCell();
+    }
+
+    // Exactly one cell is selected, and it is the one on the stage — a picker showing a different point than
+    // the plot is worse than no picker.
+    private void MarkSelectedCell()
+    {
+        foreach (var cell in MapCells)
+        {
+            cell.IsSelected = cell.Index == _selectedMapPoint;
+        }
     }
 
     /// <summary>Whether the stage shows spectroscopy at all — a single force curve or a map.</summary>
