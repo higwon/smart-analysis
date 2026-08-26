@@ -363,6 +363,10 @@
                             <!-- Pick a curve by where it was measured, not by an index. Only drawn when the
                                  map has a grid: hand-placed points have no layout, and laying them out in a
                                  rectangle would imply an arrangement the instrument never recorded. -->
+                            <!-- The surface the points were placed on, when the file carried one. -->
+                            <ctl:AfmImageView x:Name="SpectroscopySurface" DockPanel.Dock="Right" Width="220"
+                                              Margin="{DynamicResource SA.Gap.Left2}"
+                                              Visibility="{Binding HasReferenceSurface, Converter={StaticResource Bool2Vis}}"/>
                             <Border DockPanel.Dock="Right" Margin="{DynamicResource SA.Gap.Left2}"
                                     VerticalAlignment="Top"
                                     Visibility="{Binding HasMapGrid, Converter={StaticResource Bool2Vis}}">

@@ -37,7 +37,8 @@ public sealed class ForceVolumeDataset : AfmDataset
         ForceVolumeGeometry? geometry,
         ScanMetadata metadata,
         ProvenanceRecord provenance,
-        SpectroscopyChannelSet? channels = null)
+        SpectroscopyChannelSet? channels = null,
+        ScanImageDataset? referenceImage = null)
         : base(id, source, metadata, provenance)
     {
         DomainGuard.NotNull(separation, nameof(separation));
@@ -76,6 +77,7 @@ public sealed class ForceVolumeDataset : AfmDataset
                 nameof(geometry));
         }
 
+        ReferenceImage = referenceImage;
         AttachChannels(channels, separation.Height, separation.Width);
 
         _separation = separation;
@@ -112,6 +114,13 @@ public sealed class ForceVolumeDataset : AfmDataset
     /// </summary>
     public SpectroscopyChannelSet? Channels { get; private set; }
 
+    /// <summary>
+    /// The surface the acquisition was measured on, when the file carried one. A PSIA spectroscopy file
+    /// commonly embeds a 2D scan in the <b>same</b> IFD (tag <c>0xC502</c>) — the reference image the
+    /// instrument showed while the points were placed. Owned by this dataset, so it lives and dies with it.
+    /// </summary>
+    public ScanImageDataset? ReferenceImage { get; }
+
     private void AttachChannels(SpectroscopyChannelSet? channels, int pointCount, int sampleCount)
     {
         if (channels is null)
@@ -136,6 +145,7 @@ public sealed class ForceVolumeDataset : AfmDataset
         _separation.Dispose();
         _force.Dispose(); // distinct instances guaranteed at construction
         Channels?.Dispose();
+        ReferenceImage?.Dispose();
     }
 
     private int Offset(int pointIndex)

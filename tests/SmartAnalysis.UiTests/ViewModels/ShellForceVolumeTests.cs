@@ -528,4 +528,53 @@ public sealed class ShellForceVolumeTests
         Assert.Equal(2, vm.MapGridColumns);
         Assert.True(vm.MapCells[0].IsSelected);
     }
+    private static ScanImageDataset Surface()
+        => new(
+            DatasetId.New(), new DataSource("test", null),
+            new Axis("X", StandardUnits.Micrometre, 0.0, 1.0, 2),
+            new Axis("Y", StandardUnits.Micrometre, 0.0, 1.0, 2),
+            new ChannelDescriptor("Z Height", ChannelKind.Topography, StandardUnits.Nanometre),
+            ScanBuffer<float>.Allocate(2, 2),
+            ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+    private static ForceVolumeDataset MapWithSurface()
+        => new(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(new float[4 * Samples], Samples, 4),
+            ScanBuffer<float>.TakeOwnership(new float[4 * Samples], Samples, 4),
+            new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+            new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            null, ScanMetadata.Unknown, ProvenanceRecord.Root, null, Surface());
+
+    [Fact]
+    public void A_map_that_came_with_a_surface_offers_it()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithSurface());
+
+        Assert.True(vm.HasReferenceSurface);
+        Assert.NotNull(vm.SpectroscopyReferenceImage);
+        Assert.Equal("Z Height", vm.SpectroscopyReferenceImage!.Channel.Key);
+    }
+
+    [Fact]
+    public void A_previous_files_surface_does_not_linger_beside_the_next_files_curves()
+    {
+        // The surface belongs to one file. Showing the last one beside a map that has none would place those
+        // curves on a sample they were never measured on.
+        var ws = new Workspace();
+        var withSurface = MapWithSurface();
+        var without = Map(3);
+        var vm = NewShell(ws);
+        ws.Add(withSurface);
+        ws.Add(without);
+
+        ws.SetActive(withSurface.Id);
+        Assert.True(vm.HasReferenceSurface);
+
+        ws.SetActive(without.Id);
+
+        Assert.False(vm.HasReferenceSurface);
+        Assert.Null(vm.SpectroscopyReferenceImage);
+    }
 }

@@ -569,6 +569,8 @@ public partial class MainWindow : Window
             ProfileChart.Clear();
         }
 
+        RenderSpectroscopySurface();
+
         if (_viewModel.ActiveForceCurve is { } forceCurve)
         {
             // A force curve is force against separation — its own view, not the spatial curve stage.
@@ -710,6 +712,20 @@ public partial class MainWindow : Window
                 channels, _viewModel.SelectedXChannel, _viewModel.SelectedYChannel,
                 _viewModel.IsForceVolume ? _viewModel.SelectedMapPoint : 0)
             : null;
+
+    // The surface a spectroscopy file was measured on, drawn beside its curves. Cleared when there is none,
+    // so a previous file's surface cannot linger beside the next file's curves.
+    private void RenderSpectroscopySurface()
+    {
+        if (_viewModel.SpectroscopyReferenceImage is { } surface)
+        {
+            SpectroscopySurface.Render(RenderInputFactory.ForImage(surface, _viewModel.Colormap, null));
+        }
+        else
+        {
+            SpectroscopySurface.Clear();
+        }
+    }
 
     private void MapCell_Click(object sender, RoutedEventArgs e)
     {

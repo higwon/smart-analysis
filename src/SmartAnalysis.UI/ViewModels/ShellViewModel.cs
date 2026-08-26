@@ -899,6 +899,17 @@ public sealed class ShellViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// The surface the active spectroscopy dataset was measured on, when the file carried one. Most PSIA
+    /// spectroscopy files embed the 2D scan alongside the curves, so a map can be shown against the sample it
+    /// came from rather than as a bare grid of indices.
+    /// </summary>
+    public ScanImageDataset? SpectroscopyReferenceImage
+        => _activeForceVolume?.ReferenceImage ?? _activeForceCurve?.ReferenceImage;
+
+    /// <summary>Whether there is a reference surface to draw.</summary>
+    public bool HasReferenceSurface => SpectroscopyReferenceImage is not null;
+
     /// <summary>Whether the stage shows spectroscopy at all — a single force curve or a map.</summary>
     public bool IsSpectroscopy => IsSingleForceCurve || IsForceVolume;
 
@@ -1005,6 +1016,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedYChannel));
         OnPropertyChanged(nameof(IsDesignatedChannelPair));
         OnPropertyChanged(nameof(IsSpectroscopy));
+        OnPropertyChanged(nameof(SpectroscopyReferenceImage));
+        OnPropertyChanged(nameof(HasReferenceSurface));
         OnPropertyChanged(nameof(SpectroscopyLabel));
     }
 
