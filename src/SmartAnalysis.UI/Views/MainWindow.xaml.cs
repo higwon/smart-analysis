@@ -77,6 +77,7 @@ public partial class MainWindow : Window
         };
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         _viewModel.MapPointChanged += RedrawMapPoint;
+        SpectroscopySurface.PointMarkerClicked += SurfacePointMarker_Clicked;
 
         RenderImages();
     }
@@ -720,6 +721,7 @@ public partial class MainWindow : Window
         if (_viewModel.SpectroscopyReferenceImage is { } surface)
         {
             SpectroscopySurface.Render(RenderInputFactory.ForImage(surface, _viewModel.Colormap, null));
+            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
         }
         else
         {
@@ -727,13 +729,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private void MapCell_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement { Tag: int index })
-        {
-            _viewModel.SelectedMapPoint = index;
-        }
-    }
+    private void SurfacePointMarker_Clicked(object? sender, int index)
+        => _viewModel.SelectedMapPoint = index;
 
     private void MapPointBack_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(-1);
 
@@ -742,6 +739,8 @@ public partial class MainWindow : Window
     // Only the plotted curve changes when the viewer steps through a map; the rest of the stage is untouched.
     private void RedrawMapPoint()
     {
+        SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
+
         // A channel change redraws a single curve too, not only a map point.
         if (SpectroscopyCurveInput() is { } input)
         {

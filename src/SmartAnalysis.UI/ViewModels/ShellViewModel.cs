@@ -778,9 +778,9 @@ public sealed class ShellViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(MapPointLabel));
                 OnPropertyChanged(nameof(SpectroscopyLabel));
+                OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
                 OnPropertyChanged(nameof(CanStepMapPointBack));
                 OnPropertyChanged(nameof(CanStepMapPointForward));
-                MarkSelectedCell();
                 MapPointChanged?.Invoke();
             }
         }
@@ -794,8 +794,10 @@ public sealed class ShellViewModel : ObservableObject
     public bool CanStepMapPointForward => MapPointCount > 0 && _selectedMapPoint < MapPointCount - 1;
 
     /// <summary>
-    /// What the viewer is looking at: which curve, and where on the sample it was measured when the map has a
-    /// grid. A map without one says so rather than showing a position it does not have.
+    /// What the viewer is looking at: which curve, and where it was measured. The position comes from the
+    /// recorded layout whenever the file kept one, because that is the frame the markers on the stage are drawn
+    /// in — a toolbar quoting a different frame would have the stage contradict itself about one point. The
+    /// reconstructed grid is a fallback, and the label names whichever frame it is speaking in.
     /// </summary>
     public string MapPointLabel
     {
@@ -806,20 +808,33 @@ public sealed class ShellViewModel : ObservableObject
                 return string.Empty;
             }
 
-            string ordinal = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
-            if (map.Geometry is not { } grid)
+            string label = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
+            if (map.Geometry is { } cells)
             {
-                return $"{ordinal} · no grid";
+                int column = (_selectedMapPoint % cells.Columns) + 1;
+                int row = (_selectedMapPoint / cells.Columns) + 1;
+                label += $" · col {column}/{cells.Columns}, row {row}/{cells.Rows}";
             }
 
-            var (x, y) = grid.PositionOf(_selectedMapPoint);
-            int column = (_selectedMapPoint % grid.Columns) + 1;
-            int row = (_selectedMapPoint / grid.Columns) + 1;
-            return $"{ordinal} · col {column}/{grid.Columns}, row {row}/{grid.Rows} · "
-                + $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
-                + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {grid.LengthUnit.Symbol}";
+            if (map.PointLayout is { } layout && _selectedMapPoint < layout.Count)
+            {
+                var p = layout[_selectedMapPoint];
+                return $"{label} · surface {Position(p.X, p.Y, layout.LengthUnit)}";
+            }
+
+            if (map.Geometry is { } grid)
+            {
+                var (x, y) = grid.PositionOf(_selectedMapPoint);
+                return $"{label} · scan {Position(x, y, grid.LengthUnit)}";
+            }
+
+            return $"{label} · no recorded position";
         }
     }
+
+    private static string Position(double x, double y, Unit unit)
+        => $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
+            + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {unit.Symbol}";
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
 
@@ -840,63 +855,9 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(MapPointMaxIndex));
         OnPropertyChanged(nameof(MapPointLabel));
         OnPropertyChanged(nameof(SpectroscopyLabel));
+        OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
         OnPropertyChanged(nameof(CanStepMapPointBack));
         OnPropertyChanged(nameof(CanStepMapPointForward));
-        RebuildMapCells();
-    }
-
-    /// <summary>
-    /// The map's points laid out as a clickable grid, so a curve can be chosen by <b>where it was measured</b>
-    /// rather than by an index. Empty when the map has no grid, because a rectangle would imply a regular
-    /// spacing that a hand-placed point set does not have.
-    /// <para>
-    /// Those points are <b>not</b> position-less, though: the file records each one's measured coordinates
-    /// (tag <c>0xC506</c>, after the header struct), and 25 of the sample files carry real ones — one is
-    /// literally a diagonal. Most files also embed the <b>reference image</b> the map was measured on (tag
-    /// <c>0xC502</c>, same IFD). Drawing the points where they are is <b>FF13</b>, over that surface is
-    /// <b>FF14</b>; this grid is the regular case, standing in until then.
-    /// </para>
-    /// </summary>
-    public IReadOnlyList<MapCellViewModel> MapCells { get; private set; } = [];
-
-    /// <summary>Whether there is a grid worth drawing.</summary>
-    public bool HasMapGrid => MapCells.Count > 0;
-
-    /// <summary>How wide to lay the picker out.</summary>
-    public int MapGridColumns => _activeForceVolume?.Geometry?.Columns ?? 0;
-
-    private void RebuildMapCells()
-    {
-        var cells = new List<MapCellViewModel>();
-        if (_activeForceVolume is { Geometry: { } grid })
-        {
-            for (int i = 0; i < grid.PointCount; i++)
-            {
-                var (x, y) = grid.PositionOf(i);
-                cells.Add(new MapCellViewModel(
-                    i,
-                    (i % grid.Columns) + 1,
-                    (i / grid.Columns) + 1,
-                    $"Point {i + 1} · ({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
-                    + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {grid.LengthUnit.Symbol}"));
-            }
-        }
-
-        MapCells = cells;
-        OnPropertyChanged(nameof(MapCells));
-        OnPropertyChanged(nameof(HasMapGrid));
-        OnPropertyChanged(nameof(MapGridColumns));
-        MarkSelectedCell();
-    }
-
-    // Exactly one cell is selected, and it is the one on the stage — a picker showing a different point than
-    // the plot is worse than no picker.
-    private void MarkSelectedCell()
-    {
-        foreach (var cell in MapCells)
-        {
-            cell.IsSelected = cell.Index == _selectedMapPoint;
-        }
     }
 
     /// <summary>
@@ -912,6 +873,49 @@ public sealed class ShellViewModel : ObservableObject
 
     /// <summary>Whether the stage shows spectroscopy at all — a single force curve or a map.</summary>
     public bool IsSpectroscopy => IsSingleForceCurve || IsForceVolume;
+
+    /// <summary>
+    /// Whether the curve itself takes the Stage. A spectroscopy dataset that came with a surface shows the
+    /// surface (doc 26 §22.1) and keeps the curve in the Inspector; one without a surface has nothing spatial
+    /// to show, so the curve takes the Stage rather than leaving it blank.
+    /// </summary>
+    public bool ShowCurveOnStage => IsSpectroscopy && !HasReferenceSurface;
+
+    /// <summary>An empty bar is worse than no bar: a plain curve of the designated pair has nothing to say.</summary>
+    public bool ShowSpectroscopyToolbar => IsSpectroscopy && (IsForceVolume || SpectroscopyLabel.Length > 0);
+
+    /// <summary>
+    /// Where to mark each measured point on the surface, in surface <b>pixels</b> — the overlay draws in image
+    /// space. Empty when the file recorded no positions or carried no surface, so nothing is marked on a
+    /// picture that cannot place it.
+    /// </summary>
+    public IReadOnlyList<(double X, double Y)> PointMarkers
+    {
+        get
+        {
+            var layout = _activeForceVolume?.PointLayout ?? _activeForceCurve?.PointLayout;
+            if (layout is null || SpectroscopyReferenceImage is not { } surface)
+            {
+                return [];
+            }
+
+            // Positions are in the surface's own length unit; the overlay wants pixels.
+            double stepX = surface.X.Step;
+            double stepY = surface.Y.Step;
+            if (!(stepX > 0) || !(stepY > 0))
+            {
+                return [];
+            }
+
+            var markers = new List<(double X, double Y)>(layout.Count);
+            foreach (var p in layout.Positions)
+            {
+                markers.Add((p.X / stepX, p.Y / stepY));
+            }
+
+            return markers;
+        }
+    }
 
     /// <summary>
     /// What the viewer is looking at. A map adds which curve and where; a plot of some pair other than the one
@@ -989,6 +993,7 @@ public sealed class ShellViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(IsDesignatedChannelPair));
             OnPropertyChanged(nameof(SpectroscopyLabel));
+            OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
             MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
         }
     }
@@ -1018,7 +1023,10 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSpectroscopy));
         OnPropertyChanged(nameof(SpectroscopyReferenceImage));
         OnPropertyChanged(nameof(HasReferenceSurface));
+        OnPropertyChanged(nameof(ShowCurveOnStage));
+        OnPropertyChanged(nameof(PointMarkers));
         OnPropertyChanged(nameof(SpectroscopyLabel));
+        OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
     }
 
     private static int FindDesignated(SpectroscopyChannelSet? set, string? key, int fallback)

@@ -109,6 +109,7 @@ public partial class AfmImageView : UserControl, IImageView
     private void UpdateOverlay()
     {
         UpdateLineOverlay(); // the profile line tracks pan/zoom from the same call sites
+        PositionPointMarkers(); // and so do the measurement-point markers
         if (_regionPreview is not { } r || _bmpW <= 0 || _bmpH <= 0)
         {
             HideOverlay();
@@ -198,6 +199,104 @@ public partial class AfmImageView : UserControl, IImageView
         _linePreview = null;
         HideLineOverlay();
     }
+
+
+    // ---- Measurement-point markers (UX03) ----------------------------------------------------------------
+
+    private IReadOnlyList<(double X, double Y)> _pointMarkers = [];
+    private int _selectedMarker = -1;
+    private readonly List<System.Windows.Shapes.Ellipse> _markerShapes = [];
+
+    /// <summary>Raised when a marker is clicked, with its index.</summary>
+    public event EventHandler<int>? PointMarkerClicked;
+
+    /// <summary>
+    /// Shows the places a spectroscopy acquisition measured, in image-pixel space, with one marked as selected.
+    /// The markers keep a constant screen size so a dense map stays clickable at any zoom.
+    /// </summary>
+    public void SetPointMarkers(IReadOnlyList<(double X, double Y)> points, int selectedIndex)
+    {
+        _pointMarkers = points ?? [];
+        _selectedMarker = selectedIndex;
+        RebuildPointMarkers();
+    }
+
+    /// <summary>Removes the markers — a dataset with no recorded positions must not keep the last one's.</summary>
+    public void ClearPointMarkers()
+    {
+        _pointMarkers = [];
+        _selectedMarker = -1;
+        RebuildPointMarkers();
+    }
+
+    private void RebuildPointMarkers()
+    {
+        foreach (var shape in _markerShapes)
+        {
+            OverlayLayer.Children.Remove(shape);
+        }
+
+        _markerShapes.Clear();
+
+        if (_pointMarkers.Count == 0 || _bmpW <= 0 || _bmpH <= 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _pointMarkers.Count; i++)
+        {
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = MarkerSize,
+                Height = MarkerSize,
+                StrokeThickness = 1.5,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Tag = i,
+            };
+
+            // Unselected markers are hollow so they never hide the surface underneath; the selected one is
+            // filled, because "which curve am I looking at" has to be answerable at a glance.
+            dot.SetResourceReference(
+                System.Windows.Shapes.Shape.StrokeProperty,
+                i == _selectedMarker ? "SA.Brush.Accent.Primary" : "SA.Brush.Text.Secondary");
+            if (i == _selectedMarker)
+            {
+                dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "SA.Brush.Accent.Primary");
+            }
+            else
+            {
+                dot.Fill = System.Windows.Media.Brushes.Transparent;
+            }
+
+            dot.MouseLeftButtonDown += PointMarker_Click;
+            OverlayLayer.Children.Add(dot);
+            _markerShapes.Add(dot);
+        }
+
+        PositionPointMarkers();
+    }
+
+    private void PointMarker_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: int index })
+        {
+            PointMarkerClicked?.Invoke(this, index);
+            e.Handled = true; // a marker click selects a point; it must not also start a pan
+        }
+    }
+
+    private void PositionPointMarkers()
+    {
+        double s = ImgScale.ScaleX;
+        for (int i = 0; i < _markerShapes.Count; i++)
+        {
+            var (x, y) = _pointMarkers[i];
+            Canvas.SetLeft(_markerShapes[i], (x * s) + ImgTranslate.X - (MarkerSize / 2));
+            Canvas.SetTop(_markerShapes[i], (y * s) + ImgTranslate.Y - (MarkerSize / 2));
+        }
+    }
+
+    private const double MarkerSize = 9.0;
 
     private void UpdateLineOverlay()
     {
@@ -329,6 +428,7 @@ public partial class AfmImageView : UserControl, IImageView
     /// <summary>Clears the view (e.g. when there is no active image). Releases the owned bitmap.</summary>
     public void Clear()
     {
+        ClearPointMarkers();
         Img.Source = null;
         Palette.Clear();
         _bmpW = _bmpH = 0;

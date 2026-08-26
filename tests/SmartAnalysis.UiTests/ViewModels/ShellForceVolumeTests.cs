@@ -167,7 +167,7 @@ public sealed class ShellForceVolumeTests
         Assert.Contains("Point 5 of 6", vm.MapPointLabel);
         Assert.Contains("col 2/3", vm.MapPointLabel);
         Assert.Contains("row 2/2", vm.MapPointLabel);
-        Assert.Contains("(0, 0.5)", vm.MapPointLabel);
+        Assert.Contains("scan (0, 0.5)", vm.MapPointLabel);
         Assert.Contains("um", vm.MapPointLabel);
     }
 
@@ -178,7 +178,7 @@ public sealed class ShellForceVolumeTests
         var vm = WithActiveMap(ws, Map(4)); // hand-placed points: no geometry
 
         Assert.Contains("Point 1 of 4", vm.MapPointLabel);
-        Assert.Contains("no grid", vm.MapPointLabel);
+        Assert.Contains("no recorded position", vm.MapPointLabel);
     }
 
     [Fact]
@@ -452,82 +452,6 @@ public sealed class ShellForceVolumeTests
         Assert.Equal(2, vm.SelectedYChannel);   // Force, not position 1
         Assert.True(vm.IsDesignatedChannelPair);
     }
-    [Fact]
-    public void A_grid_map_offers_a_cell_for_every_point()
-    {
-        var ws = new Workspace();
-        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
-
-        Assert.True(vm.HasMapGrid);
-        Assert.Equal(6, vm.MapCells.Count);
-        Assert.Equal(3, vm.MapGridColumns);
-
-        // Cells run along X first, the same order the payload stores its spectra in.
-        Assert.Equal((1, 1), (vm.MapCells[0].Column, vm.MapCells[0].Row));
-        Assert.Equal((3, 1), (vm.MapCells[2].Column, vm.MapCells[2].Row));
-        Assert.Equal((1, 2), (vm.MapCells[3].Column, vm.MapCells[3].Row));
-    }
-
-    [Fact]
-    public void A_cell_says_where_on_the_sample_it_is()
-    {
-        // The whole point of picking spatially: the cell has to mean a place, not just an ordinal.
-        var ws = new Workspace();
-        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
-
-        Assert.Contains("(0, 0.5)", vm.MapCells[4].Tooltip);
-        Assert.Contains("um", vm.MapCells[4].Tooltip);
-    }
-
-    [Fact]
-    public void Exactly_one_cell_is_selected_and_it_is_the_one_on_the_stage()
-    {
-        // A picker highlighting a different point than the plot is worse than no picker.
-        var ws = new Workspace();
-        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
-
-        Assert.Equal(0, vm.MapCells.Count(c => c.IsSelected) - 1);
-        Assert.True(vm.MapCells[0].IsSelected);
-
-        vm.SelectedMapPoint = 4;
-
-        Assert.Single(vm.MapCells.Where(c => c.IsSelected));
-        Assert.True(vm.MapCells[4].IsSelected);
-        Assert.False(vm.MapCells[0].IsSelected);
-    }
-
-    [Fact]
-    public void A_map_with_no_grid_draws_no_picker()
-    {
-        // A rectangle would imply a regular spacing a hand-placed point set does not have. Those points do
-        // have measured coordinates in the file, but drawing them where they are is FF13, not a grid.
-        var ws = new Workspace();
-        var vm = WithActiveMap(ws, Map(4));
-
-        Assert.False(vm.HasMapGrid);
-        Assert.Empty(vm.MapCells);
-        Assert.Equal(0, vm.MapGridColumns);
-    }
-
-    [Fact]
-    public void The_picker_is_rebuilt_for_the_next_map()
-    {
-        var ws = new Workspace();
-        var first = Map(6, Grid(3, 2));
-        var second = Map(4, Grid(2, 2));
-        var vm = NewShell(ws);
-        ws.Add(first);
-        ws.Add(second);
-
-        ws.SetActive(first.Id);
-        Assert.Equal(6, vm.MapCells.Count);
-
-        ws.SetActive(second.Id);
-
-        Assert.Equal(4, vm.MapCells.Count);
-        Assert.Equal(2, vm.MapGridColumns);
-        Assert.True(vm.MapCells[0].IsSelected);
-    }
     private static ScanImageDataset Surface()
         => new(
             DatasetId.New(), new DataSource("test", null),
@@ -576,5 +500,123 @@ public sealed class ShellForceVolumeTests
 
         Assert.False(vm.HasReferenceSurface);
         Assert.Null(vm.SpectroscopyReferenceImage);
+    }
+    private static MapPointLayout Layout(params (double X, double Y)[] points)
+        => new([.. points.Select(p => new MapPointPosition(p.X, p.Y))], StandardUnits.Micrometre);
+
+    /// <summary>A map with a 4x4-pixel surface over 4x4 um, so one pixel is exactly 1 um.</summary>
+    private static ForceVolumeDataset MapOnSurface(
+        MapPointLayout? layout, int points = 2, ForceVolumeGeometry? geometry = null)
+        => new(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(new float[points * Samples], Samples, points),
+            ScanBuffer<float>.TakeOwnership(new float[points * Samples], Samples, points),
+            new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+            new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            geometry, ScanMetadata.Unknown, ProvenanceRecord.Root, null,
+            new ScanImageDataset(
+                DatasetId.New(), new DataSource("test", null),
+                new Axis("X", StandardUnits.Micrometre, 0.0, 1.0, 4),
+                new Axis("Y", StandardUnits.Micrometre, 0.0, 1.0, 4),
+                new ChannelDescriptor("Z Height", ChannelKind.Topography, StandardUnits.Nanometre),
+                ScanBuffer<float>.Allocate(4, 4), ScanMetadata.Unknown, ProvenanceRecord.Root),
+            layout);
+
+    [Fact]
+    public void The_surface_takes_the_stage_and_the_curve_does_not()
+    {
+        // doc 26 §22.1: a map is many curves measured at PLACES, so the Stage is the surface. Putting one
+        // curve there makes one of N the subject and hides that the others exist.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
+
+        Assert.True(vm.HasReferenceSurface);
+        Assert.False(vm.ShowCurveOnStage);
+    }
+
+    [Fact]
+    public void With_no_surface_the_curve_takes_the_stage_rather_than_leaving_it_blank()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(3));   // no surface
+
+        Assert.False(vm.HasReferenceSurface);
+        Assert.True(vm.ShowCurveOnStage);
+    }
+
+    [Fact]
+    public void Markers_are_the_recorded_positions_converted_to_surface_pixels()
+    {
+        // The overlay draws in image space. Handing it micrometres would scatter the marks by the pixel size.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
+
+        Assert.Equal(2, vm.PointMarkers.Count);
+        Assert.Equal((1.0, 1.0), vm.PointMarkers[0]);   // 1 um / 1 um-per-pixel
+        Assert.Equal((3.0, 2.0), vm.PointMarkers[1]);
+    }
+
+    [Fact]
+    public void Nothing_is_marked_on_a_surface_that_cannot_place_it()
+    {
+        // A map whose file recorded no positions has nothing to mark, and marking anywhere would be a claim
+        // about where it was measured.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapOnSurface(layout: null));
+
+        Assert.True(vm.HasReferenceSurface);
+        Assert.Empty(vm.PointMarkers);
+    }
+
+    [Fact]
+    public void A_map_with_positions_but_no_surface_marks_nothing()
+    {
+        var ws = new Workspace();
+        var map = new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(new float[2 * Samples], Samples, 2),
+            ScanBuffer<float>.TakeOwnership(new float[2 * Samples], Samples, 2),
+            new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Micrometre, "Z Scan"),
+            new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            null, ScanMetadata.Unknown, ProvenanceRecord.Root, null, null, Layout((1, 1), (3, 2)));
+        var vm = WithActiveMap(new Workspace(), map);
+
+        Assert.Empty(vm.PointMarkers);
+    }
+
+    [Fact]
+    public void The_toolbar_names_the_place_the_marker_is_drawn()
+    {
+        // The stage draws the RECORDED position; a toolbar quoting the reconstructed grid instead would put two
+        // coordinates on screen for one point, in two frames, with no way to tell which is which.
+        var ws = new Workspace();
+        var vm = WithActiveMap(
+            ws,
+            MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1)));
+
+        vm.SelectedMapPoint = 1;
+
+        var surface = vm.SpectroscopyReferenceImage!;
+        var (markerX, markerY) = vm.PointMarkers[1];
+        string place = FormattableString.Invariant(
+            $"({markerX * surface.X.Step:0.###}, {markerY * surface.Y.Step:0.###})");
+
+        Assert.Contains(place, vm.MapPointLabel);
+        Assert.Contains("surface", vm.MapPointLabel);
+
+        // The grid puts point 1 at (1.5, -0.5). That number must not reach the label.
+        Assert.DoesNotContain("1.5", vm.MapPointLabel);
+    }
+
+    [Fact]
+    public void Without_recorded_positions_the_label_says_which_frame_it_fell_back_to()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(6, Grid(3, 2)));
+
+        vm.SelectedMapPoint = 4;
+
+        Assert.Contains("scan", vm.MapPointLabel);
+        Assert.DoesNotContain("surface", vm.MapPointLabel);
     }
 }
