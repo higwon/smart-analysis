@@ -355,6 +355,7 @@ Active View always wins layout priority; nothing pushes the data below the fold.
 
 ---
 
+
 ## 18. Contracts to amend (after approval)
 
 - **doc 22 (IA):** rename "Parameters" region → **Inspector** (role-switching, §13); add the **Operation
@@ -366,6 +367,9 @@ Active View always wins layout priority; nothing pushes the data below the fold.
   becomes a **component with a contextual toolbar** (§9), explicitly **no ROI** in MVP.
 - **doc 17 / doc 21:** add the surface-hierarchy / Stage-first / operation-launcher principles as UX/visual
   rules; no token changes required (values from doc 23 suffice).
+- **§5 / §6 (this doc):** amended by **§22** for the spectroscopy dataset types — a force-volume map gets a
+  Stage view (surface + points) and an Inspector role (map props), and the volume image is a parameterised
+  view with an explicit *Keep as image*, not a dataset per adjustment.
 - No change to doc 11 (layering), doc 23 (tokens), doc 25 (icons), or any Domain/Application/Analysis contract.
 
 ---
@@ -413,3 +417,94 @@ premium non-WPF look in both themes (Q9–12,15), launcher-based command scaling
 role (Q4), lineage/result clarity (Q1,5), comparison as a workflow (Q8), calm expert density (Q14,16), and
 one coherent visual language that new features extend (Q17) — so the screens read as **SmartAnalysis, a real
 professional analysis product** (Q18), not "functional + a bit pretty."
+
+
+---
+
+## 22. Spectroscopy stages (UX03)
+
+Added when the spectroscopy slice landed. It is written down because the first attempt was built **without**
+it: `ForceVolumeDataset` was introduced as a dataset type with no row in §5, so there was no agreed answer to
+"what does the Stage render, what is on its toolbar, what does the Inspector show" — and controls were
+appended to the Stage one pull request at a time. The result had the map's points drawn twice (once as an
+abstract grid, once as an image), fixed-width panes fighting for room, and the *image* Inspector still showing
+"Select an image" beside a curve. §6's rule was the thing violated: a new dataset type adds a **Stage view +
+an Inspector role**, not shell improvisation.
+
+### 22.1 A map's Stage is the surface, not the curve
+
+A force–volume map is **many curves measured at places on a sample**. The place is what distinguishes them,
+so the Stage shows the **surface with the measurement points on it**, and a curve is what you get by
+*choosing* a point. Putting a single curve on the Stage inverts that: it makes one of 64 the subject and
+leaves no way to see that the other 63 exist, or where any of them is.
+
+```
+┌ viewer toolbar ───────────────────────────────────────────────────────────┐
+│ Fit  Cursor  Colormap  |  ◧ Surface / Volume  |  ◀ Point 16 of 64 ▶  Export│
+├───────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│        reference surface, points drawn at their measured positions        │
+│                     (selected point marked)                               │
+│                                                                           │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+Point selection has two routes, both landing on the same selection: **click a point on the Stage** (spatial —
+the reason the surface is there) and **◀ ▶ in the toolbar** (sequential — for stepping through without
+hunting). No separate grid widget: the points are already on the surface.
+
+A map whose file records **no positions** cannot draw this. That case falls back to the sequential route
+alone, and the Stage says so rather than inventing a layout — the same rule the nullable grid geometry
+follows.
+
+### 22.2 The Inspector carries the selection, not the Stage
+
+| Inspector role | When | Contents |
+|---|---|---|
+| **Map props** | a force–volume map is active | grid/point counts · selected point's coordinates · **channel pair** · the selected point's curve · *Extract this point* |
+| **Curve props** | a force curve is active | dataset properties · **channel pair** (when the file kept its channels) |
+
+The **channel pair** belongs here, not on the Stage toolbar: it is a property of what you are looking at, and
+the toolbar is for view manipulation (§9). The selected point's **curve preview** lives here too — it is the
+answer to "what did this point measure", which is inspection, not the Stage's subject.
+
+Extracting a point (A39) is the explicit step from *inspecting* a curve to *working on* it: it derives a
+`ForceCurveDataset`, which then owns the Stage as any curve does, with its own provenance.
+
+### 22.3 The volume image is a view, not a pile of datasets
+
+A volume image is one pixel per map point, valued by a measure computed from that point's curve — stiffness,
+adhesion, deformation, modulus, and so on. Its parameters are the measure's own (thresholds, contact model,
+probe constants), and **the user changes them and expects the picture to update**.
+
+That makes it a **parameterised Stage view over the map**, recomputed on change — *not* a derived dataset per
+adjustment. Materialising one on every threshold tweak would bury the workspace in near-identical images and
+make provenance meaningless.
+
+It therefore follows the **preview → apply** pattern this product already uses for image processing:
+
+| | |
+|---|---|
+| **Preview** | the Volume view mode. Parameters live in the Inspector; changing one recomputes the image in place. Nothing enters the workspace. |
+| **Apply** | *Keep as image* derives a real `ScanImageDataset` with a provenance step recording the measure and every parameter used. It is then an ordinary image — the existing image Stage, Inspector and operations, with no shell change. |
+
+The Surface/Volume toggle sits on the viewer toolbar because it is a view mode of the same Stage, the way the
+2D/3D toggle is for an image.
+
+### 22.4 Amendment to §5
+
+| Active dataset type | Stage renders | Viewer toolbar | Inspector default | Applicable ops (launcher) |
+|---|---|---|---|---|
+| **Force volume (map)** | **Map view** — reference surface + measurement points, selected one marked; **Surface / Volume** view modes | Fit·Cursor·Colormap·**Surface/Volume**·**◀ Point ▶**·Export | **Map props** (§22.2) | Extract Point; *Keep as image* from the Volume view |
+| **Force curve** *(sharpens the existing "Spectrum / force curve" row)* | curve view (V03) | Fit·Cursor·multi-series·Export | dataset props + channel pair | Split, Separation, FD Measures, Modulus, Compare, Export |
+
+### 22.5 Amendment to §6
+
+| Feature | Entry point | Primary Stage surface | Inspector behavior | Workspace result | Provenance |
+|---|---|---|---|---|---|
+| **Map point selection** | Stage click / toolbar ◀ ▶ | map view (marker moves) | map props (coords, curve preview) | none — selection is view state | — |
+| **Extract map point** | Launcher ▸ Process / Inspector | map → curve | curve props | derived force curve + `[source]` | step (point, grid position, channels) |
+| **Volume image** | Viewer toolbar ▸ Volume | map view (recomputed in place) | measure + its parameters | none while previewing | — |
+| **Keep as image** | Inspector ▸ Keep as image | volume view → image stage | dataset props | derived scan image | step (measure + all parameters) |
+
+Rule still satisfied: each adds a launcher entry, an Inspector role, and at most one Stage view.
