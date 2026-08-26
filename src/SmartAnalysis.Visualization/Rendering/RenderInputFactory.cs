@@ -1,3 +1,4 @@
+using SmartAnalysis.Domain.Channels;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Visualization.Colormaps;
 
@@ -68,9 +69,32 @@ public static class RenderInputFactory
     {
         ArgumentNullException.ThrowIfNull(curve);
 
-        int n = curve.Length;
-        var separation = curve.Separation.Memory.Span;
-        var force = curve.Force.Memory.Span;
+        return ForForceCurve(
+            curve.Separation.Memory.Span, curve.Force.Memory.Span,
+            curve.SeparationChannel, curve.ForceChannel, seriesName ?? curve.ForceChannel.DisplayName);
+    }
+
+    /// <summary>
+    /// One curve out of a force–volume map. Every point shares the map channels, so a plotted point differs
+    /// only in its samples — the axes stay comparable as the viewer steps through the map.
+    /// </summary>
+    public static CurveRenderInput ForForceVolumePoint(ForceVolumeDataset map, int pointIndex, string? seriesName = null)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+
+        return ForForceCurve(
+            map.SeparationAt(pointIndex).Span, map.ForceAt(pointIndex).Span,
+            map.SeparationChannel, map.ForceChannel, seriesName ?? map.ForceChannel.DisplayName);
+    }
+
+    private static CurveRenderInput ForForceCurve(
+        ReadOnlySpan<float> separation,
+        ReadOnlySpan<float> force,
+        ChannelDescriptor separationChannel,
+        ChannelDescriptor forceChannel,
+        string seriesName)
+    {
+        int n = separation.Length;
         var xs = new double[n];
         var ys = new double[n];
         double xMin = double.PositiveInfinity, xMax = double.NegativeInfinity;
@@ -105,9 +129,9 @@ public static class RenderInputFactory
             yMin = yMax = 0.0;
         }
 
-        var series = new XySeries(seriesName ?? curve.ForceChannel.DisplayName, xs, ys);
-        var xAxis = new AxisView(curve.SeparationChannel.DisplayName, curve.SeparationChannel.Unit.Symbol, xMin, xMax, n);
-        var yAxis = new AxisView(curve.ForceChannel.DisplayName, curve.ForceChannel.Unit.Symbol, yMin, yMax, n);
+        var series = new XySeries(seriesName, xs, ys);
+        var xAxis = new AxisView(separationChannel.DisplayName, separationChannel.Unit.Symbol, xMin, xMax, n);
+        var yAxis = new AxisView(forceChannel.DisplayName, forceChannel.Unit.Symbol, yMin, yMax, n);
         return new CurveRenderInput([series], xAxis, yAxis);
     }
 
