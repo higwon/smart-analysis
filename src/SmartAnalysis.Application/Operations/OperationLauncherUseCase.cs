@@ -384,6 +384,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         LineProfileDataset => DataKind.LineProfile,
         SpectrumDataset => DataKind.Spectrum,
         ForceCurveDataset => DataKind.ForceCurve,
+        ForceVolumeDataset => DataKind.ForceVolume,
         _ => null,
     };
 

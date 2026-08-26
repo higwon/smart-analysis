@@ -555,8 +555,8 @@ keeps it visible and auditable rather than hidden inside the fit.
 A dataset **as read** still carries the file's Z channel as its abscissa — `PsiaTiffReader` populates
 `ForceCurveDataset.Separation` from whatever the file flagged — so a fit run directly on it inherits the
 caveat. A dataset **derived through A38** carries the corrected coordinate, and its provenance records the
-spring constant used. The remaining gap is force-volume: A38 accepts a `ForceCurve`, so a map's point has to
-become a curve of its own before it can be corrected.
+spring constant used. A map's point reaches the same correction through A39
+(`force-volume.extract-point`), which turns it into a curve of its own with its grid position recorded.
 
 ---
 

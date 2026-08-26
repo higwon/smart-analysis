@@ -7,6 +7,9 @@ public enum DataKind
     LineProfile,
     Spectrum,
     ForceCurve,
+
+    /// <summary>Many force curves from one acquisition — a force-volume map, or a set of hand-placed points.</summary>
+    ForceVolume,
 }
 
 /// <summary>What an operation produces.</summary>
