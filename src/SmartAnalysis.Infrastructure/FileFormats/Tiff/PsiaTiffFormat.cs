@@ -61,7 +61,8 @@ internal sealed record PsiaImageHeader(
     double ZScale,
     double ZOffset,
     string Unit,
-    int DataType)
+    int DataType,
+    double Angle)
 {
     /// <summary>
     /// Parses the header bytes (tag 0xC503). Returns null if the payload is shorter than
@@ -85,7 +86,7 @@ internal sealed record PsiaImageHeader(
         _ = r.ReadInt32();                              // FlattenOrder
         int width = r.ReadInt32();
         int height = r.ReadInt32();
-        _ = r.ReadDouble();                             // Angle
+        double angle = r.ReadDouble();
         _ = r.ReadInt32();                              // SineScan
         _ = r.ReadDouble();                             // OverScan
         _ = r.ReadInt32();                              // FastScanDir
@@ -119,7 +120,7 @@ internal sealed record PsiaImageHeader(
 
         return new PsiaImageHeader(
             imageType, sourceName, imageMode, width, height,
-            xScanSize, yScanSize, xOffset, yOffset, dataGain, zScale, zOffset, unit, dataType);
+            xScanSize, yScanSize, xOffset, yOffset, dataGain, zScale, zOffset, unit, dataType, angle);
     }
 
     /// <summary>Reads a fixed-width UTF-16LE string of <paramref name="charCount"/> chars, trimmed at the first NUL.</summary>
@@ -159,6 +160,7 @@ internal sealed record PsiaSpectroscopyHeader(
     IReadOnlyList<double> Offsets,
     double ForceConstantNewtonPerMetre,
     double SensitivityVoltPerMicrometre,
+    IReadOnlyList<(float X, float Y)> RawPoints,
     bool IsVolumeImage,
     int PointsPerX,
     double ScanSizeX,
@@ -181,6 +183,16 @@ internal sealed record PsiaSpectroscopyHeader(
 
     /// <summary>Bytes needed to also reach <c>SensitivityVoltPerMicroMeter</c>, the field right after it.</summary>
     private const int SensitivityBytes = 992;
+
+    /// <summary>
+    /// Where the per-point records begin: immediately after the header struct. Each is
+    /// <c>float PosX, float PosY, float Time</c> — the position the instrument <b>measured</b> for that point,
+    /// which is not the same as one reconstructed from the grid offset and spacing.
+    /// </summary>
+    private const int PointsOffset = 1208;
+
+    /// <summary>Bytes per per-point record: PosX, PosY, Time.</summary>
+    private const int PointRecordBytes = 12;
 
     /// <summary>
     /// Absolute offset of the payload's element type. The fields between it and <c>Sensitivity</c> are not mapped,
@@ -255,12 +267,25 @@ internal sealed record PsiaSpectroscopyHeader(
             }
         }
 
+        // A file that stops before the point records simply has none; the curves are unaffected.
+        var rawPoints = new List<(float X, float Y)>();
+        if (spectPoints > 0 && headerBytes.Length >= PointsOffset + (checked(spectPoints * PointRecordBytes)))
+        {
+            for (int i = 0; i < spectPoints; i++)
+            {
+                int at = PointsOffset + (i * PointRecordBytes);
+                rawPoints.Add((
+                    BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(headerBytes.AsSpan(at))),
+                    BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(headerBytes.AsSpan(at + 4)))));
+            }
+        }
+
         int? dataType = headerBytes.Length >= DataTypeOffset + sizeof(int)
             ? BinaryPrimitives.ReadInt32LittleEndian(headerBytes.AsSpan(DataTypeOffset))
             : null;
 
         return new PsiaSpectroscopyHeader(
-            lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant, sensitivity,
+            lines, sourceCount, dataPoints, spectPoints, offsets, forceConstant, sensitivity, rawPoints,
             volumeImage, pointsPerX, scanX, scanY, offsetX, offsetY, dataType);
     }
 
