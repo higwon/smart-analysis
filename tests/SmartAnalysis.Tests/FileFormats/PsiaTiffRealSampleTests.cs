@@ -1,3 +1,4 @@
+using System.Linq;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Domain.Datasets;
 using SmartAnalysis.Domain.Units;
@@ -192,6 +193,11 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
                     }
                 }
 
+                var kept = map.Channels;
+                Assert.NotNull(kept);
+                Assert.Equal(map.PointCount, kept!.PointCount);
+                Assert.Equal(map.SampleCount, kept.SampleCount);
+                output.WriteLine("        channels: " + string.Join(", ", kept.Channels.Select(c => c.DisplayName + "[" + c.Unit.Symbol + "]")));
                 maps++;
             }
             else if (result.IsSuccess)

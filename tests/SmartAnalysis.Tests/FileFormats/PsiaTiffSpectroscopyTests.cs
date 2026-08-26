@@ -1,3 +1,4 @@
+using System.Linq;
 using SmartAnalysis.Analysis.Spectroscopy;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Domain.Channels;
@@ -873,4 +874,97 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
         Assert.True(segmentation.CountOf(SegmentKind.Retract) > 1);
     }
 
+    [Fact]
+    public async Task Every_measured_channel_is_kept_not_only_the_two_the_file_flags()
+    {
+        // Half of a typical file is channels the axis flags do not point at, and some of them are better than
+        // the flagged ones — real files carry a populated Separation while flagging the raw piezo Z Height.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Height", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                    new("Separation", "um", DataGain: 1.0, IsXAxis: false, IsYAxis: false),
+                ],
+                dataPoints: Points),
+            Planar(Float, Ramp(0, 1), Ramp(1000, 1), Ramp(500, 1)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        var channels = curve.Channels;
+        Assert.NotNull(channels);
+        Assert.Equal(3, channels!.ChannelCount);
+        Assert.Equal(["Z Height", "Force", "Separation"], channels.Channels.Select(c => c.DisplayName));
+
+        // The unflagged channel is real data, not a placeholder.
+        int separation = channels.IndexOf("Separation");
+        Assert.Equal(Ramp(500, 1).Select(v => (float)v).ToArray(), channels.At(separation, 0).ToArray());
+    }
+
+    [Fact]
+    public async Task A_deflection_channel_reads_in_force_whichever_way_it_is_reached()
+    {
+        // The designated ordinate is converted; the same channel reached through the channel set must not come
+        // back in volts, or the two routes would disagree about what was measured.
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Height", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Vertical (A-B)", "V", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                ],
+                dataPoints: Points,
+                forceConstant: 2.0,
+                sensitivity: 100.0),
+            Planar(Float, Ramp(0, 1), Ramp(5, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var curve = Assert.IsType<ForceCurveDataset>(result.Dataset);
+        var channels = curve.Channels!;
+        int deflection = channels.IndexOf("Vertical (A-B)");
+        Assert.Equal(StandardUnits.Nanonewton.Symbol, channels.Channels[deflection].Unit.Symbol);
+        foreach (var force in channels.At(deflection, 0).ToArray())
+        {
+            Assert.Equal(100f, force, 3);
+        }
+    }
+
+    [Fact]
+    public async Task A_map_keeps_every_channel_at_every_point()
+    {
+        var path = NewPath();
+        PsiaTiffTestWriter.WriteSpectroscopyFile(
+            path,
+            ImageHeader(),
+            PsiaTiffTestWriter.BuildSpectroscopyHeader(
+                [
+                    new("Z Scan", "um", DataGain: 1.0, IsXAxis: true, IsYAxis: false),
+                    new("Force", "nN", DataGain: 1.0, IsXAxis: false, IsYAxis: true),
+                    new("Current", "nA", DataGain: 1.0, IsXAxis: false, IsYAxis: false),
+                ],
+                dataPoints: Points,
+                spectroscopyPoints: 2),
+            Planar(Float,
+                Ramp(0, 1), Ramp(1000, 1), Ramp(70, 0),
+                Ramp(100, 1), Ramp(2000, 1), Ramp(80, 0)));
+
+        var result = await Reader().ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+
+        using var map = Assert.IsType<ForceVolumeDataset>(result.Dataset);
+        var channels = map.Channels!;
+        Assert.Equal(3, channels.ChannelCount);
+        Assert.Equal(2, channels.PointCount);
+
+        // The unflagged channel differs per point, so a set that stored only the first point would show 70 twice.
+        int current = channels.IndexOf("Current");
+        Assert.All(channels.At(current, 0).ToArray(), v => Assert.Equal(70f, v));
+        Assert.All(channels.At(current, 1).ToArray(), v => Assert.Equal(80f, v));
+    }
 }
