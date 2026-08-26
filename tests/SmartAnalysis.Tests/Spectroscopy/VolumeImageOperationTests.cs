@@ -7,6 +7,7 @@ using SmartAnalysis.Domain.Metadata;
 using SmartAnalysis.Domain.Provenance;
 using SmartAnalysis.Domain.Spectroscopy;
 using SmartAnalysis.Domain.Units;
+using System.Linq;
 using Xunit;
 
 namespace SmartAnalysis.Tests.Spectroscopy;
@@ -163,6 +164,31 @@ public sealed class VolumeImageOperationTests
 
         Assert.True(float.IsNaN(image.Data.Memory.Span[0]));
         Assert.True(float.IsNaN(image.Data.Memory.Span[1]));
+    }
+
+    [Fact]
+    public async Task Running_with_nothing_chosen_measures_a_pair_that_makes_sense_together()
+    {
+        // The peak force belongs to the PUSH. Defaulting the measure to MaxForce and the half to Retract would
+        // quietly report the largest force of the pull-off instead — a plausible number and a normal-looking
+        // picture, with nothing on screen saying it is not the peak of the push.
+        using var map = Map(6, Grid(3, 2));
+
+        var result = await Operation().RunAsync(
+            new OperationInput(map), new ParameterSet(new Dictionary<string, object?>()), null, CancellationToken.None);
+        using var byDefault = (ScanImageDataset)result.DerivedDataset!;
+
+        using var onApproach = await RunAsync(map, VolumeMeasure.MaxForce, CurvePhase.Approach);
+        using var onRetract = await RunAsync(map, VolumeMeasure.MaxForce, CurvePhase.Retract);
+
+        Assert.Equal(onApproach.Data.Memory.Span[0], byDefault.Data.Memory.Span[0], precision: 4);
+        Assert.NotEqual(onRetract.Data.Memory.Span[0], byDefault.Data.Memory.Span[0], precision: 4);
+
+        // The descriptor's defaults and the run's fallbacks are two places that could drift apart; the picture
+        // above only pins the run. This pins the schema the generic form reads.
+        var schema = Operation().Descriptor.Parameters;
+        Assert.Equal(VolumeMeasure.MaxForce, schema.Parameters.Single(x => x.Name == VolumeImageOperation.MeasureParameter).Default);
+        Assert.Equal(CurvePhase.Approach, schema.Parameters.Single(x => x.Name == VolumeImageOperation.PhaseParameter).Default);
     }
 
     [Fact]

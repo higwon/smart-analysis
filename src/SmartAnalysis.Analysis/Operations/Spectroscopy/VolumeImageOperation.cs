@@ -14,10 +14,10 @@ namespace SmartAnalysis.Analysis.Operations.Spectroscopy;
 /// <summary>Which measure of a point's curve becomes that pixel's value.</summary>
 public enum VolumeMeasure
 {
-    /// <summary>The peak of the push.</summary>
+    /// <summary>The largest force on the half measured — the peak of the push, on the approach.</summary>
     MaxForce,
 
-    /// <summary>How deep the pull-off went below zero.</summary>
+    /// <summary>How far the force went below zero — the pull-off, on the retract.</summary>
     Adhesion,
 
     /// <summary>Force per unit travel across the threshold window.</summary>
@@ -54,6 +54,10 @@ public sealed class VolumeImageOperation : IAnalysisOperation
     public const string ThresholdParameter = "threshold";
     public const string PhaseParameter = "phase";
 
+    // The default measure and the default half have to make sense TOGETHER: the peak force belongs to the push,
+    // so the pair that runs when nothing is chosen is MaxForce on the approach.
+    private const VolumeMeasure DefaultMeasure = VolumeMeasure.MaxForce;
+    private const CurvePhase DefaultPhase = CurvePhase.Approach;
     private const double DefaultThreshold = 50.0;
 
     private readonly IExecutionEnvironmentProvider _environment;
@@ -69,8 +73,8 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         acceptedInputs: [DataKind.ForceVolume],
         parameters: new ParameterSchema(
         [
-            new ParameterDescriptor(MeasureParameter, typeof(VolumeMeasure), defaultValue: VolumeMeasure.MaxForce, help: "Which measure of each point's curve becomes that pixel."),
-            new ParameterDescriptor(PhaseParameter, typeof(CurvePhase), defaultValue: CurvePhase.Retract, help: "Which half of each round trip to measure. Adhesion lives on the retract."),
+            new ParameterDescriptor(MeasureParameter, typeof(VolumeMeasure), defaultValue: DefaultMeasure, help: "Which measure of each point's curve becomes that pixel."),
+            new ParameterDescriptor(PhaseParameter, typeof(CurvePhase), defaultValue: DefaultPhase, help: "Which half of each round trip to measure. The peak force is on the approach; the pull-off adhesion is on the retract."),
             new ParameterDescriptor(ThresholdParameter, typeof(double), defaultValue: DefaultThreshold, min: 0.0, max: 100.0, help: "Percentage of the maximum force that bounds the stiffness/deformation window (0–100)."),
         ]),
         output: OutputKind.DerivedDataset,
@@ -131,8 +135,8 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         // Validate is the contract; reaching here with a bad input means it was not honoured (F04).
         var map = (ForceVolumeDataset)input.Primary!;
         var grid = map.Geometry!;
-        var measure = parameters.TryGet<VolumeMeasure>(MeasureParameter, out var m) ? m : VolumeMeasure.MaxForce;
-        var phase = parameters.TryGet<CurvePhase>(PhaseParameter, out var p) ? p : CurvePhase.Retract;
+        var measure = parameters.TryGet<VolumeMeasure>(MeasureParameter, out var m) ? m : DefaultMeasure;
+        var phase = parameters.TryGet<CurvePhase>(PhaseParameter, out var p) ? p : DefaultPhase;
         double threshold = parameters.TryGet<double>(ThresholdParameter, out var t) ? t : DefaultThreshold;
 
         var pixels = new float[map.PointCount];
@@ -182,16 +186,24 @@ public sealed class VolumeImageOperation : IAnalysisOperation
 
         var unit = UnitOf(measure, map.ForceChannel.Unit, map.SeparationChannel.Unit);
         var buffer = ScanBuffer<float>.TakeOwnership(pixels, grid.Columns, grid.Rows);
-
-        var image = new ScanImageDataset(
-            imageId,
-            map.Source,
-            new Axis("X", grid.LengthUnit, grid.OffsetX, StepOf(grid.StepX, grid.ScanSizeX), grid.Columns),
-            new Axis("Y", grid.LengthUnit, grid.OffsetY, StepOf(grid.StepY, grid.ScanSizeY), grid.Rows),
-            new ChannelDescriptor(measure.ToString(), KindOf(measure), unit, $"{measure} ({phase})"),
-            buffer,
-            map.Metadata,
-            ProvenanceRecord.DerivedFrom(map.Id, [step]));
+        ScanImageDataset image;
+        try
+        {
+            image = new ScanImageDataset(
+                imageId,
+                map.Source,
+                new Axis("X", grid.LengthUnit, grid.OffsetX, StepOf(grid.StepX, grid.ScanSizeX), grid.Columns),
+                new Axis("Y", grid.LengthUnit, grid.OffsetY, StepOf(grid.StepY, grid.ScanSizeY), grid.Rows),
+                new ChannelDescriptor(measure.ToString(), KindOf(measure), unit, $"{measure} ({phase})"),
+                buffer,
+                map.Metadata,
+                ProvenanceRecord.DerivedFrom(map.Id, [step]));
+        }
+        catch
+        {
+            buffer.Dispose();   // ownership transfers on success only (ADR-011/012)
+            throw;
+        }
 
         progress?.Report(new OperationProgress(1.0, "Done."));
         return Task.FromResult(OperationResult.Derived(image, warnings));
