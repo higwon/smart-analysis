@@ -539,12 +539,24 @@ stiffness:
 This is the same regime **LD-08** degrades in, and the two compound: one understates the tip-compliance
 correction, the other omits the cantilever-compliance correction entirely.
 
-**In the new product.** Not yet corrected either, and until FF10 the reader **discarded** the channel that
-would have fixed it: only the two axis-flagged channels were read, so a populated `Separation` went in the bin
-with 52% of every file's measured data. A12 currently fits against whatever the file flags as the abscissa.
-`ForceCurveDataset.Separation` is populated straight from the file's Z channel by `PsiaTiffReader`, so the same
-caveat applies to our Hertz and Sneddon fits. Recorded as **also open**: the deflection subtraction needs the
-spring constant, which FF08 now recovers from the header, so the pieces are in place.
+**In the new product: addressed, two ways.** Until FF10 the reader **discarded** the channel that would have
+fixed it — only the two axis-flagged channels were read, so a populated `Separation` went in the bin with 52%
+of every file's measured data. Now:
+
+- **Where the instrument measured it**, the channel is kept (FF10) and selectable (FF11). Choosing it is
+  better than recomputing it.
+- **Where it did not**, `force-curve.separation` (A38) computes `z - F/k` as its own operation, with the
+  spring constant a **required** parameter — no default, because k belongs to one physical probe and
+  guessing it silently rescales every result. The k used is recorded in provenance, and the corrected
+  abscissa is renamed so a chart cannot still claim it is the piezo channel.
+
+A12 still fits against whatever abscissa it is handed; the correction is a step the user applies first, which
+keeps it visible and auditable rather than hidden inside the fit.
+A dataset **as read** still carries the file's Z channel as its abscissa — `PsiaTiffReader` populates
+`ForceCurveDataset.Separation` from whatever the file flagged — so a fit run directly on it inherits the
+caveat. A dataset **derived through A38** carries the corrected coordinate, and its provenance records the
+spring constant used. The remaining gap is force-volume: A38 accepts a `ForceCurve`, so a map's point has to
+become a curve of its own before it can be corrected.
 
 ---
 
