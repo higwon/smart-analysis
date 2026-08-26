@@ -170,6 +170,16 @@ public sealed class PsiaTiffRealSampleTests(ITestOutputHelper output)
                     + $"{map.SeparationChannel.DisplayName} vs {map.ForceChannel.DisplayName} "
                     + (map.Geometry is { } grid ? $"grid {grid.Columns}x{grid.Rows} over {grid.ScanSizeX:G3}x{grid.ScanSizeY:G3} {grid.LengthUnit.Symbol}" : "no grid"));
 
+                if (map.Geometry is { } g)
+                {
+                    // The scan size spans first point to last, so a centred scan (Offset = -ScanSize / 2)
+                    // must come out symmetric about zero. Reading the extent as a cell grid would leave the
+                    // last point one spacing short and shift every point inward.
+                    var (lastX, lastY) = g.PositionOf(g.PointCount - 1);
+                    Assert.Equal(g.OffsetX + g.ScanSizeX, lastX, 6);
+                    Assert.Equal(g.OffsetY + g.ScanSizeY, lastY, 6);
+                }
+
                 Assert.Equal(StandardUnits.Length, map.SeparationChannel.Unit.Dimension);
                 Assert.Equal(StandardUnits.Force, map.ForceChannel.Unit.Dimension);
                 for (int point = 0; point < map.PointCount; point++)

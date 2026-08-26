@@ -548,10 +548,23 @@ public sealed class PsiaTiffSpectroscopyTests : IDisposable
         Assert.Equal(2, grid.Rows);   // 6 spectra across a 3-wide grid
         Assert.Equal("um", grid.LengthUnit.Symbol);
 
-        // Points run along X first, and a position is the centre of its cell.
-        Assert.Equal((-1.0, -0.5), grid.PositionOf(0));
-        Assert.Equal((0.0, -0.5), grid.PositionOf(1));
-        Assert.Equal((-1.0, 0.5), grid.PositionOf(3)); // first point of the second row
+        // The scan size is the span from the FIRST point to the LAST, so spacing is ScanSize / (count - 1) and
+        // the grid lands exactly on [Offset, Offset + ScanSize]. Legacy computes the same for a PSIA-TIFF
+        // (XSpecSize / (XPointCount - 1)), and it is the only reading under which a file recording
+        // Offset = -ScanSize / 2 places its grid symmetrically about the scan centre.
+        Assert.Equal(1.5, grid.StepX);   // 3 um across 3 columns
+        Assert.Equal(2.0, grid.StepY);   // 2 um across 2 rows
+
+        // Points run along X first.
+        Assert.Equal((-1.5, -1.0), grid.PositionOf(0));
+        Assert.Equal((0.0, -1.0), grid.PositionOf(1));
+        Assert.Equal((-1.5, 1.0), grid.PositionOf(3)); // first point of the second row
+
+        // The invariant that distinguishes this from a cell grid: the last point sits exactly one scan size
+        // from the first, on both axes. A cell reading would leave it short by one spacing.
+        var (lastX, lastY) = grid.PositionOf(grid.PointCount - 1);
+        Assert.Equal(grid.OffsetX + grid.ScanSizeX, lastX, 9);
+        Assert.Equal(grid.OffsetY + grid.ScanSizeY, lastY, 9);
     }
 
     [Fact]

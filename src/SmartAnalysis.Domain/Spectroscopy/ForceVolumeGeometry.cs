@@ -4,8 +4,17 @@ namespace SmartAnalysis.Domain.Spectroscopy;
 
 /// <summary>
 /// Where a force–volume map's curves sit on the sample: a regular <see cref="Columns"/> × <see cref="Rows"/>
-/// grid covering <see cref="ScanSizeX"/> × <see cref="ScanSizeY"/> at <see cref="OffsetX"/>/<see cref="OffsetY"/>,
-/// all in <see cref="LengthUnit"/>.
+/// grid whose <b>first</b> point is at <see cref="OffsetX"/>/<see cref="OffsetY"/> and whose <b>last</b> point is
+/// exactly <see cref="ScanSizeX"/> × <see cref="ScanSizeY"/> away, all in <see cref="LengthUnit"/>.
+/// <para>
+/// The scan size is the <b>span from the first point to the last</b>, not a cell-grid extent, so the spacing is
+/// <c>ScanSize / (count - 1)</c>. That is what legacy computes for a PSIA-TIFF
+/// (<c>SpectroscopyAnalysisModel</c>: <c>XSpecSize / (XPointCount - 1)</c>), and it is what the files
+/// themselves say — a centred scan records <c>Offset = -ScanSize / 2</c>, which places the grid symmetrically
+/// about the scan centre only under this reading. Note the 2D image axes use a different convention
+/// (<c>step = ScanSize / count</c>) because there the extent covers pixels, not endpoints; legacy likewise
+/// switches conventions per format, using <c>/ count</c> for PS-PPT and HDF5.
+/// </para>
 /// <para>
 /// A multi-point spectroscopy file does not always have this. The instrument records a grid for a force–volume
 /// map and nothing for a set of hand-placed points, so geometry is <b>optional</b> on the dataset — inventing a
@@ -69,6 +78,12 @@ public sealed record ForceVolumeGeometry
     /// <summary>How many curves the grid accounts for.</summary>
     public int PointCount => Columns * Rows;
 
+    /// <summary>Distance between neighbouring columns; zero when there is only one.</summary>
+    public double StepX => Columns > 1 ? ScanSizeX / (Columns - 1) : 0;
+
+    /// <summary>Distance between neighbouring rows; zero when there is only one.</summary>
+    public double StepY => Rows > 1 ? ScanSizeY / (Rows - 1) : 0;
+
     /// <summary>The sample position of the curve at <paramref name="pointIndex"/>, in <see cref="LengthUnit"/>.</summary>
     public (double X, double Y) PositionOf(int pointIndex)
     {
@@ -81,9 +96,7 @@ public sealed record ForceVolumeGeometry
         int column = pointIndex % Columns;
         int row = pointIndex / Columns;
 
-        // A cell's centre, so a 1-wide grid lands mid-scan rather than on its edge.
-        return (OffsetX + ((column + 0.5) * ScanSizeX / Columns),
-                OffsetY + ((row + 0.5) * ScanSizeY / Rows));
+        return (OffsetX + (column * StepX), OffsetY + (row * StepY));
     }
 
     private static bool IsPositiveFinite(double value) => double.IsFinite(value) && value > 0;
