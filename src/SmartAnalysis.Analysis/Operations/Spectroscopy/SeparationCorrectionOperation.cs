@@ -26,6 +26,13 @@ namespace SmartAnalysis.Analysis.Operations.Spectroscopy;
 /// (<b>LD-11</b> in the legacy defect register).
 /// </para>
 /// <para>
+/// <b>What this is, exactly.</b> The result is <c>z - d</c>: a displacement coordinate with the cantilever's
+/// compliance removed. It is <b>not</b> an absolute separation with zero at the contact point — that needs
+/// <c>z_contact</c> and <c>d_contact</c>, which only a contact model can locate. The two differ by a constant,
+/// which is exactly what a contact fit determines for itself, so this is the right coordinate to hand one. A
+/// consumer that wants zero to mean touching must still find the contact point.
+/// </para>
+/// <para>
 /// <b>When not to use this.</b> Some instruments record the separation themselves — a populated
 /// <c>Separation</c> channel sits in the file next to the piezo channel. Where one exists, selecting it is
 /// better than recomputing it: it is what was measured, not what we derived from a spring constant.
@@ -45,7 +52,8 @@ public sealed class SeparationCorrectionOperation : IAnalysisOperation
         id: "force-curve.separation",
         version: 1,
         displayName: "Tip–Sample Separation",
-        summary: "Subtracts the cantilever deflection from the piezo position, so a contact fit sees indentation rather than travel.",
+        summary: "Subtracts the cantilever deflection from the piezo position, so a contact fit sees indentation "
+               + "rather than travel. The zero is not moved to the contact point — a contact model locates that.",
         acceptedInputs: [DataKind.ForceCurve],
         parameters: new ParameterSchema(
         [

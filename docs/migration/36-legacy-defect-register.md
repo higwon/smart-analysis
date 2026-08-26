@@ -552,9 +552,11 @@ of every file's measured data. Now:
 
 A12 still fits against whatever abscissa it is handed; the correction is a step the user applies first, which
 keeps it visible and auditable rather than hidden inside the fit.
-`ForceCurveDataset.Separation` is populated straight from the file's Z channel by `PsiaTiffReader`, so the same
-caveat applies to our Hertz and Sneddon fits. Recorded as **also open**: the deflection subtraction needs the
-spring constant, which FF08 now recovers from the header, so the pieces are in place.
+A dataset **as read** still carries the file's Z channel as its abscissa — `PsiaTiffReader` populates
+`ForceCurveDataset.Separation` from whatever the file flagged — so a fit run directly on it inherits the
+caveat. A dataset **derived through A38** carries the corrected coordinate, and its provenance records the
+spring constant used. The remaining gap is force-volume: A38 accepts a `ForceCurve`, so a map's point has to
+become a curve of its own before it can be corrected.
 
 ---
 
