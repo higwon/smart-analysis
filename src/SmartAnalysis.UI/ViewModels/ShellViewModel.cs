@@ -88,6 +88,8 @@ public sealed class ShellViewModel : ObservableObject
     private bool _isOperationPreview;
     private ImageRenderInput? _operationPreviewInput;
     private string? _volumeUnavailable;
+    private ThresholdWindow? _window;
+    private bool _windowComputed;
     private CurveRenderInput? _operationPreviewCurve;
     private Task _operationPreviewTask = Task.CompletedTask;
     private Func<DatasetId, CancellationToken, Task<PreviewOutput>>? _computePreview;
@@ -892,13 +894,39 @@ public sealed class ShellViewModel : ObservableObject
         => OperationEditor is ParameterFormViewModel form ? _launcher.Explain(form.Id, form.Values) : null;
 
     /// <summary>
+    /// Whether the Inspector curve shows whatever pair the channel picker was left on.
+    /// <para>
+    /// False in the Volume view, where the curve's job changed: it is no longer somewhere to explore an
+    /// acquisition's channels but the explanation of the picture on the stage. The marks on it are a force level
+    /// and two separations, so drawing them over (say) a Voltage-against-Z pair would be a confident explanation
+    /// of a measurement nothing made.
+    /// </para>
+    /// </summary>
+    public bool InspectorCurveFollowsChannelPicker => !IsVolumeView;
+
+    /// <summary>
     /// Separations at which to mark the selected point's curve: where the threshold window begins and ends.
     /// Empty unless the Volume view is showing, because the marks belong to ITS settings (doc 26 §22.6).
     /// </summary>
-    public IReadOnlyList<double> CurveVerticalMarkers => Window() is { } w ? [w.PeakSeparation, w.WindowSeparation] : [];
+    public IReadOnlyList<double> CurveVerticalMarkers
+        => CurrentWindow() is { } w ? [w.PeakSeparation, w.WindowSeparation] : [];
 
     /// <summary>Force levels to mark: the non-contact level every force is measured from, and what the threshold means.</summary>
-    public IReadOnlyList<double> CurveHorizontalMarkers => Window() is { } w ? [w.Baseline, w.ThresholdForce] : [];
+    public IReadOnlyList<double> CurveHorizontalMarkers
+        => CurrentWindow() is { } w ? [w.Baseline, w.ThresholdForce] : [];
+
+    // Both marker lists describe one window, and a drag will ask for them many times a second. Computed once
+    // per refresh and dropped whenever anything it depends on moves.
+    private ThresholdWindow? CurrentWindow()
+    {
+        if (!_windowComputed)
+        {
+            _window = Window();
+            _windowComputed = true;
+        }
+
+        return _window;
+    }
 
     // A point with no window comes back with NaN separations, which the render input drops — so "nothing to
     // measure here" draws as a curve with no window on it, which is the explanation for that pixel being a hole.
@@ -933,6 +961,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSpectroscopyImage));
         OnPropertyChanged(nameof(ShowCurveOnStage));
         OnPropertyChanged(nameof(ShowCurveInInspector));
+        OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
         _showSurface.RaiseCanExecuteChanged();
@@ -941,6 +970,8 @@ public sealed class ShellViewModel : ObservableObject
 
     private void RaiseCurveMarkersChanged()
     {
+        _windowComputed = false;
+        _window = null;
         OnPropertyChanged(nameof(CurveVerticalMarkers));
         OnPropertyChanged(nameof(CurveHorizontalMarkers));
     }

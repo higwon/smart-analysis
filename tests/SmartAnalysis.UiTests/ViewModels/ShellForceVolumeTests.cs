@@ -1159,4 +1159,46 @@ public sealed class ShellForceVolumeTests
         // A wider window reaches further down the ramp, so the level it averages is higher up the force axis.
         Assert.True(vm.CurveHorizontalMarkers[0] > narrow);
     }
+
+    [Fact]
+    public void The_volume_view_pins_the_inspector_curve_to_the_pair_the_picture_was_measured_from()
+    {
+        // The marks are a force level and two separations. Drawn over some other channel pair — a voltage
+        // against a bias, say — they would be nN and nm lines on axes that are neither, and they would look
+        // exactly as authoritative as the correct ones. So in the Volume view the curve is not the picker's to
+        // choose: it is the pair the picture came from.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapWithChannels(2);
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+
+        // Leave the picker somewhere other than the designated pair, the way UX04 lets a viewer do.
+        vm.SelectedYChannel = 2;
+        Assert.False(vm.IsDesignatedChannelPair);
+        Assert.True(vm.InspectorCurveFollowsChannelPicker);   // the Surface view is still the picker's
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+    }
+
+    [Fact]
+    public void Leaving_the_volume_view_gives_the_curve_back_to_the_picker()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.ShowVolumeCommand.Execute(null);
+        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+
+        vm.ShowSurfaceCommand.Execute(null);
+
+        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+    }
 }

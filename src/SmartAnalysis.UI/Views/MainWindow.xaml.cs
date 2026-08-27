@@ -754,11 +754,22 @@ public partial class MainWindow : Window
     {
         SpectroscopyCurve.Render(input);
 
-        // The Inspector's copy carries the settings drawn on it (doc 26 §22.6): the non-contact level every
-        // force is measured from, what the threshold percentage means in force, and the window it selects. The
-        // stage's copy does not — there the curve is the subject, not the thing being tuned.
-        InspectorCurve.Render(
-            input.WithMarkers(_viewModel.CurveVerticalMarkers, _viewModel.CurveHorizontalMarkers));
+        if (_viewModel.InspectorCurveFollowsChannelPicker)
+        {
+            InspectorCurve.Render(input);
+            return;
+        }
+
+        // In the Volume view the Inspector's copy carries the settings drawn on it (doc 26 §22.6) — and must
+        // therefore be the pair the PICTURE was measured from, not whatever pair the channel picker was last
+        // left on. A force level and two separations drawn over some other pair would explain nothing that was
+        // measured. The stage's copy is unmarked: there the curve is the subject, not the thing being tuned.
+        if (_viewModel.ActiveForceVolume is { } map)
+        {
+            InspectorCurve.Render(
+                RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint)
+                    .WithMarkers(_viewModel.CurveVerticalMarkers, _viewModel.CurveHorizontalMarkers));
+        }
     }
 
     private void ClearSpectroscopyCurve()
