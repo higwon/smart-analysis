@@ -51,7 +51,7 @@ public sealed record ImageRenderInput
     }
 
     /// <summary>
-    /// Whether any sample is not a number — somewhere the instrument did not measure.
+    /// Whether any sample is non-finite — a NaN or an infinity, somewhere the instrument did not measure.
     /// <para>
     /// Carried so a legend can name the colour those samples get, and <b>only</b> when there are some: a
     /// "no data" swatch on every image would be noise on the great majority that have none.
