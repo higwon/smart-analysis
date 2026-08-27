@@ -753,7 +753,12 @@ public partial class MainWindow : Window
     private void RenderSpectroscopyCurve(CurveRenderInput input)
     {
         SpectroscopyCurve.Render(input);
-        InspectorCurve.Render(input);
+
+        // The Inspector's copy carries the settings drawn on it (doc 26 §22.6): the non-contact level every
+        // force is measured from, what the threshold percentage means in force, and the window it selects. The
+        // stage's copy does not — there the curve is the subject, not the thing being tuned.
+        InspectorCurve.Render(
+            input.WithMarkers(_viewModel.CurveVerticalMarkers, _viewModel.CurveHorizontalMarkers));
     }
 
     private void ClearSpectroscopyCurve()

@@ -31,7 +31,7 @@ namespace SmartAnalysis.UiTests.ViewModels;
 public sealed class ShellProvenancePanelTests
 {
     private static ShellViewModel NewShell(Workspace ws)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ScanImageDataset Root()

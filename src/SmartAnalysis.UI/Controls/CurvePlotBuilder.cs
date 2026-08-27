@@ -77,6 +77,15 @@ public static class CurvePlotBuilder
             marker.LineWidth = 1.5f;
             marker.LinePattern = ScottPlot.LinePattern.Dashed;
         }
+
+        // Horizontal reference lines (e.g. the non-contact level, and the force a threshold percentage means).
+        foreach (var y in input.HorizontalMarkers)
+        {
+            var marker = plot.Add.HorizontalLine(y);
+            marker.Color = theme.Axis;
+            marker.LineWidth = 1.5f;
+            marker.LinePattern = ScottPlot.LinePattern.Dashed;
+        }
     }
     // Strictly ascending, which is what SignalXY needs. A single non-finite sample makes the answer false,
     // because SignalXY cannot order what it cannot compare.

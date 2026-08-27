@@ -14,6 +14,11 @@ namespace SmartAnalysis.Analysis.Spectroscopy;
 /// not measured — and it is what an image should paint as a hole rather than as a value.
 /// </para>
 /// <para>
+/// <c>Baseline</c>, <c>PeakSeparation</c> and <c>WindowSeparation</c> are reported so a viewer can draw the
+/// settings on the curve they were read from. A threshold typed as a bare percentage is a claim about a place
+/// on a curve the user cannot see, and a point with no window is exactly the point whose pixel is a hole.
+/// </para>
+/// <para>
 /// Forces are measured from the curve's own <b>non-contact level</b>, not from absolute zero. A raw deflection
 /// signal carries an arbitrary offset, so "how far below zero did the pull-off go" asks about the detector's
 /// electronics rather than about the sample — on a curve that never crosses zero it answers <c>0</c> for every
@@ -26,6 +31,7 @@ public readonly record struct ForceDistanceMeasures(
     double Stiffness,
     double Deformation,
     double PeakSeparation,
+    double WindowSeparation,
     double Baseline,
     bool HasNonFiniteSamples,
     bool LooksLikeRoundTrip,
@@ -45,7 +51,7 @@ public readonly record struct ForceDistanceMeasures(
 
     /// <summary>Nothing finite to measure: the answer is "not measured", not a number.</summary>
     public static ForceDistanceMeasures None { get; } = new(
-        double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN,
+        double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN,
         HasNonFiniteSamples: true, LooksLikeRoundTrip: false, BaselineIsFlat: false);
 
     /// <summary>The threshold-window measures are undefined when the window has no separation travel.</summary>
@@ -140,6 +146,7 @@ public readonly record struct ForceDistanceMeasures(
             stiffness,
             deformation,
             separation[peak],
+            edge?.Separation ?? double.NaN,
             baseline,
             HasNonFiniteSamples: finite < force.Length,
             LooksLikeRoundTrip: IsRoundTrip(separation),

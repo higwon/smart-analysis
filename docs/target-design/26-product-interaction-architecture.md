@@ -532,6 +532,9 @@ That workflow is right and this product should have it. Three steps, in order:
 | **2. The parameters are drawn on it** | The threshold appears as the force level it means and the window it selects. A point that yields nothing shows **no window** — which is the explanation for its hole. |
 | **3. The parameters are dragged on it** | As legacy does. Deferred: the value of 1 and 2 does not depend on it, and a control you can drag is worth less than a control whose meaning you can see. |
 
+Steps 1 and 2 are built. The marks are the **baseline** (the level every force on that panel is measured from),
+the **threshold force** it means on this curve, and the two **separations** bounding the window it selects.
+
 Point selection stays a single source (§22.1): `◀ ▶` steps, and a click on the Volume image selects the point
 under it — the same mapping the picture is built from, so a hole is one click from its curve.
 

@@ -33,11 +33,11 @@ public sealed class ShellForceVolumeTests
     private const int Samples = 4;
 
     private static ShellViewModel NewShell(Workspace ws)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ShellViewModel NewShell(Workspace ws, IOperationLauncher launcher)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
                launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     /// <summary>A map of <paramref name="points"/> curves; point k has force samples all equal to k.</summary>
@@ -309,7 +309,14 @@ public sealed class ShellForceVolumeTests
             => operationId == "force-volume.volume-image"
                 ? new OperationForm(
                     operationId, "Volume Image", "one pixel per point", OperationCategory.Process,
-                    [new ParameterFieldDescriptor("threshold", "Threshold", ParameterFieldKind.Number, 50.0, 0.0, 100.0, [], null, "")],
+                    [
+                        new ParameterFieldDescriptor("threshold", "Threshold", ParameterFieldKind.Number, 50.0, 0.0, 100.0, [], null, ""),
+                        new ParameterFieldDescriptor("baseline", "Baseline", ParameterFieldKind.Number, 20.0, 1.0, 100.0, [], null, ""),
+                        new ParameterFieldDescriptor(
+                            "phase", "Phase", ParameterFieldKind.Choice, "Approach", null, null,
+                            [new ParameterFieldOption("Approach", "Approach"), new ParameterFieldOption("Retract", "Retract")],
+                            null, ""),
+                    ],
                     DerivesImage: true)
                 : null;
 
@@ -975,5 +982,181 @@ public sealed class ShellForceVolumeTests
         vm.ShowSurfaceCommand.Execute(null);
 
         Assert.False(vm.HasVolumeUnavailable);
+    }
+
+    [Fact]
+    public void The_curve_carries_no_marks_outside_the_volume_view()
+    {
+        // The marks belong to the Volume view's settings. On the Surface view the curve is what the selected
+        // point measured, and there is no threshold on screen for a line to be explaining.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.Empty(vm.CurveVerticalMarkers);
+        Assert.Empty(vm.CurveHorizontalMarkers);
+    }
+
+    [Fact]
+    public void Entering_the_volume_view_announces_that_the_marks_moved()
+    {
+        // The curve is redrawn from a binding; without a notification it keeps whatever it last drew, which is
+        // the curve with no settings on it.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.Contains(nameof(vm.CurveVerticalMarkers), raised);
+        Assert.Contains(nameof(vm.CurveHorizontalMarkers), raised);
+    }
+
+    [Fact]
+    public void Stepping_to_another_point_announces_that_the_marks_moved()
+    {
+        // Each point has its own baseline and its own window. Marks left from the previous point would explain
+        // a number this one does not hold.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.StepMapPoint(1);
+
+        Assert.Contains(nameof(vm.CurveHorizontalMarkers), raised);
+    }
+
+    /// <summary>
+    /// A map of round trips: flat out of contact beyond separation 8, a push inside it. The retract pushes only
+    /// half as hard, so the two halves are genuinely different curves and "which half" is a question this
+    /// fixture can answer.
+    /// </summary>
+    private static ForceVolumeDataset RoundTripMap()
+    {
+        const int samples = 20;
+        const int points = 2;
+        var separation = new float[points * samples];
+        var force = new float[points * samples];
+
+        for (int p = 0; p < points; p++)
+        {
+            for (int i = 0; i < samples; i++)
+            {
+                bool approach = i < 10;
+                float z = approach ? 10 - i : i - 9;
+                separation[(p * samples) + i] = z;
+                float push = z >= 8f ? 0f : (8f - z) * (8f - z) * (approach ? 1f : 0.5f);
+                force[(p * samples) + i] = 267f + push;
+            }
+        }
+
+        return new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(separation, samples, points),
+            ScanBuffer<float>.TakeOwnership(force, samples, points),
+            new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Nanometre, "Z Scan"),
+            new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            Grid(2, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+    }
+
+    [Fact]
+    public void The_volume_view_puts_the_settings_on_the_curve()
+    {
+        // doc 26 §22.6 step 2. "50% of the maximum force" is a place on a curve; the panel says the number and
+        // the curve has to say where it lands, or a hole in the picture has no explanation on screen.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = RoundTripMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        // Two verticals: where the window begins and where it ends. Two horizontals: the non-contact level every
+        // force is measured from, and the force the threshold percentage means.
+        Assert.Equal(2, vm.CurveVerticalMarkers.Count);
+        Assert.Equal(2, vm.CurveHorizontalMarkers.Count);
+
+        // The baseline is the curve's own out-of-contact level, not zero.
+        Assert.Equal(267.0, vm.CurveHorizontalMarkers[0], 3);
+        Assert.True(vm.CurveHorizontalMarkers[1] > vm.CurveHorizontalMarkers[0]);
+
+        // And the threshold line is where the BOX says, not where a default says.
+        double atHalf = vm.CurveHorizontalMarkers[1];
+        ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "threshold").Value = 25.0;
+
+        Assert.True(vm.CurveHorizontalMarkers[1] < atHalf);
+    }
+
+    [Fact]
+    public void The_marks_follow_the_half_the_picture_is_measured_on()
+    {
+        // The panel's Phase decides which half every pixel came from. Marks drawn on the other one would explain
+        // a number the picture does not hold.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = RoundTripMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        double onApproach = vm.CurveHorizontalMarkers[1];
+
+        var phase = ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "phase");
+        phase.Value = "Retract";
+
+        // The retract pushes half as hard, so 50% of ITS peak is a lower force.
+        Assert.True(vm.CurveHorizontalMarkers[1] < onApproach);
+    }
+
+    [Fact]
+    public void The_baseline_mark_follows_the_box_that_sets_it()
+    {
+        // On a curve whose far end never flattens there is no single non-contact level, so how much of the
+        // travel you average genuinely changes the answer. That is what makes this wiring visible at all — on a
+        // properly flat tail the mark is meant NOT to move.
+        const int samples = 20;
+        var separation = new float[samples];
+        var force = new float[samples];
+        for (int i = 0; i < samples; i++)
+        {
+            separation[i] = 20f - i;              // one long descent: contact from the first sample
+            force[i] = 267f + (i * 5f);
+        }
+
+        var map = new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(separation, samples, 1),
+            ScanBuffer<float>.TakeOwnership(force, samples, 1),
+            new ChannelDescriptor("Z Scan", ChannelKind.Topography, StandardUnits.Nanometre, "Z Scan"),
+            new ChannelDescriptor("Force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            Grid(1, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        double narrow = vm.CurveHorizontalMarkers[0];
+
+        var baseline = ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "baseline");
+        baseline.Value = 60.0;
+
+        // A wider window reaches further down the ramp, so the level it averages is higher up the force axis.
+        Assert.True(vm.CurveHorizontalMarkers[0] > narrow);
     }
 }

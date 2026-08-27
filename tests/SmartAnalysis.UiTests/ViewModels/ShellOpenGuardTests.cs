@@ -30,7 +30,7 @@ namespace SmartAnalysis.UiTests.ViewModels;
 public sealed class ShellOpenGuardTests
 {
     private static ShellViewModel NewShell(Workspace ws, FakePersistence persistence, FakePathPicker picker, FakePrompt prompt)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
                new FakeLauncher(), new MeasurementStore(), persistence, picker, prompt);
 
     private static ScanImageDataset Image() => new(

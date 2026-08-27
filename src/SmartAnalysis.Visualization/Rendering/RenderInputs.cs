@@ -101,7 +101,12 @@ public sealed record XySeries
 /// <summary>An XY plot to render: one or more <see cref="XySeries"/> with X/Y axis views. Immutable.</summary>
 public sealed record CurveRenderInput
 {
-    public CurveRenderInput(IReadOnlyList<XySeries> series, AxisView x, AxisView y, IReadOnlyList<double>? verticalMarkers = null)
+    public CurveRenderInput(
+        IReadOnlyList<XySeries> series,
+        AxisView x,
+        AxisView y,
+        IReadOnlyList<double>? verticalMarkers = null,
+        IReadOnlyList<double>? horizontalMarkers = null)
     {
         ArgumentNullException.ThrowIfNull(series);
         var copy = new XySeries[series.Count];
@@ -113,27 +118,46 @@ public sealed record CurveRenderInput
         Series = Array.AsReadOnly(copy);
         X = x ?? throw new ArgumentNullException(nameof(x));
         Y = y ?? throw new ArgumentNullException(nameof(y));
-        if (verticalMarkers is null)
-        {
-            VerticalMarkers = [];
-        }
-        else
-        {
-            var marks = new double[verticalMarkers.Count];
-            for (int i = 0; i < marks.Length; i++)
-            {
-                marks[i] = verticalMarkers[i];
-            }
-
-            VerticalMarkers = Array.AsReadOnly(marks);
-        }
+        VerticalMarkers = Finite(verticalMarkers);
+        HorizontalMarkers = Finite(horizontalMarkers);
     }
+
+    // A non-finite position has no place on the plot. Dropping it is what makes "there is no window here" draw
+    // as no lines at all, rather than as a line at whichever edge the axis happens to end on.
+    private static IReadOnlyList<double> Finite(IReadOnlyList<double>? values)
+    {
+        if (values is null)
+        {
+            return [];
+        }
+
+        var kept = new List<double>(values.Count);
+        foreach (var v in values)
+        {
+            if (double.IsFinite(v))
+            {
+                kept.Add(v);
+            }
+        }
+
+        return kept.AsReadOnly();
+    }
+
+    /// <summary>The same plot with reference lines added. What a parameter MEANS is the caller's knowledge, not
+    /// the factory's — so the shell adds the marks to a plot the factory built from data alone.</summary>
+    public CurveRenderInput WithMarkers(
+        IReadOnlyList<double>? vertical, IReadOnlyList<double>? horizontal)
+        => new(Series, X, Y, vertical, horizontal);
 
     public IReadOnlyList<XySeries> Series { get; }
 
     /// <summary>X positions (axis units) at which to draw vertical reference lines — e.g. a crop range's boundaries on
     /// the source curve. Empty for a plain plot.</summary>
     public IReadOnlyList<double> VerticalMarkers { get; }
+
+    /// <summary>Y positions (axis units) at which to draw horizontal reference lines — e.g. the non-contact level
+    /// a force is measured from. Non-finite positions are dropped, so an absent level draws nothing.</summary>
+    public IReadOnlyList<double> HorizontalMarkers { get; }
 
     public AxisView X { get; }
 

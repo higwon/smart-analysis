@@ -43,7 +43,7 @@ public sealed class ShellSurfaceEditingTests
         [Int("left"), Int("top"), Int("width"), Int("height")]);
 
     private static ShellViewModel NewShell(Workspace ws, OperationForm form)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
                new FormLauncher(form), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ScanImageDataset Image()
