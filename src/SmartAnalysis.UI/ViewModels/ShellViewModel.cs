@@ -966,6 +966,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowCurveOnStage));
         OnPropertyChanged(nameof(ShowCurveInInspector));
         OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
+        OnPropertyChanged(nameof(PointMarkers));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
         _showSurface.RaiseCanExecuteChanged();
@@ -1139,6 +1140,15 @@ public sealed class ShellViewModel : ObservableObject
     {
         get
         {
+            // Empty in the Volume view, and empty HERE rather than at each place that draws: the positions are
+            // in the SURFACE's pixels, which the volume picture does not share, so a caller that forgot the mode
+            // would not draw nothing — it would draw the marks somewhere wrong on a picture where every pixel is
+            // already a point.
+            if (IsVolumeView)
+            {
+                return [];
+            }
+
             var layout = _activeForceVolume?.PointLayout ?? _activeForceCurve?.PointLayout;
             if (layout is null || SpectroscopyReferenceImage is not { } surface)
             {

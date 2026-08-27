@@ -734,8 +734,8 @@ public partial class MainWindow : Window
             }
 
             // Every pixel of the volume image IS a measurement point, so a marker on each would be noise drawn on
-            // top of the thing it marks.
-            SpectroscopySurface.ClearPointMarkers();
+            // top of the thing it marks. The view-model says so by offering none.
+            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
             return;
         }
 
