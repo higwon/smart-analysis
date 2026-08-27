@@ -77,11 +77,11 @@ Where the two touch, entries here name the 07 theme they instantiate:
 |---|---|
 | **M2** Extension-only detection; locale-dependent encoding | LD-03, LD-04, LD-05 |
 | **M3** Host-endian assumptions | LD-09 |
-| **M5** Incomplete / silently-wrong algorithm paths | LD-01, LD-02, LD-07, LD-12 |
+| **M5** Incomplete / silently-wrong algorithm paths | LD-01, LD-02, LD-07, LD-12, LD-20 |
 | **C3** No reproducibility / no provenance persistence | LD-13 |
 | **L1** Dead / orphan code | LD-14 |
 | **L2** Naming / hygiene | LD-10 |
-| *(no theme — found during implementation)* | LD-06, LD-08, **LD-11**, LI-01, LI-02, LI-03 |
+| *(no theme — found during implementation)* | LD-06, LD-08, **LD-11**, **LD-15**, **LD-16**, **LD-17**, **LD-18**, **LD-19**, LI-01, LI-02, LI-03 |
 
 The last row is the point of keeping this file: the measurement-science findings (**LD-08**, **LD-11**,
 **LD-12**) were not visible from a structural survey. They need someone reading the physics while porting it.
@@ -672,6 +672,158 @@ condition changes nothing, both suggest the code does something it does not.
 
 **In the new product.** Not carried over. The reference image itself is real and worth reading (**FF14**); this
 entry is only about the orphan property and the no-op branch.
+
+---
+
+## LD-15 · The volume-image cache is keyed by measure alone, not by the parameters that made it
+
+**Severity:** High
+**Lens:** Code
+**Files:** `Framework/UI/FW.UI.Common/Model/SpectroscopyAnalysisModel.cs`,
+`Project/SmartAnalysis/UIPages/SmartAnalysis.UI.SpectroscopyAnalysis/ViewModel/SpectroscopyFDViewModel.cs`,
+`.../ViewModel/SpectroscopyModulusViewModel.cs`
+**07 theme:** none — found during implementation
+
+Computed volume images are cached in `Model.VolumeImageModelCollection`, keyed **only** by
+`ESpectroscopyVolumeType`. A Stiffness image computed at 50% and one computed at 20% are different pictures of
+the same data, and the cache cannot tell them apart.
+
+Both `UpdateVolumeImageAction` implementations work around it by explicitly removing the cache entry before
+regenerating. That is a convention, not a guarantee: any future path that changes a parameter and asks for the
+image without remembering to evict shows the **previous parameters' picture** with the new numbers beside it.
+
+**Consequence.** A silently wrong image that looks completely normal. Nothing on screen ties a picture to the
+settings that produced it.
+
+**In the new product.** Structurally impossible: the volume image is a **view** recomputed from its parameters
+on every change (doc 26 §22.3), and the only cached thing is the last preview, which is dropped when any
+parameter moves. Nothing is keyed by measure.
+
+---
+
+## LD-16 · One threshold control writes two different fields, so the readout and the image can disagree
+
+**Severity:** High
+**Lens:** Measurement science
+**File:** `Project/SmartAnalysis/UIPages/SmartAnalysis.UI.SpectroscopyAnalysis/ViewModel/SpectroscopyFDViewModel.cs`
+**07 theme:** none — found during implementation
+
+The FD panel has a single `Deformation Threshold (%)` spin edit. On *Update Volume Image* it is written to
+`Model.StiffnessThreshold` **or** `Model.DeformationThreshold` — whichever the currently selected volume type
+is, and only that one.
+
+The on-screen Stiffness and Deformation readouts both use the live control value. So: set the threshold to 20
+and generate a Stiffness image; `DeformationThreshold` still holds whatever it held before. Generate a
+Deformation image without touching the control and it is computed at the **stale** value, while the number
+displayed beside it was computed at 20.
+
+**Consequence.** The panel and the picture report different measurements of the same curve, with no
+indication. This is a measurement-science error, not a UI slip: both numbers are presented as the deformation
+of that point.
+
+**In the new product.** The measure and its threshold are parameters of one operation, submitted together and
+recorded together (`force-volume.volume-image`). There is no per-measure stored field to fall out of step, and
+**U09** hides the threshold entirely for measures that do not read it.
+
+---
+
+## LD-17 · Stiffness and deformation are computed against a different abscissa than the one on screen
+
+**Severity:** High
+**Lens:** Measurement science
+**Files:** `Framework/UI/FW.UI.Common/Model/SpectroscopyAnalysisModel.cs`,
+`Framework/Analysis/FW.Analysis.Calculate/Spectroscopy/FDSpectroscopyCalculator.cs`
+**07 theme:** none — found during implementation
+
+The settings chart plots the user's `SelectedXChannel` — a separation channel. `GetStiffness` and
+`GetDeformation` ignore it and look up the **Z-detector** channel internally (`GetIsZDetector()`).
+
+So `stiffness = |ΔF / ΔZ|` is a force per unit of **piezo travel**, while the curve the user reads the
+threshold off is force against **separation**. On a compliant sample those differ by exactly the cantilever
+deflection — which is the whole quantity of interest.
+
+Same family as **LD-11** (modulus fitted against piezo travel), same cause: the displayed abscissa and the
+computed abscissa are chosen independently.
+
+**Consequence.** A stiffness systematically wrong on soft samples, read off a curve that does not show the
+axis it was computed on.
+
+**In the new product.** The volume image measures the map's own designated separation/force pair and refuses a
+map whose channels are not a length and a force. **A38** provides the separation correction, and doc 26 §22.6
+requires the parameters to be drawn on the curve they act on — the divergence could not stay invisible.
+
+---
+
+## LD-18 · The baseline offset is a blind percentage of the tail, and is never shown
+
+**Severity:** Medium
+**Lens:** Measurement science
+**File:** `Framework/UI/FW.UI.Common/Model/SpectroscopyAnalysisModel.cs` (`GetBaseLineOffsetValue`)
+**07 theme:** none — found during implementation
+
+Every FD measure — snap-in, pull-off, adhesion energy, deformation, stiffness, modulus — is computed after
+subtracting a baseline obtained by sorting (separation, force) pairs **descending by separation**, taking the
+top *N* % of points, and averaging their force.
+
+The assumption is that the largest separations are the non-contact tail. It holds for an ordinary approach
+curve and fails quietly when it does not: a truncated curve, a flat region shorter than the chosen percentage,
+or any curve whose maximum separation is not its non-contact end. The single offset is subtracted from **both**
+trace and retrace, so it also cannot correct trace/retrace drift.
+
+It is the most consequential setting on the panel and the only one **not drawn on the chart** — every other
+parameter there has a cursor or a draggable line.
+
+**Consequence.** A wrong baseline shifts every downstream measure by a constant, invisible in the shape of the
+curve and in the resulting image.
+
+**In the new product.** Not carried over as a percentage. Doc 26 §22.6 records that a baseline, when it is
+added, has to be a region shown on the curve.
+
+---
+
+## LD-19 · Oliver–Pharr transfers a fit range across the map as raw sample indices
+
+**Severity:** Medium
+**Lens:** Measurement science
+**File:** `Project/SmartAnalysis/UIPages/SmartAnalysis.UI.SpectroscopyAnalysis/ViewModel/SpectroscopyModulusViewModel.cs`
+**07 theme:** none — found during implementation
+
+The chart cursors that set a modulus fit range are stored as **ratios** of the force range
+(`ModulusUpperRatio` / `ModulusLowerRatio`), which transfers sensibly from the tuned curve to every other
+point: a ratio means the same thing on a curve of any length.
+
+Oliver–Pharr does not. It stores `ModulusIndexA` / `ModulusIndexB`, the raw sample indices under the cursors.
+Applying those to the whole map assumes every curve has the same length **and** the same alignment as the one
+the user happened to tune on.
+
+**Consequence.** On a map whose curves differ in length or phase, each pixel is fitted over a different part of
+its curve, and the image is a mosaic of incomparable fits.
+
+**In the new product.** Not yet applicable — Oliver–Pharr is deferred (**A12** remainder). Recorded so that
+when it lands, the fit range is expressed in the curve's own terms and not in sample indices.
+
+---
+
+## LD-20 · NaN is filtered independently on X and Y, which can misalign the pairs
+
+**Severity:** Medium
+**Lens:** Code
+**Files:** `Framework/UI/FW.UI.Controls/Chart/SpectroscopyLineChart/SpectroscopyBandChartSeriesViewModel.cs`,
+`Framework/Analysis/FW.Analysis.Calculate/Spectroscopy/FDSpectroscopyCalculator.cs`
+**07 theme:** M5 — incomplete / silently-wrong algorithm paths
+
+Several places drop non-finite samples from the X array and the Y array in **separate** passes, then use the
+two results as if they were still a sequence of pairs. That is only true when every dropout falls at the same
+index in both.
+
+Where it does not, the arrays end up different lengths (adhesion-energy integration then requires equal
+lengths and returns NaN) or — worse — the same length but shifted, so every point after the first unmatched
+dropout is paired with the wrong partner.
+
+**Consequence.** Either a measure that silently returns NaN, or one computed on a curve that never existed.
+
+**In the new product.** `ForceDistanceMeasures.Of` walks the two spans **together** and skips an index when
+either side is non-finite, so a pair is never split. Its own guard rejects mismatched lengths outright.
 
 ---
 

@@ -858,6 +858,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(CanShowVolume));
         OnPropertyChanged(nameof(ShowSpectroscopyImage));
         OnPropertyChanged(nameof(ShowCurveOnStage));
+        OnPropertyChanged(nameof(ShowCurveInInspector));
         _showSurface.RaiseCanExecuteChanged();
         _showVolume.RaiseCanExecuteChanged();
     }
