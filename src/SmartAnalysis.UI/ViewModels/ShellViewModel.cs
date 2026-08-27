@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Windows.Input;
+using System.Linq;
 using SmartAnalysis.Application.Analysis;
 using SmartAnalysis.Application.FileFormats;
 using SmartAnalysis.Application.Operations;
@@ -32,6 +33,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly ThemeManager _theme;
     private readonly IScanFilePicker _picker;
     private readonly IImageAnalysisUseCase _imageAnalysis;
+    private readonly ISpectroscopyParameterPreview _parameterPreview;
     private readonly IOperationLauncher _launcher;
     private readonly MeasurementStore _measurements;
     private readonly IWorkspacePersistence _persistence;
@@ -86,6 +88,8 @@ public sealed class ShellViewModel : ObservableObject
     private bool _isOperationPreview;
     private ImageRenderInput? _operationPreviewInput;
     private string? _volumeUnavailable;
+    private ThresholdWindow? _window;
+    private bool _windowComputed;
     private CurveRenderInput? _operationPreviewCurve;
     private Task _operationPreviewTask = Task.CompletedTask;
     private Func<DatasetId, CancellationToken, Task<PreviewOutput>>? _computePreview;
@@ -98,13 +102,14 @@ public sealed class ShellViewModel : ObservableObject
     private double _rangeMin;
     private double _rangeMax = 1.0;
 
-    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, IOperationLauncher launcher, MeasurementStore measurements, IWorkspacePersistence persistence, IWorkspacePathPicker workspacePicker, IUnsavedChangesPrompt unsavedPrompt)
+    public ShellViewModel(Workspace workspace, IScanFileReader reader, ThemeManager theme, IScanFilePicker picker, IImageAnalysisUseCase imageAnalysis, ISpectroscopyParameterPreview parameterPreview, IOperationLauncher launcher, MeasurementStore measurements, IWorkspacePersistence persistence, IWorkspacePathPicker workspacePicker, IUnsavedChangesPrompt unsavedPrompt)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _picker = picker ?? throw new ArgumentNullException(nameof(picker));
         _imageAnalysis = imageAnalysis ?? throw new ArgumentNullException(nameof(imageAnalysis));
+        _parameterPreview = parameterPreview ?? throw new ArgumentNullException(nameof(parameterPreview));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _measurements = measurements ?? throw new ArgumentNullException(nameof(measurements));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
@@ -641,6 +646,7 @@ public sealed class ShellViewModel : ObservableObject
                     // While the form is open, re-run the uncommitted preview whenever a field changes.
                     editor.ParametersChanged += (_, _) =>
                     {
+                        RaiseCurveMarkersChanged();
                         if (_isOperationPreview)
                         {
                             RefreshOperationPreview();
@@ -810,6 +816,7 @@ public sealed class ShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
                 OnPropertyChanged(nameof(CanStepMapPointBack));
                 OnPropertyChanged(nameof(CanStepMapPointForward));
+                RaiseCurveMarkersChanged();
                 MapPointChanged?.Invoke();
             }
         }
@@ -880,10 +887,72 @@ public sealed class ShellViewModel : ObservableObject
         _volumeUnavailable = reason;
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
+        RaiseCurveMarkersChanged();
     }
 
     private string? ExplainVolume()
         => OperationEditor is ParameterFormViewModel form ? _launcher.Explain(form.Id, form.Values) : null;
+
+    /// <summary>
+    /// Whether the Inspector curve shows whatever pair the channel picker was left on.
+    /// <para>
+    /// False in the Volume view, where the curve's job changed: it is no longer somewhere to explore an
+    /// acquisition's channels but the explanation of the picture on the stage. The marks on it are a force level
+    /// and two separations, so drawing them over (say) a Voltage-against-Z pair would be a confident explanation
+    /// of a measurement nothing made.
+    /// </para>
+    /// </summary>
+    public bool InspectorCurveFollowsChannelPicker => !IsVolumeView;
+
+    /// <summary>
+    /// Separations at which to mark the selected point's curve: where the threshold window begins and ends.
+    /// Empty unless the Volume view is showing, because the marks belong to ITS settings (doc 26 §22.6).
+    /// </summary>
+    public IReadOnlyList<double> CurveVerticalMarkers
+        => CurrentWindow() is { } w ? [w.PeakSeparation, w.WindowSeparation] : [];
+
+    /// <summary>Force levels to mark: the non-contact level every force is measured from, and what the threshold means.</summary>
+    public IReadOnlyList<double> CurveHorizontalMarkers
+        => CurrentWindow() is { } w ? [w.Baseline, w.ThresholdForce] : [];
+
+    // Both marker lists describe one window, and a drag will ask for them many times a second. Computed once
+    // per refresh and dropped whenever anything it depends on moves.
+    private ThresholdWindow? CurrentWindow()
+    {
+        if (!_windowComputed)
+        {
+            _window = Window();
+            _windowComputed = true;
+        }
+
+        return _window;
+    }
+
+    // A point with no window comes back with NaN separations, which the render input drops — so "nothing to
+    // measure here" draws as a curve with no window on it, which is the explanation for that pixel being a hole.
+    private ThresholdWindow? Window()
+    {
+        if (!IsVolumeView || _activeForceVolume is not { } map || OperationEditor is not ParameterFormViewModel form)
+        {
+            return null;
+        }
+
+        return _parameterPreview.Locate(
+            map,
+            _selectedMapPoint,
+            phaseIsApproach: Choice(form, "phase") is not "Retract",
+            thresholdPercent: Number(form, "threshold") ?? 50.0,
+            baselinePercent: Number(form, "baseline") ?? 20.0);
+    }
+
+    private static string? Choice(ParameterFormViewModel form, string name)
+        => form.Fields.FirstOrDefault(f => f.Name == name)?.Value as string;
+
+    private static double? Number(ParameterFormViewModel form, string name)
+        => form.Fields.FirstOrDefault(f => f.Name == name)?.Value is { } v
+            && double.TryParse(v.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d)
+            ? d
+            : null;
 
     private void RaiseVolumeViewChanged()
     {
@@ -892,10 +961,19 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSpectroscopyImage));
         OnPropertyChanged(nameof(ShowCurveOnStage));
         OnPropertyChanged(nameof(ShowCurveInInspector));
+        OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
         _showSurface.RaiseCanExecuteChanged();
         _showVolume.RaiseCanExecuteChanged();
+    }
+
+    private void RaiseCurveMarkersChanged()
+    {
+        _windowComputed = false;
+        _window = null;
+        OnPropertyChanged(nameof(CurveVerticalMarkers));
+        OnPropertyChanged(nameof(CurveHorizontalMarkers));
     }
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;

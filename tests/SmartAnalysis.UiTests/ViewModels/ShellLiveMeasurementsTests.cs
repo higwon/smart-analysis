@@ -32,11 +32,11 @@ public sealed class ShellLiveMeasurementsTests
         => NewShell(ws, new FakeImageAnalysis());
 
     private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis, new SpectroscopyParameterPreviewUseCase(),
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ShellViewModel NewShell(Workspace ws, IOperationLauncher launcher)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
                launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ImageRenderInput MakeInput()

@@ -23,7 +23,7 @@ namespace SmartAnalysis.UiTests.ViewModels;
 public sealed class ShellPaletteTests
 {
     private static ShellViewModel NewShell()
-        => new(new Workspace(), new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        => new(new Workspace(), new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
                new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     [Fact]

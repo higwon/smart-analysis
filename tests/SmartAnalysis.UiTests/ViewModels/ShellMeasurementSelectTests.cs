@@ -36,7 +36,7 @@ public sealed class ShellMeasurementSelectTests
         ws.Add(image);
         ws.SetActive(image.Id);
 
-        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
             new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
         vm.SelectMeasurement(DatasetId.New()); // the exact call the tree makes for a measurement node
@@ -173,7 +173,7 @@ public sealed class ShellMeasurementSelectTests
 
         var launcher = new MeasureRunLauncher();
         var analysis = new FakeImageAnalysis { Region = new MeasurementRegion(image.Id, RegionOverlayShape.Rectangle, 1, 1, 4, 4) };
-        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
+        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis, new SpectroscopyParameterPreviewUseCase(),
             launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
         vm.LauncherItems.Single(i => i.Id == "image.grains").LaunchCommand.Execute(null);
@@ -186,7 +186,7 @@ public sealed class ShellMeasurementSelectTests
     }
 
     private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis, new SpectroscopyParameterPreviewUseCase(),
             new FakeLauncher(), new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class ShellMeasurementSelectTests
         ws.SetActive(image.Id);
 
         var launcher = new MeasureRunLauncher();
-        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(),
+        var vm = new ShellViewModel(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), new FakeImageAnalysis(), new SpectroscopyParameterPreviewUseCase(),
             launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
         vm.LauncherItems.Single(i => i.Id == "image.grains").LaunchCommand.Execute(null);

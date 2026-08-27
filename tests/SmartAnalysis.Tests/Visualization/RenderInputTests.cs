@@ -85,6 +85,55 @@ public sealed class RenderInputTests
     public void Colormap_requires_256_entries()
         => Assert.Throws<ArgumentException>(() => new Colormap([new Rgb(0, 0, 0)]));
 
+    // --- Curve reference lines ---
+
+    private static CurveRenderInput Curve(
+        IReadOnlyList<double>? vertical = null, IReadOnlyList<double>? horizontal = null)
+        => new(
+            [new XySeries("s", new double[] { 0.0, 1.0 }, new double[] { 0.0, 1.0 })],
+            new AxisView("X", "nm", 0, 1, 2),
+            new AxisView("Y", "nN", 0, 1, 2),
+            vertical,
+            horizontal);
+
+    [Fact]
+    public void A_mark_with_no_place_on_the_plot_is_dropped()
+    {
+        // "There is no window on this curve" arrives as NaN. Kept, it would draw a line at whichever edge the
+        // axis happens to end on — an explanation of a measurement that was never made.
+        var input = Curve(
+            vertical: [1.0, double.NaN, 2.0],
+            horizontal: [double.NaN, 5.0, double.PositiveInfinity]);
+
+        Assert.Equal([1.0, 2.0], input.VerticalMarkers);
+        Assert.Equal([5.0], input.HorizontalMarkers);
+    }
+
+    [Fact]
+    public void A_plot_with_no_marks_asked_for_has_none()
+    {
+        var input = Curve();
+
+        Assert.Empty(input.VerticalMarkers);
+        Assert.Empty(input.HorizontalMarkers);
+    }
+
+    [Fact]
+    public void Adding_marks_keeps_the_series_and_the_axes()
+    {
+        // The factory builds a plot from data; what a parameter MEANS is the caller's knowledge. Adding the
+        // marks must not rebuild anything else.
+        var plain = Curve();
+
+        var marked = plain.WithMarkers([1.0], [2.0]);
+
+        Assert.Equal(plain.Series, marked.Series);
+        Assert.Same(plain.X, marked.X);
+        Assert.Same(plain.Y, marked.Y);
+        Assert.Equal([1.0], marked.VerticalMarkers);
+        Assert.Equal([2.0], marked.HorizontalMarkers);
+    }
+
     // --- AxisView ---
 
     [Fact]

@@ -36,7 +36,7 @@ public sealed class ShellCurveRoutingTests
         => NewShell(ws, analysis, new FakeLauncher());
 
     private static ShellViewModel NewShell(Workspace ws, IImageAnalysisUseCase analysis, IOperationLauncher launcher)
-        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis,
+        => new(ws, new FakeReader(), new ThemeManager(), new FakeScanPicker(), analysis, new SpectroscopyParameterPreviewUseCase(),
                launcher, new MeasurementStore(), new FakePersistence(), new FakePathPicker(), new FakePrompt());
 
     private static ScanImageDataset Image()

@@ -753,7 +753,23 @@ public partial class MainWindow : Window
     private void RenderSpectroscopyCurve(CurveRenderInput input)
     {
         SpectroscopyCurve.Render(input);
-        InspectorCurve.Render(input);
+
+        if (_viewModel.InspectorCurveFollowsChannelPicker)
+        {
+            InspectorCurve.Render(input);
+            return;
+        }
+
+        // In the Volume view the Inspector's copy carries the settings drawn on it (doc 26 §22.6) — and must
+        // therefore be the pair the PICTURE was measured from, not whatever pair the channel picker was last
+        // left on. A force level and two separations drawn over some other pair would explain nothing that was
+        // measured. The stage's copy is unmarked: there the curve is the subject, not the thing being tuned.
+        if (_viewModel.ActiveForceVolume is { } map)
+        {
+            InspectorCurve.Render(
+                RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint)
+                    .WithMarkers(_viewModel.CurveVerticalMarkers, _viewModel.CurveHorizontalMarkers));
+        }
     }
 
     private void ClearSpectroscopyCurve()
