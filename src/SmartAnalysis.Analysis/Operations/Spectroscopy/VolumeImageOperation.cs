@@ -82,9 +82,9 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 relevantWhen: new ParameterRelevance(
                     MeasureParameter, [VolumeMeasure.Stiffness, VolumeMeasure.Deformation])),
             new ParameterDescriptor(
-                BaselineParameter, typeof(double), defaultValue: ForceDistanceMeasures.DefaultBaselineFraction,
-                min: 0.01, max: 1.0,
-                help: "How much of each curve's separation travel, at the far end, is taken to be out of contact. Every force is measured from the level found there."),
+                BaselineParameter, typeof(double), defaultValue: ForceDistanceMeasures.DefaultBaselinePercent,
+                min: 1.0, max: 100.0,
+                help: "Percentage of each curve's separation travel, at the far end, taken to be out of contact (1-100). Every force is measured from the level found there."),
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
@@ -147,9 +147,9 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         var measure = parameters.TryGet<VolumeMeasure>(MeasureParameter, out var m) ? m : DefaultMeasure;
         var phase = parameters.TryGet<CurvePhase>(PhaseParameter, out var p) ? p : DefaultPhase;
         double threshold = parameters.TryGet<double>(ThresholdParameter, out var t) ? t : DefaultThreshold;
-        double baselineFraction = parameters.TryGet<double>(BaselineParameter, out var b)
+        double baselinePercent = parameters.TryGet<double>(BaselineParameter, out var b)
             ? b
-            : ForceDistanceMeasures.DefaultBaselineFraction;
+            : ForceDistanceMeasures.DefaultBaselinePercent;
 
         var pixels = new float[map.PointCount];
         int unmeasured = 0;
@@ -163,7 +163,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 progress?.Report(new OperationProgress((double)point / map.PointCount, "Measuring the map."));
             }
 
-            var (value, flat) = MeasureAt(map, point, phase, threshold, baselineFraction, measure);
+            var (value, flat) = MeasureAt(map, point, phase, threshold, baselinePercent, measure);
             if (!flat)
             {
                 sloping++;
@@ -202,7 +202,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
             operationVersion: Descriptor.Version,
             order: 0,
             environment: _environment.Capture(),
-            parameters: Recorded(measure, phase, threshold, baselineFraction),
+            parameters: Recorded(measure, phase, threshold, baselinePercent),
             warnings: warnings,
             parentResultId: imageId);
 
@@ -235,7 +235,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
     // returning the whole round trip's number instead would put a mixed-phase measure in the picture and nothing
     // on screen would say so.
     private static (double Value, bool BaselineIsFlat) MeasureAt(
-        ForceVolumeDataset map, int point, CurvePhase phase, double threshold, double baselineFraction,
+        ForceVolumeDataset map, int point, CurvePhase phase, double threshold, double baselinePercent,
         VolumeMeasure measure)
     {
         var separation = map.SeparationAt(point).Span;
@@ -260,7 +260,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
 
         int start = longest.Start, length = longest.Length;
         var measures = ForceDistanceMeasures.Of(
-            force.Slice(start, length), separation.Slice(start, length), threshold, baselineFraction);
+            force.Slice(start, length), separation.Slice(start, length), threshold, baselinePercent);
 
         double value = measure switch
         {
@@ -277,13 +277,13 @@ public sealed class VolumeImageOperation : IAnalysisOperation
     // Only what actually shaped the picture. A step naming a threshold the measure never read would put a false
     // cause in the record: someone reproducing it would tune a number that changes nothing.
     private static Dictionary<string, PhysicalValue> Recorded(
-        VolumeMeasure measure, CurvePhase phase, double threshold, double baselineFraction)
+        VolumeMeasure measure, CurvePhase phase, double threshold, double baselinePercent)
     {
         var recorded = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)
         {
             [MeasureParameter] = new((int)measure, StandardUnits.One),
             [PhaseParameter] = new((int)phase, StandardUnits.One),
-            [BaselineParameter] = new(baselineFraction, StandardUnits.One),
+            [BaselineParameter] = new(baselinePercent, StandardUnits.One),
         };
 
         if (measure is VolumeMeasure.Stiffness or VolumeMeasure.Deformation)

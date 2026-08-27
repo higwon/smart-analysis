@@ -159,27 +159,27 @@ public sealed class BaselineReferencedForceTests
 
     [Theory]
     [InlineData(0.0)]
-    [InlineData(-0.1)]
-    [InlineData(1.5)]
+    [InlineData(-10.0)]
+    [InlineData(150.0)]
     [InlineData(double.NaN)]
-    public void A_baseline_fraction_outside_the_curve_is_refused(double fraction)
+    public void A_baseline_percentage_outside_the_curve_is_refused(double percent)
     {
-        // Zero would read a level from no travel at all; more than one would call the whole curve non-contact.
+        // Zero would read a level from no travel at all; more than 100% would call the whole curve non-contact.
         var (force, separation) = Approach();
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => ForceDistanceMeasures.Of(force, separation, 50.0, fraction));
+            () => ForceDistanceMeasures.Of(force, separation, 50.0, percent));
     }
 
     [Fact]
     public void A_wider_baseline_window_still_finds_the_same_flat_level()
     {
-        // The fraction says how much of the travel to average. On a curve whose tail really is flat, widening it
+        // The percentage says how much of the travel to average. On a curve whose tail really is flat, widening it
         // within that tail must not move the answer — that is what makes the parameter safe to expose.
         var (force, separation) = Approach(offset: 50f, pullOff: 5f);
 
-        var narrow = ForceDistanceMeasures.Of(force, separation, 50.0, 0.1);
-        var wide = ForceDistanceMeasures.Of(force, separation, 50.0, 0.4);
+        var narrow = ForceDistanceMeasures.Of(force, separation, 50.0, 10.0);
+        var wide = ForceDistanceMeasures.Of(force, separation, 50.0, 40.0);
 
         Assert.Equal(narrow.MaxForce, wide.MaxForce, 3);
         Assert.Equal(narrow.Baseline, wide.Baseline, 3);

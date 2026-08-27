@@ -33,8 +33,12 @@ public readonly record struct ForceDistanceMeasures(
 {
     private const double RoundTripFactor = 1.5;
 
-    /// <summary>How much of the half's separation travel, at the far end, is taken to be non-contact.</summary>
-    public const double DefaultBaselineFraction = 0.2;
+    /// <summary>
+    /// How much of the half's separation travel, at the far end, is taken to be non-contact, as a PERCENTAGE.
+    /// A percentage because the threshold beside it is one: two adjacent controls, one 0-100 and one 0-1, are an
+    /// invitation to type the wrong scale into whichever you happen to be looking at.
+    /// </summary>
+    public const double DefaultBaselinePercent = 20.0;
 
     // A tail scattering by more than this share of the curve's whole force range is not a flat non-contact line.
     private const double FlatTolerance = 0.1;
@@ -60,7 +64,7 @@ public readonly record struct ForceDistanceMeasures(
         ReadOnlySpan<float> force,
         ReadOnlySpan<float> separation,
         double thresholdPercent,
-        double baselineFraction = DefaultBaselineFraction)
+        double baselinePercent = DefaultBaselinePercent)
     {
         if (force.Length != separation.Length)
         {
@@ -69,13 +73,13 @@ public readonly record struct ForceDistanceMeasures(
                 nameof(separation));
         }
 
-        if (!(baselineFraction > 0.0) || baselineFraction > 1.0)
+        if (!(baselinePercent > 0.0) || baselinePercent > 100.0)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(baselineFraction), baselineFraction, "The baseline fraction must be in (0, 1].");
+                nameof(baselinePercent), baselinePercent, "The baseline percentage must be in (0, 100].");
         }
 
-        var level = EstimateBaseline(force, separation, baselineFraction);
+        var level = EstimateBaseline(force, separation, baselinePercent / 100.0);
         if (!double.IsFinite(level.Force))
         {
             return None;

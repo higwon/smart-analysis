@@ -42,7 +42,7 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
         parameters: new ParameterSchema(
         [
             new ParameterDescriptor(ThresholdParameter, typeof(double), defaultValue: DefaultThreshold, min: 0.0, max: 100.0, help: "Percentage of the maximum force that bounds the stiffness/deformation window (0–100)."),
-            new ParameterDescriptor(BaselineParameter, typeof(double), defaultValue: ForceDistanceMeasures.DefaultBaselineFraction, min: 0.01, max: 1.0, help: "How much of the curve's separation travel, at the far end, is taken to be out of contact. Forces are measured from the level found there."),
+            new ParameterDescriptor(BaselineParameter, typeof(double), defaultValue: ForceDistanceMeasures.DefaultBaselinePercent, min: 1.0, max: 100.0, help: "Percentage of the curve's separation travel, at the far end, taken to be out of contact (1-100). Forces are measured from the level found there."),
         ]),
         output: OutputKind.Artifact,
         isDeterministic: true,
@@ -101,16 +101,16 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
 
         var curve = (ForceCurveDataset)input.Primary;
         double threshold = parameters.TryGet<double>(ThresholdParameter, out var t) ? t : DefaultThreshold;
-        double baselineFraction = parameters.TryGet<double>(BaselineParameter, out var b)
+        double baselinePercent = parameters.TryGet<double>(BaselineParameter, out var b)
             ? b
-            : ForceDistanceMeasures.DefaultBaselineFraction;
+            : ForceDistanceMeasures.DefaultBaselinePercent;
 
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new OperationProgress(0.0, "Measuring the curve."));
 
         var warnings = new List<OperationWarning>();
         var m = ForceDistanceMeasures.Of(
-            curve.Force.Memory.Span, curve.Separation.Memory.Span, threshold, baselineFraction);
+            curve.Force.Memory.Span, curve.Separation.Memory.Span, threshold, baselinePercent);
 
         if (m.HasNonFiniteSamples)
         {
@@ -165,7 +165,7 @@ public sealed class ForceDistanceMeasuresOperation : IAnalysisOperation
             parameters: new Dictionary<string, PhysicalValue>
             {
                 [ThresholdParameter] = new(threshold, StandardUnits.One),
-                [BaselineParameter] = new(baselineFraction, StandardUnits.One),
+                [BaselineParameter] = new(baselinePercent, StandardUnits.One),
             },
             warnings: warnings,
             parentResultId: artifactId);

@@ -298,13 +298,13 @@ public sealed class VolumeImageOperationTests
             {
                 [VolumeImageOperation.MeasureParameter] = VolumeMeasure.Adhesion,
                 [VolumeImageOperation.PhaseParameter] = CurvePhase.Retract,
-                [VolumeImageOperation.BaselineParameter] = 0.3,
+                [VolumeImageOperation.BaselineParameter] = 30.0,
             }),
             null,
             CancellationToken.None);
         using var image = (ScanImageDataset)result.DerivedDataset!;
 
-        Assert.Equal(0.3, image.Provenance.Steps[0].Parameters[VolumeImageOperation.BaselineParameter].Value);
+        Assert.Equal(30.0, image.Provenance.Steps[0].Parameters[VolumeImageOperation.BaselineParameter].Value);
     }
 
     [Fact]
