@@ -233,6 +233,10 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
     // Resolves the active source, coerces the parameters, attaches the ROI for a region-capable op, and validates —
     // the shared front half of apply and preview, so the two never diverge on what they run. On any expected problem
     // returns only an Error (a best-effort preview turns it into "no PREVIEW"; apply surfaces it as a typed failure).
+    /// <inheritdoc/>
+    public string? Explain(string operationId, IReadOnlyDictionary<string, object?> values)
+        => Prepare(operationId, values).Error;
+
     private Prepared Prepare(string operationId, IReadOnlyDictionary<string, object?> values)
     {
         ArgumentNullException.ThrowIfNull(values);

@@ -720,11 +720,16 @@ public partial class MainWindow : Window
     {
         if (_viewModel.IsVolumeView)
         {
-            // The picture IS the preview — nothing is in the workspace to render until Keep as image. A stale
-            // surface stays up until the first one arrives rather than blanking the stage.
+            // The picture IS the preview — nothing is in the workspace to render until Keep as image. When the
+            // current settings cannot produce one, the previous picture must go: leaving it up shows one set of
+            // settings on the stage and another in the panel beside it, with nothing saying which is which.
             if (_viewModel.OperationPreviewInput is { } picture)
             {
                 SpectroscopySurface.Render(picture);
+            }
+            else if (_viewModel.HasVolumeUnavailable)
+            {
+                SpectroscopySurface.Clear();
             }
 
             // Every pixel of the volume image IS a measurement point, so a marker on each would be noise drawn on

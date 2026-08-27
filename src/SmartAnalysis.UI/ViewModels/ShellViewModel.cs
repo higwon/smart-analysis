@@ -85,6 +85,7 @@ public sealed class ShellViewModel : ObservableObject
     private Task _liveMeasurementsTask = Task.CompletedTask;
     private bool _isOperationPreview;
     private ImageRenderInput? _operationPreviewInput;
+    private string? _volumeUnavailable;
     private CurveRenderInput? _operationPreviewCurve;
     private Task _operationPreviewTask = Task.CompletedTask;
     private Func<DatasetId, CancellationToken, Task<PreviewOutput>>? _computePreview;
@@ -315,6 +316,7 @@ public sealed class ShellViewModel : ObservableObject
 
         _isOperationPreview = on;
         _operationPreviewInput = null; // clear the old preview; a fresh one is computed below when turning on
+        SetVolumeUnavailable(null);
         _operationPreviewCurve = null;
         OnPropertyChanged(nameof(IsOperationPreview));
         OnPropertyChanged(nameof(ShowComparePanes));
@@ -376,6 +378,15 @@ public sealed class ShellViewModel : ObservableObject
             {
                 _operationPreviewInput = output.Image;
                 _operationPreviewCurve = output.Curve;
+
+                // An attempt that produced nothing is not the same as no attempt yet. On the Volume view the
+                // preview IS the stage, so leaving the previous picture up would show one set of settings while
+                // another is on screen beside it.
+                SetVolumeUnavailable(
+                    IsVolumeView && output.Image is null
+                        ? ExplainVolume() ?? "This map cannot be measured with these settings."
+                        : null);
+
                 OnPropertyChanged(nameof(OperationPreviewInput));
                 OnPropertyChanged(nameof(OperationPreviewCurve));
                 ImagesChanged?.Invoke(this, EventArgs.Empty);
@@ -852,6 +863,26 @@ public sealed class ShellViewModel : ObservableObject
         => $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
             + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {unit.Symbol}";
 
+    /// <summary>Why the Volume view has no picture for the current settings, or null when it has one.</summary>
+    public string? VolumeUnavailable => _volumeUnavailable;
+
+    public bool HasVolumeUnavailable => _volumeUnavailable is not null;
+
+    private void SetVolumeUnavailable(string? reason)
+    {
+        if (_volumeUnavailable == reason)
+        {
+            return;
+        }
+
+        _volumeUnavailable = reason;
+        OnPropertyChanged(nameof(VolumeUnavailable));
+        OnPropertyChanged(nameof(HasVolumeUnavailable));
+    }
+
+    private string? ExplainVolume()
+        => OperationEditor is ParameterFormViewModel form ? _launcher.Explain(form.Id, form.Values) : null;
+
     private void RaiseVolumeViewChanged()
     {
         OnPropertyChanged(nameof(IsVolumeView));
@@ -859,6 +890,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSpectroscopyImage));
         OnPropertyChanged(nameof(ShowCurveOnStage));
         OnPropertyChanged(nameof(ShowCurveInInspector));
+        OnPropertyChanged(nameof(VolumeUnavailable));
+        OnPropertyChanged(nameof(HasVolumeUnavailable));
         _showSurface.RaiseCanExecuteChanged();
         _showVolume.RaiseCanExecuteChanged();
     }
