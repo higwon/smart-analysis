@@ -843,4 +843,23 @@ public sealed class ShellForceVolumeTests
         Assert.False(vm.ShowCurveOnStage);
         Assert.True(vm.ShowSpectroscopyImage);
     }
+
+    [Fact]
+    public void A_rejected_channel_index_is_pushed_back_so_the_combo_cannot_go_blank()
+    {
+        // A ComboBox writes SelectedIndex = -1 when its ItemsSource is swapped. The view-model coerces that back
+        // into range — but when the coerced value is the one it already held, SetProperty raises nothing, the
+        // control never re-reads, and it sits at -1 showing an empty box beside a populated one.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+        vm.SelectedYChannel = 0;
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.SelectedYChannel = -1;
+
+        Assert.Equal(0, vm.SelectedYChannel);
+        Assert.Contains(nameof(vm.SelectedYChannel), raised);
+    }
 }

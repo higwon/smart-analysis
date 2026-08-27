@@ -1085,21 +1085,32 @@ public sealed class ShellViewModel : ObservableObject
         => SpectroscopyChannels is null
            || (_selectedXChannel == _designatedXChannel && _selectedYChannel == _designatedYChannel);
 
+    // A selector writes SelectedIndex = -1 whenever its item source is swapped. Coercing that back into range is
+    // not enough: unless the rejection is announced, the control never re-reads and sits at -1 — an empty combo
+    // beside a populated one, with the view-model holding a perfectly good value the whole time.
     private void SetChannel(ref int field, int value, string name)
     {
         if (SpectroscopyChannels is not { } set)
         {
+            OnPropertyChanged(name);
             return;
         }
 
         int clamped = Math.Clamp(value, 0, set.ChannelCount - 1);
-        if (SetProperty(ref field, clamped, name))
+        if (!SetProperty(ref field, clamped, name))
         {
-            OnPropertyChanged(nameof(IsDesignatedChannelPair));
-            OnPropertyChanged(nameof(SpectroscopyLabel));
-            OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
-            MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
+            if (clamped != value)
+            {
+                OnPropertyChanged(name);
+            }
+
+            return;
         }
+
+        OnPropertyChanged(nameof(IsDesignatedChannelPair));
+        OnPropertyChanged(nameof(SpectroscopyLabel));
+        OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
+        MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
     }
 
     // A channel selection belongs to one dataset. Carrying an index across would plot whatever channel happened
