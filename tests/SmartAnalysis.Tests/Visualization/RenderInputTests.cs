@@ -85,6 +85,31 @@ public sealed class RenderInputTests
     public void Colormap_requires_256_entries()
         => Assert.Throws<ArgumentException>(() => new Colormap([new Rgb(0, 0, 0)]));
 
+    // --- Unmeasured samples (V06) ---
+
+    private static ImageRenderInput Image(params float[] z)
+        => new(
+            z, z.Length, 1, new ValueRange(0, 1), Colormap.Grayscale,
+            new AxisView("X", "nm", 0, 1, z.Length), new AxisView("Y", "nm", 0, 1, 1), "nm");
+
+    [Fact]
+    public void An_image_with_every_sample_measured_says_so()
+        => Assert.False(Image(0f, 1f, 2f).HasUnmeasured);
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    public void One_unmeasured_sample_is_enough_to_need_a_legend(float bad)
+    {
+        // The colour is already on screen by then (V04). What was missing is anything saying what it means.
+        Assert.True(Image(0f, bad, 2f).HasUnmeasured);
+    }
+
+    [Fact]
+    public void An_empty_image_has_nothing_unmeasured()
+        => Assert.False(Image().HasUnmeasured);
+
     // --- Curve reference lines ---
 
     private static CurveRenderInput Curve(

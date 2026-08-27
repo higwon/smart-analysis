@@ -50,7 +50,8 @@ public partial class PaletteBar : UserControl
     }
 
     /// <summary>Sets the colormap, the fixed data axis and the current value window, then repaints.</summary>
-    public void Update(Colormap colormap, ValueRange dataRange, ValueRange window, string unit)
+    public void Update(
+        Colormap colormap, ValueRange dataRange, ValueRange window, string unit, bool hasUnmeasured = false)
     {
         _colormap = colormap;
         _data = dataRange;
@@ -59,6 +60,10 @@ public partial class PaletteBar : UserControl
         MaxLabel.Text = Format(dataRange.Max);
         MinLabel.Text = Format(dataRange.Min);
         UnitLabel.Text = unit;
+
+        NoDataSwatch.Background = new SolidColorBrush(ToColor(Colormap.NoData));
+        NoDataKey.Visibility = hasUnmeasured ? Visibility.Visible : Visibility.Collapsed;
+
         Repaint();
     }
 
@@ -68,6 +73,7 @@ public partial class PaletteBar : UserControl
         _colormap = null;
         Bar.Background = null;
         MaxLabel.Text = MinLabel.Text = UnitLabel.Text = string.Empty;
+        NoDataKey.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
