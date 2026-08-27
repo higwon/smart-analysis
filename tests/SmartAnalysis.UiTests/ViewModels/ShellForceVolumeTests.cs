@@ -1350,36 +1350,67 @@ public sealed class ShellForceVolumeTests
     }
 
     [Fact]
-    public void The_volume_picture_carries_no_surface_markers()
+    public void The_volume_picture_marks_the_selected_point_and_only_it()
     {
-        // The positions are in the SURFACE's pixels. A 128-pixel surface carrying an 8-point map means point 1
-        // sits near surface pixel 8 — which on an 8-pixel-wide picture lands in the far corner. Exactly one mark
-        // stays on screen and the other 63 fly off it, which reads as a stray dot rather than as a bug.
+        // Not all of them: on a picture where every pixel is a point, a mark on each is noise drawn over the
+        // thing it marks. Not none either: the mark is the only thing saying which of the curves the panel
+        // beside it describes, and the only confirmation that a click landed where the viewer meant.
         var ws = new Workspace();
         var vm = NewShell(ws, new VolumeLauncher());
-        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        var map = Map(6, Grid(3, 2));
         ws.Add(map);
         ws.SetActive(map.Id);
-
-        Assert.NotEmpty(vm.PointMarkers);
-
         vm.ShowVolumeCommand.Execute(null);
 
-        Assert.Empty(vm.PointMarkers);
+        vm.SelectMapPointAt(column: 1, row: 1);
+
+        // The centre of that point's OWN pixel — the picture's coordinates, not the surface's.
+        Assert.Equal((1.5, 1.5), Assert.Single(vm.PointMarkers));
+        Assert.Equal(0, vm.SelectedPointMarker);
     }
 
     [Fact]
-    public void Stepping_a_point_inside_the_volume_view_still_offers_no_markers()
+    public void The_surface_marks_every_point_and_says_which_is_selected()
     {
-        // The redraw path asks again on every point change; it must get the same answer as the first render.
         var ws = new Workspace();
         var vm = NewShell(ws, new VolumeLauncher());
         var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
         ws.Add(map);
         ws.SetActive(map.Id);
+
+        vm.SelectedMapPoint = 1;
+
+        Assert.Equal(2, vm.PointMarkers.Count);
+        Assert.Equal(1, vm.SelectedPointMarker);
+    }
+
+    [Fact]
+    public void The_mark_follows_the_point_through_the_volume_view()
+    {
+        // The redraw path asks again on every point change; a mark left behind would point at the previous
+        // curve while the panel describes this one.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
         vm.ShowVolumeCommand.Execute(null);
 
+        var before = Assert.Single(vm.PointMarkers);
         vm.StepMapPoint(1);
+
+        Assert.NotEqual(before, Assert.Single(vm.PointMarkers));
+    }
+
+    [Fact]
+    public void A_volume_view_of_a_map_with_no_grid_marks_nothing()
+    {
+        // Without a grid there is no picture either, so there is no pixel for a mark to sit on.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(4);
+        ws.Add(map);
+        ws.SetActive(map.Id);
 
         Assert.Empty(vm.PointMarkers);
     }

@@ -733,16 +733,15 @@ public partial class MainWindow : Window
                 SpectroscopySurface.Clear();
             }
 
-            // Every pixel of the volume image IS a measurement point, so a marker on each would be noise drawn on
-            // top of the thing it marks. The view-model says so by offering none.
-            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
+            // One mark: the selected point, in the picture's own pixels. The view-model decides which and where.
+            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedPointMarker);
             return;
         }
 
         if (_viewModel.SpectroscopyReferenceImage is { } surface)
         {
             SpectroscopySurface.Render(RenderInputFactory.ForImage(surface, _viewModel.Colormap, null));
-            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
+            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedPointMarker);
         }
         else
         {
@@ -794,7 +793,7 @@ public partial class MainWindow : Window
     // Only the plotted curve changes when the viewer steps through a map; the rest of the stage is untouched.
     private void RedrawMapPoint()
     {
-        SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
+        SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedPointMarker);
 
         // A channel change redraws a single curve too, not only a map point.
         if (SpectroscopyCurveInput() is { } input)

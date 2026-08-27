@@ -894,6 +894,12 @@ public sealed class ShellViewModel : ObservableObject
         => OperationEditor is ParameterFormViewModel form ? _launcher.Explain(form.Id, form.Values) : null;
 
     /// <summary>
+    /// Which of <see cref="PointMarkers"/> is the selected one. The Volume view offers exactly one mark — the
+    /// selected point — so it is that one; elsewhere the marks are every point in order.
+    /// </summary>
+    public int SelectedPointMarker => IsVolumeView ? 0 : _selectedMapPoint;
+
+    /// <summary>
     /// Whether the Inspector curve shows whatever pair the channel picker was left on.
     /// <para>
     /// False in the Volume view, where the curve's job changed: it is no longer somewhere to explore an
@@ -967,6 +973,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowCurveInInspector));
         OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
         OnPropertyChanged(nameof(PointMarkers));
+        OnPropertyChanged(nameof(SelectedPointMarker));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
         _showSurface.RaiseCanExecuteChanged();
@@ -1140,13 +1147,21 @@ public sealed class ShellViewModel : ObservableObject
     {
         get
         {
-            // Empty in the Volume view, and empty HERE rather than at each place that draws: the positions are
-            // in the SURFACE's pixels, which the volume picture does not share, so a caller that forgot the mode
-            // would not draw nothing — it would draw the marks somewhere wrong on a picture where every pixel is
-            // already a point.
+            // The Volume view marks ONE point: the selected one, at the centre of its own pixel.
+            //
+            // Not all of them — on a picture where every pixel is already a point that would be noise drawn on
+            // top of the thing it marks. But not none either: the mark is the only thing on screen saying which
+            // of the curves the panel beside it describes, and, since a click on a pixel is how that curve is
+            // chosen, the only confirmation that the click landed where the viewer meant.
+            //
+            // In the picture's OWN pixels. The recorded positions below are in the surface's, which the volume
+            // image does not share — mixing them is what put a stray mark in the far corner.
             if (IsVolumeView)
             {
-                return [];
+                return _activeForceVolume?.Geometry is { } cells
+                    && _selectedMapPoint >= 0 && _selectedMapPoint < cells.Columns * cells.Rows
+                        ? [((_selectedMapPoint % cells.Columns) + 0.5, (_selectedMapPoint / cells.Columns) + 0.5)]
+                        : [];
             }
 
             var layout = _activeForceVolume?.PointLayout ?? _activeForceCurve?.PointLayout;
