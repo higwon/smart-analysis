@@ -427,6 +427,13 @@
             <Border Grid.Column="2" Background="{DynamicResource SA.Brush.Background.Sidebar}"
                     BorderBrush="{DynamicResource SA.Brush.Border.Default}" BorderThickness="{DynamicResource SA.Stroke.Hairline.Left}">
                 <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- The roles overlay each other; only one is visible at a time. -->
+                    <Grid Grid.Row="0">
                     <!-- placeholder when no image -->
                     <StackPanel Margin="{DynamicResource SA.Pad.Panel}" VerticalAlignment="Center" HorizontalAlignment="Center"
                                 Visibility="{Binding HasNothingToInspect, Converter={StaticResource Bool2Vis}}">
@@ -502,12 +509,6 @@
                                 <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedXChannel}"/>
                                 <TextBlock Text="Y" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Top1}"/>
                                 <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedYChannel}"/>
-                            </StackPanel>
-
-                            <!-- What this point measured. Inspection, not the Stage's subject. -->
-                            <StackPanel Visibility="{Binding ShowCurveInInspector, Converter={StaticResource Bool2Vis}}">
-                                <TextBlock Text="CURVE" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
-                                <ctl:AfmCurveView x:Name="InspectorCurve" Height="180"/>
                             </StackPanel>
 
                             <Button Content="Extract this point" Style="{StaticResource SA.Button.Primary}"
@@ -720,6 +721,16 @@
                             <TextBlock Text="A recorded step is read-only. Selecting it does not change the active dataset."
                                        TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
                         </Border>
+                    </StackPanel>
+                    </Grid>
+
+                    <!-- doc 26 SS22.6: the selected point curve belongs to the POINT, not to a role. It is what
+                         the volume image parameters act on, so it cannot be the thing that disappears when you
+                         switch to the view that sets them. -->
+                    <StackPanel Grid.Row="1" Margin="{DynamicResource SA.Pad.Panel}"
+                                Visibility="{Binding ShowCurveInInspector, Converter={StaticResource Bool2Vis}}">
+                        <TextBlock Text="CURVE" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                        <ctl:AfmCurveView x:Name="InspectorCurve" Height="180"/>
                     </StackPanel>
                 </Grid>
             </Border>

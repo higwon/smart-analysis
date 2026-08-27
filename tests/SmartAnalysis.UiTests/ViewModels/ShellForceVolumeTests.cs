@@ -825,6 +825,64 @@ public sealed class ShellForceVolumeTests
     }
 
     [Fact]
+    public void The_curve_stays_in_the_inspector_when_the_volume_takes_the_stage()
+    {
+        // doc 26 SS22.6: the volume image parameters are statements ABOUT a curve — "50% of the maximum force"
+        // is a place on one. Hiding the curve when you switch to the view that sets them leaves the user typing
+        // a number with no referent, and a pixel that comes out as a hole with no explanation.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.True(vm.ShowCurveInInspector);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.True(vm.IsVolumeView);
+        Assert.True(vm.ShowCurveInInspector);
+    }
+
+    [Fact]
+    public void A_surfaceless_map_shows_the_curve_beside_the_picture_rather_than_twice()
+    {
+        // With no surface the curve owns the stage, so the Inspector does not repeat it. Entering the Volume
+        // view hands the stage to the picture — and that is exactly when the Inspector has to pick the curve up.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));   // no reference surface
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.True(vm.ShowCurveOnStage);
+        Assert.False(vm.ShowCurveInInspector);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.False(vm.ShowCurveOnStage);
+        Assert.True(vm.ShowCurveInInspector);
+    }
+
+    [Fact]
+    public void Entering_the_volume_view_announces_the_curve_moving()
+    {
+        // The binding only re-reads on a change notification; without one the panel keeps whatever it last drew.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.Contains(nameof(vm.ShowCurveInInspector), raised);
+    }
+
+    [Fact]
     public void A_map_with_no_surface_still_gets_the_picture_rather_than_the_curve()
     {
         // ShowCurveOnStage exists so a surface-less map is not blank. The picture is a better answer than the

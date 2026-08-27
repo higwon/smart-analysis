@@ -508,3 +508,33 @@ The Surface/Volume toggle sits on the viewer toolbar because it is a view mode o
 | **Keep as image** | Inspector ▸ Keep as image | volume view → image stage | dataset props | derived scan image | step (measure + all parameters) |
 
 Rule still satisfied: each adds a launcher entry, an Inspector role, and at most one Stage view.
+
+### 22.6 A volume image is tuned against a curve, not typed at
+
+Added after the first Volume view reached the screen. Its parameters were a numeric form: `Measure`, `Phase`,
+`Threshold = 50`. Every one of those is a statement **about a curve** — "50% of the maximum force" is a place
+on a force curve, not a number — and the panel showed no curve. Worse, entering the Volume view switched the
+Inspector to the operation role, which hid the very curve preview §22.2 had just put there.
+
+So the loop was: type a number, look at a picture, guess. And when a pixel came out as a **hole** (§22.3: a
+point whose curve has no run of the requested phase is `NaN`), nothing on screen said why.
+
+Legacy solves this by putting the curve **inside the settings panel** and setting the parameters by dragging on
+it: a draggable baseline for adhesion energy, a pair of snapping cursors for a modulus fit range, a single
+cursor for an indexed volume. The user picks a point, tunes against that one curve with live numbers, then
+presses *Update Volume Image* to apply the same parameters to every point.
+
+That workflow is right and this product should have it. Three steps, in order:
+
+| | |
+|---|---|
+| **1. The curve stays** | The selected point's curve is visible in the Inspector in **both** views. It is what the parameters act on; it cannot be the thing that disappears when you go to set them. |
+| **2. The parameters are drawn on it** | The threshold appears as the force level it means and the window it selects. A point that yields nothing shows **no window** — which is the explanation for its hole. |
+| **3. The parameters are dragged on it** | As legacy does. Deferred: the value of 1 and 2 does not depend on it, and a control you can drag is worth less than a control whose meaning you can see. |
+
+Point selection stays a single source (§22.1): `◀ ▶` steps, and a click on the Volume image selects the point
+under it — the same mapping the picture is built from, so a hole is one click from its curve.
+
+**What this product does not copy from legacy.** Legacy's baseline offset is a blind percentage of the
+longest-separation tail, applied to every measure. It is the most consequential setting on the panel and it is
+not shown on the curve at all — see `36-legacy-defect-register.md`.
