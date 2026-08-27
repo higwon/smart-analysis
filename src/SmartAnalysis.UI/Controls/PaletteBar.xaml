@@ -7,6 +7,7 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Top = data maximum -->
@@ -49,5 +50,17 @@
                    HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Top2}"/>
         <TextBlock x:Name="UnitLabel" Grid.Row="3" Style="{StaticResource SA.Text.Micro}"
                    HorizontalAlignment="Center"/>
+
+        <!-- Only when the image actually has unmeasured samples. A viewer who meets the colour otherwise has to
+             already know what it means, and a legend on every image would be noise on the ones that have none. -->
+        <StackPanel x:Name="NoDataKey" Grid.Row="4" Orientation="Horizontal" Visibility="Collapsed"
+                    HorizontalAlignment="Center" Margin="{DynamicResource SA.Gap.Top1}">
+            <Border x:Name="NoDataSwatch" Width="10" Height="10" VerticalAlignment="Center"
+                    BorderBrush="{DynamicResource SA.Brush.Border.Default}"
+                    BorderThickness="{DynamicResource SA.Stroke.Hairline}"
+                    CornerRadius="{DynamicResource SA.Radius.Sm}"/>
+            <TextBlock Text="no data" Style="{StaticResource SA.Text.Micro}"
+                       VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left1}"/>
+        </StackPanel>
     </Grid>
 </UserControl>

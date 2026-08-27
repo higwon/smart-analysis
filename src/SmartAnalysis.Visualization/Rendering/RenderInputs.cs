@@ -37,7 +37,27 @@ public sealed record ImageRenderInput
         X = x ?? throw new ArgumentNullException(nameof(x));
         Y = y ?? throw new ArgumentNullException(nameof(y));
         ChannelUnit = channelUnit ?? throw new ArgumentNullException(nameof(channelUnit));
+
+        // Counted here, once, while the borrow is valid (ADR-011) — a viewer cannot ask the samples later.
+        var span = z.Span;
+        foreach (var v in span)
+        {
+            if (!float.IsFinite(v))
+            {
+                HasUnmeasured = true;
+                break;
+            }
+        }
     }
+
+    /// <summary>
+    /// Whether any sample is not a number — somewhere the instrument did not measure.
+    /// <para>
+    /// Carried so a legend can name the colour those samples get, and <b>only</b> when there are some: a
+    /// "no data" swatch on every image would be noise on the great majority that have none.
+    /// </para>
+    /// </summary>
+    public bool HasUnmeasured { get; }
 
     /// <summary>
     /// Row-major pixel values — a <b>borrowed read-only view of the source dataset's buffer</b>, not an

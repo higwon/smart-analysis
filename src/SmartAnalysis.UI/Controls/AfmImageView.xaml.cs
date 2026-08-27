@@ -457,7 +457,7 @@ public partial class AfmImageView : UserControl, IImageView
         _bmpW = w;
         _bmpH = h;
 
-        Palette.Update(input.Colormap, input.DataRange, input.Range, input.ChannelUnit);
+        Palette.Update(input.Colormap, input.DataRange, input.Range, input.ChannelUnit, input.HasUnmeasured);
 
         if (Viewport.ActualWidth > 0 && Viewport.ActualHeight > 0)
         {
