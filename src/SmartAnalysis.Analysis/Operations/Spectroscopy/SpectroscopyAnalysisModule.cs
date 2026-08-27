@@ -18,6 +18,7 @@ public static class SpectroscopyAnalysisModule
         services.AddAnalysisOperation<ApproachRetractSplitOperation>();   // A23 — the half every FD measure builds on
         services.AddAnalysisOperation<ForceDistanceMeasuresOperation>();  // A13
         services.AddAnalysisOperation<MapPointExtractOperation>();       // A39 - the bridge from a map to every curve op
+        services.AddAnalysisOperation<VolumeImageOperation>();            // FF15 - a map as a picture, one pixel per point
 
         services.AddAnalysisOperation<SeparationCorrectionOperation>(); // A38 — what a contact fit should see (LD-11)
         services.AddAnalysisOperation<ModulusOperation>();                // A12
