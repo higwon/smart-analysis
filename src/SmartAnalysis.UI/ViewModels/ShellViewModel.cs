@@ -39,6 +39,8 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IUnsavedChangesPrompt _unsavedPrompt;
     private readonly AsyncRelayCommand _runStatistics;
     private readonly AsyncRelayCommand _extractPoint;
+    private readonly RelayCommand _showSurface;
+    private readonly RelayCommand _showVolume;
     private readonly RelayCommand _save;
     private string? _workspacePath;   // where this workspace was last saved/opened (Save writes here silently)
     private bool _suppressDirty;      // guards the dirty flag during an in-place Open
@@ -48,6 +50,7 @@ public sealed class ShellViewModel : ObservableObject
     // everything else falls through to the generic parameter form. Adding a new operation needs no entry.
     private const string FlattenId = "image.flatten";
     private const string StatisticsId = "image.statistics";
+    private const string VolumeImageId = "force-volume.volume-image";
 
     private string _workspaceName = "Untitled workspace";
     private bool _hasUnsavedChanges;
@@ -130,6 +133,10 @@ public sealed class ShellViewModel : ObservableObject
         ToggleLauncherCommand = new RelayCommand(() => IsLauncherOpen = !IsLauncherOpen, () => LauncherItems.Count > 0);
         _runStatistics = new AsyncRelayCommand(RunStatisticsAsync, () => HasActiveImage, OnCommandError);
         _extractPoint = new AsyncRelayCommand(ExtractPointAsync, () => IsForceVolume, OnCommandError);
+        // Closing the editor is what leaves the volume view: the picture is the preview, so there is no separate
+        // "off" state to keep in sync.
+        _showSurface = new RelayCommand(() => OperationEditor = null, () => IsVolumeView);
+        _showVolume = new RelayCommand(() => LaunchOperation(VolumeImageId), () => CanShowVolume && !IsVolumeView);
         ExitCompareCommand = new RelayCommand(() => _workspace.SetComparison([]), () => IsBeforeAfter);
 
         // Topology changes (datasets added/removed) rebuild the tree; an active/comparison change only
@@ -226,6 +233,7 @@ public sealed class ShellViewModel : ObservableObject
             IsInteractiveImageEditing = IsImageOverlayEditor(value);
             SetProperty(ref _operationEditor, value);
             SetOperationPreview(value);
+            RaiseVolumeViewChanged();
         }
     }
 
@@ -265,6 +273,10 @@ public sealed class ShellViewModel : ObservableObject
             FlattenPanelViewModel when HasActiveImage
                 => async (id, ct) => new PreviewOutput(await _imageAnalysis.PreviewFlattenAsync(id, CurrentFlattenOptions(), _colormap, EffectiveRange, ct).ConfigureAwait(true), null),
             ParameterFormViewModel form when HasActiveImage && form.DerivesImage && !IsImageOverlayEditor(form)
+                => async (id, ct) => new PreviewOutput(await _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange, ct).ConfigureAwait(true), null),
+            // A map is not an image, but a map -> image operation still previews: the picture recomputes in place
+            // as the measure's parameters change, and nothing enters the workspace until Apply (doc 26 SS22.3).
+            ParameterFormViewModel form when _activeForceVolume is not null && form.DerivesImage
                 => async (id, ct) => new PreviewOutput(await _launcher.PreviewAsync(form.Id, form.Values, _colormap, EffectiveRange, ct).ConfigureAwait(true), null),
             ParameterFormViewModel form when _activeCurve is not null && form.DerivesCurve && !IsImageOverlayEditor(form) && !IsProfileRangeEditor(form)
                 => async (id, ct) => new PreviewOutput(null, await _launcher.PreviewCurveAsync(form.Id, form.Values, ct).ConfigureAwait(true)),
@@ -310,6 +322,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(CompareAfterLabel));
         OnPropertyChanged(nameof(ShowSingle2D));
         OnPropertyChanged(nameof(ShowSingle3D));
+        RaiseVolumeViewChanged();
+
         OnPropertyChanged(nameof(OperationPreviewInput));
         OnPropertyChanged(nameof(OperationPreviewCurve));
 
@@ -838,6 +852,16 @@ public sealed class ShellViewModel : ObservableObject
         => $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
             + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {unit.Symbol}";
 
+    private void RaiseVolumeViewChanged()
+    {
+        OnPropertyChanged(nameof(IsVolumeView));
+        OnPropertyChanged(nameof(CanShowVolume));
+        OnPropertyChanged(nameof(ShowSpectroscopyImage));
+        OnPropertyChanged(nameof(ShowCurveOnStage));
+        _showSurface.RaiseCanExecuteChanged();
+        _showVolume.RaiseCanExecuteChanged();
+    }
+
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
 
     // Switching maps resets the selection: point 7 of the map you were looking at has nothing to do with
@@ -881,7 +905,7 @@ public sealed class ShellViewModel : ObservableObject
     /// surface (doc 26 §22.1) and keeps the curve in the Inspector; one without a surface has nothing spatial
     /// to show, so the curve takes the Stage rather than leaving it blank.
     /// </summary>
-    public bool ShowCurveOnStage => IsSpectroscopy && !HasReferenceSurface;
+    public bool ShowCurveOnStage => IsSpectroscopy && !HasReferenceSurface && !IsVolumeView;
 
     /// <summary>
     /// The Inspector previews the selected point's curve only when the stage is showing the surface instead —
@@ -941,6 +965,25 @@ public sealed class ShellViewModel : ObservableObject
             return map.Geometry is { } grid ? $"{grid.Columns} × {grid.Rows} grid · {points}" : $"{points} · no grid";
         }
     }
+
+    /// <summary>
+    /// The Stage is showing the map as a picture rather than the surface it was measured on (doc 26 SS22.3). It is
+    /// a <b>view</b>, not a dataset: the parameters live in the Inspector and the picture recomputes in place, and
+    /// only <i>Keep as image</i> puts one in the workspace. Materialising one per threshold tweak would bury the
+    /// workspace in near-identical images and make provenance meaningless.
+    /// </summary>
+    public bool IsVolumeView
+        => _isOperationPreview && IsForceVolume && OperationEditor is ParameterFormViewModel { Id: VolumeImageId };
+
+    /// <summary>Offered only for a map that could produce a picture: without a grid there is no shape to draw.</summary>
+    public bool CanShowVolume => _activeForceVolume?.Geometry is not null;
+
+    /// <summary>The image view takes the Stage for the surface and for the volume picture alike.</summary>
+    public bool ShowSpectroscopyImage => HasReferenceSurface || IsVolumeView;
+
+    public ICommand ShowSurfaceCommand => _showSurface;
+
+    public ICommand ShowVolumeCommand => _showVolume;
 
     /// <summary>An empty bar is worse than no bar: a plain curve of the designated pair has nothing to say.</summary>
     public bool ShowSpectroscopyToolbar => IsSpectroscopy && (IsForceVolume || SpectroscopyLabel.Length > 0);
@@ -1042,21 +1085,32 @@ public sealed class ShellViewModel : ObservableObject
         => SpectroscopyChannels is null
            || (_selectedXChannel == _designatedXChannel && _selectedYChannel == _designatedYChannel);
 
+    // A selector writes SelectedIndex = -1 whenever its item source is swapped. Coercing that back into range is
+    // not enough: unless the rejection is announced, the control never re-reads and sits at -1 — an empty combo
+    // beside a populated one, with the view-model holding a perfectly good value the whole time.
     private void SetChannel(ref int field, int value, string name)
     {
         if (SpectroscopyChannels is not { } set)
         {
+            OnPropertyChanged(name);
             return;
         }
 
         int clamped = Math.Clamp(value, 0, set.ChannelCount - 1);
-        if (SetProperty(ref field, clamped, name))
+        if (!SetProperty(ref field, clamped, name))
         {
-            OnPropertyChanged(nameof(IsDesignatedChannelPair));
-            OnPropertyChanged(nameof(SpectroscopyLabel));
-            OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
-            MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
+            if (clamped != value)
+            {
+                OnPropertyChanged(name);
+            }
+
+            return;
         }
+
+        OnPropertyChanged(nameof(IsDesignatedChannelPair));
+        OnPropertyChanged(nameof(SpectroscopyLabel));
+        OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
+        MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
     }
 
     // A channel selection belongs to one dataset. Carrying an index across would plot whatever channel happened
@@ -1536,6 +1590,7 @@ public sealed class ShellViewModel : ObservableObject
         (ToggleLauncherCommand as RelayCommand)?.RaiseCanExecuteChanged();
         _runStatistics.RaiseCanExecuteChanged();
         _extractPoint.RaiseCanExecuteChanged();
+        RaiseVolumeViewChanged();
         (ExitCompareCommand as RelayCommand)?.RaiseCanExecuteChanged();
         ImagesChanged?.Invoke(this, EventArgs.Empty);
     }

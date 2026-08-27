@@ -70,6 +70,15 @@ public sealed class ParameterFormViewModel : ObservableObject
     /// <summary>The current field values as UI primitives (the Application coerces them to the schema's CLR types).</summary>
     public IReadOnlyDictionary<string, object?> Values => Fields.ToDictionary(f => f.Name, f => f.Value);
 
+    /// <summary>
+    /// What the commit button says. "Apply" fits an operation that transforms the thing on the Stage, but a form
+    /// whose result is a <b>view</b> the user is already looking at needs to say what pressing it produces — the
+    /// view is not applied to anything, it is kept (doc 26 SS22.3).
+    /// </summary>
+    public string ApplyLabel => _form.DerivesImage && Id.StartsWith("force-volume.", StringComparison.Ordinal)
+        ? "Keep as image"
+        : "Apply";
+
     public ICommand ApplyCommand { get; }
 
     public string? ErrorMessage
