@@ -11,6 +11,7 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Bool2Vis"/>
         <conv:InverseBooleanToVisibilityConverter x:Key="NotBool2Vis"/>
+        <conv:BooleanToOpacityConverter x:Key="Bool2Dim"/>
         <conv:ResourceKeyToGeometryConverter x:Key="Key2Geo"/>
         <conv:RatioToHeightConverter x:Key="Ratio2H"/>
 
@@ -582,7 +583,12 @@
                                         <ItemsControl ItemsSource="{Binding Fields}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="{x:Type vm:ParameterFieldViewModel}">
-                                                    <StackPanel Margin="{DynamicResource SA.Gap.Bottom2}">
+                                                    <!-- A field the current settings do not use stays put but inert:
+                                                         a control that appears and vanishes as you work hides what
+                                                         shapes the result instead of showing it. -->
+                                                    <StackPanel Margin="{DynamicResource SA.Gap.Bottom2}"
+                                                                IsEnabled="{Binding IsRelevant}"
+                                                                Opacity="{Binding IsRelevant, Converter={StaticResource Bool2Dim}}">
                                                         <TextBlock Text="{Binding Label}" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
                                                         <ComboBox ItemsSource="{Binding Options}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                                                   SelectedValue="{Binding Value, Mode=TwoWay}"

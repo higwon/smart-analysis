@@ -16,6 +16,48 @@ namespace SmartAnalysis.Analysis.Operations;
 /// <see cref="Unit"/> to form a <see cref="PhysicalValue"/> when it records provenance.
 /// </para>
 /// </summary>
+/// <summary>
+/// Says that a parameter is only used for some settings of <b>another</b> parameter — a threshold that bounds a
+/// window two of four measures compute, say.
+/// <para>
+/// Without this a schema can only offer every control at once, and a control that does nothing to the result is
+/// worse than a missing one: the user changes it, nothing happens, and there is no way to tell whether the
+/// setting was ignored or the data simply did not respond.
+/// </para>
+/// </summary>
+public sealed record ParameterRelevance
+{
+    public ParameterRelevance(string parameter, IReadOnlyList<object> values)
+    {
+        Parameter = AnalysisGuard.Text(parameter, nameof(parameter));
+        ArgumentNullException.ThrowIfNull(values);
+        if (values.Count == 0)
+        {
+            throw new ArgumentException(
+                "A relevance with no values would make the parameter permanently irrelevant.", nameof(values));
+        }
+
+        foreach (var v in values)
+        {
+            if (v is null)
+            {
+                throw new ArgumentException("A relevance value must not be null.", nameof(values));
+            }
+        }
+
+        Values = Array.AsReadOnly(values.ToArray());
+    }
+
+    /// <summary>The parameter whose setting decides.</summary>
+    public string Parameter { get; }
+
+    /// <summary>The settings of <see cref="Parameter"/> for which the owning parameter is used.</summary>
+    public IReadOnlyList<object> Values { get; }
+
+    public bool IsSatisfiedBy(object? value)
+        => value is not null && Values.Any(v => v.Equals(value));
+}
+
 public sealed record ParameterDescriptor
 {
     public ParameterDescriptor(
@@ -25,7 +67,8 @@ public sealed record ParameterDescriptor
         double? min = null,
         double? max = null,
         Unit? unit = null,
-        string? help = null)
+        string? help = null,
+        ParameterRelevance? relevantWhen = null)
     {
         Name = AnalysisGuard.Text(name, nameof(name));
         Type = AnalysisGuard.NotNull(type, nameof(type));
@@ -92,6 +135,7 @@ public sealed record ParameterDescriptor
         Max = max;
         Unit = unit;
         Help = help ?? string.Empty;
+        RelevantWhen = relevantWhen;
     }
 
     public string Name { get; }
@@ -107,6 +151,9 @@ public sealed record ParameterDescriptor
     public Unit? Unit { get; }
 
     public string Help { get; }
+
+    /// <summary>When set, the parameter is only used for some settings of another one.</summary>
+    public ParameterRelevance? RelevantWhen { get; }
 
     internal static bool IsNumericType(Type type) =>
         type == typeof(double) || type == typeof(float) || type == typeof(decimal)
@@ -157,6 +204,62 @@ public sealed class ParameterSchema
         }
 
         Parameters = Array.AsReadOnly(copy);
+
+        // A relevance names another parameter and some of its settings. Checking it here means a typo fails at
+        // construction, where the schema is written, instead of quietly leaving a control permanently disabled.
+        foreach (var p in Parameters)
+        {
+            if (p.RelevantWhen is not { } rule)
+            {
+                continue;
+            }
+
+            if (rule.Parameter == p.Name)
+            {
+                throw new ArgumentException(
+                    $"Parameter '{p.Name}' cannot depend on itself.", nameof(parameters));
+            }
+
+            if (!_byName.TryGetValue(rule.Parameter, out var other))
+            {
+                throw new ArgumentException(
+                    $"Parameter '{p.Name}' depends on '{rule.Parameter}', which this schema does not declare.",
+                    nameof(parameters));
+            }
+
+            foreach (var v in rule.Values)
+            {
+                if (!other.Type.IsInstanceOfType(v))
+                {
+                    throw new ArgumentException(
+                        $"Parameter '{p.Name}' depends on '{rule.Parameter}' being {v.GetType().Name}, "
+                            + $"but that parameter is {other.Type.Name}.",
+                        nameof(parameters));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="name"/> is used at all for these values. An irrelevant parameter still validates
+    /// and still has a value — it simply does not reach the result, so nothing should present it as if it did,
+    /// and provenance should not record it as though it shaped the outcome.
+    /// </summary>
+    public bool IsRelevant(string name, IParameterSet values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        if (!TryGet(name, out var descriptor) || descriptor.RelevantWhen is not { } rule)
+        {
+            return true;
+        }
+
+        // The deciding parameter may be absent, in which case its own default is what the run will use.
+        object? deciding = values.TryGetValue(rule.Parameter, out var raw) && raw is not null
+            ? raw
+            : (TryGet(rule.Parameter, out var other) ? other.Default : null);
+
+        return rule.IsSatisfiedBy(deciding);
     }
 
     public IReadOnlyList<ParameterDescriptor> Parameters { get; }
