@@ -12,6 +12,7 @@ namespace SmartAnalysis.UI.ViewModels;
 public sealed class ParameterFieldViewModel : ObservableObject
 {
     private object? _value;
+    private bool _isRelevant = true;
 
     public ParameterFieldViewModel(ParameterFieldDescriptor descriptor)
     {
@@ -21,6 +22,7 @@ public sealed class ParameterFieldViewModel : ObservableObject
         Unit = descriptor.Unit;
         Options = descriptor.Options;
         Kind = descriptor.Kind;
+        RelevantWhen = descriptor.RelevantWhen;
 
         _value = descriptor.Kind switch
         {
@@ -46,6 +48,20 @@ public sealed class ParameterFieldViewModel : ObservableObject
     public bool IsNumber => Kind is ParameterFieldKind.Number or ParameterFieldKind.Integer;
     public bool IsBoolean => Kind == ParameterFieldKind.Boolean;
     public bool IsText => Kind == ParameterFieldKind.Text;
+
+    /// <summary>When set, this field is only used for some settings of another one.</summary>
+    public ParameterFieldRelevance? RelevantWhen { get; }
+
+    /// <summary>
+    /// Whether the current settings actually use this field. An irrelevant field keeps its value and still
+    /// submits — it simply cannot change the result, and the form shows that rather than letting the user tune
+    /// a control that does nothing.
+    /// </summary>
+    public bool IsRelevant
+    {
+        get => _isRelevant;
+        set => SetProperty(ref _isRelevant, value);
+    }
 
     /// <summary>The current raw value (submitted to the Application, which coerces it to the CLR type).</summary>
     public object? Value

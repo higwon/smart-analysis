@@ -34,10 +34,13 @@ public sealed class ParameterFormViewModel : ObservableObject
             {
                 if (e.PropertyName == nameof(ParameterFieldViewModel.Value))
                 {
+                    RefreshRelevance();
                     ParametersChanged?.Invoke(this, EventArgs.Empty);
                 }
             };
         }
+
+        RefreshRelevance();
 
         ApplyCommand = new AsyncRelayCommand(ApplyAsync, onError: ex => ErrorMessage = ex.Message);
     }
@@ -96,6 +99,22 @@ public sealed class ParameterFormViewModel : ObservableObject
     }
 
     public bool HasWarnings => !string.IsNullOrEmpty(Warnings);
+
+    // Which fields the current settings actually use. Evaluated over every field on every change: a rule can
+    // point at any other field, so one edit can turn several on or off.
+    private void RefreshRelevance()
+    {
+        foreach (var field in Fields)
+        {
+            if (field.RelevantWhen is not { } rule)
+            {
+                continue;
+            }
+
+            var deciding = Fields.FirstOrDefault(f => f.Name == rule.Parameter);
+            field.IsRelevant = deciding is not null && rule.Values.Any(v => Equals(v, deciding.Value));
+        }
+    }
 
     private async Task ApplyAsync()
     {

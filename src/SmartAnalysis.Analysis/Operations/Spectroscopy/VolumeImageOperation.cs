@@ -75,7 +75,11 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         [
             new ParameterDescriptor(MeasureParameter, typeof(VolumeMeasure), defaultValue: DefaultMeasure, help: "Which measure of each point's curve becomes that pixel."),
             new ParameterDescriptor(PhaseParameter, typeof(CurvePhase), defaultValue: DefaultPhase, help: "Which half of each round trip to measure. The peak force is on the approach; the pull-off adhesion is on the retract."),
-            new ParameterDescriptor(ThresholdParameter, typeof(double), defaultValue: DefaultThreshold, min: 0.0, max: 100.0, help: "Percentage of the maximum force that bounds the stiffness/deformation window (0–100)."),
+            new ParameterDescriptor(
+                ThresholdParameter, typeof(double), defaultValue: DefaultThreshold, min: 0.0, max: 100.0,
+                help: "Percentage of the maximum force that bounds the stiffness/deformation window (0–100).",
+                relevantWhen: new ParameterRelevance(
+                    MeasureParameter, [VolumeMeasure.Stiffness, VolumeMeasure.Deformation])),
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
@@ -175,12 +179,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
             operationVersion: Descriptor.Version,
             order: 0,
             environment: _environment.Capture(),
-            parameters: new Dictionary<string, PhysicalValue>
-            {
-                [MeasureParameter] = new((int)measure, StandardUnits.One),
-                [PhaseParameter] = new((int)phase, StandardUnits.One),
-                [ThresholdParameter] = new(threshold, StandardUnits.One),
-            },
+            parameters: Recorded(measure, phase, threshold),
             warnings: warnings,
             parentResultId: imageId);
 
@@ -247,6 +246,24 @@ public sealed class VolumeImageOperation : IAnalysisOperation
             VolumeMeasure.Deformation => measures.Deformation,
             _ => double.NaN,
         };
+    }
+
+    // Only what actually shaped the picture. A step naming a threshold the measure never read would put a false
+    // cause in the record: someone reproducing it would tune a number that changes nothing.
+    private static Dictionary<string, PhysicalValue> Recorded(VolumeMeasure measure, CurvePhase phase, double threshold)
+    {
+        var recorded = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)
+        {
+            [MeasureParameter] = new((int)measure, StandardUnits.One),
+            [PhaseParameter] = new((int)phase, StandardUnits.One),
+        };
+
+        if (measure is VolumeMeasure.Stiffness or VolumeMeasure.Deformation)
+        {
+            recorded[ThresholdParameter] = new(threshold, StandardUnits.One);
+        }
+
+        return recorded;
     }
 
     // A line of points has one row, so the grid derives no spacing for that axis — but a pixel still covers the

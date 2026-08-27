@@ -191,6 +191,39 @@ public sealed class VolumeImageOperationTests
         Assert.Equal(CurvePhase.Approach, schema.Parameters.Single(x => x.Name == VolumeImageOperation.PhaseParameter).Default);
     }
 
+    [Theory]
+    [InlineData(VolumeMeasure.Stiffness, true)]
+    [InlineData(VolumeMeasure.Deformation, true)]
+    [InlineData(VolumeMeasure.MaxForce, false)]
+    [InlineData(VolumeMeasure.Adhesion, false)]
+    public void The_threshold_declares_which_measures_actually_read_it(VolumeMeasure measure, bool used)
+    {
+        // A peak force and a pull-off depth do not look at the window at all. Offering the control anyway lets
+        // the user tune a number that changes nothing, with no way to tell that is what is happening.
+        var schema = Operation().Descriptor.Parameters;
+        var values = new ParameterSet(new Dictionary<string, object?>
+        {
+            [VolumeImageOperation.MeasureParameter] = measure,
+        });
+
+        Assert.Equal(used, schema.IsRelevant(VolumeImageOperation.ThresholdParameter, values));
+    }
+
+    [Fact]
+    public async Task A_step_does_not_name_a_setting_the_measure_never_read()
+    {
+        // Someone reproducing a max-force picture would otherwise find a threshold in the record and tune it,
+        // looking for a change that cannot come.
+        using var map = Map(4, Grid(2, 2));
+
+        using var peak = await RunAsync(map, VolumeMeasure.MaxForce, CurvePhase.Approach, threshold: 30.0);
+        using var slope = await RunAsync(map, VolumeMeasure.Stiffness, CurvePhase.Approach, threshold: 30.0);
+
+        Assert.DoesNotContain(
+            VolumeImageOperation.ThresholdParameter, peak.Provenance.Steps[0].Parameters.Keys);
+        Assert.Equal(30.0, slope.Provenance.Steps[0].Parameters[VolumeImageOperation.ThresholdParameter].Value);
+    }
+
     [Fact]
     public void A_map_with_no_grid_is_refused_rather_than_laid_out_in_an_invented_shape()
     {

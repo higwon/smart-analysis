@@ -346,8 +346,19 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
             : [];
         // Project the default to the UI primitive the control binds to (an enum default → its member name).
         var defaultValue = p.Default is { } d && p.Type.IsEnum ? d.ToString() : p.Default;
-        return new ParameterFieldDescriptor(p.Name, Humanize(p.Name), kind, defaultValue, p.Min, p.Max, options, p.Unit?.Symbol, p.Help);
+        return new ParameterFieldDescriptor(
+            p.Name, Humanize(p.Name), kind, defaultValue, p.Min, p.Max, options, p.Unit?.Symbol, p.Help,
+            Relevance(p.RelevantWhen));
     }
+
+    // The rule's values go through the SAME projection as a default, or the form would be comparing an enum
+    // member against the member NAME the choice control holds and never find a match.
+    private static ParameterFieldRelevance? Relevance(ParameterRelevance? rule)
+        => rule is null
+            ? null
+            : new ParameterFieldRelevance(
+                rule.Parameter,
+                [.. rule.Values.Select(v => v.GetType().IsEnum ? v.ToString()! : v)]);
 
     private static ParameterFieldKind FieldKind(Type t)
     {

@@ -28,6 +28,14 @@ public sealed record ParameterFieldOption(string Value, string Label);
 /// <see cref="Kind"/>, and an enum's members into <see cref="Options"/>. The submitted value is coerced
 /// back to the real parameter type by the Application before the run.
 /// </summary>
+/// <summary>
+/// A field that only matters for some settings of another field, in the same UI primitives the fields carry
+/// (an enum setting is its member name, as the choice values are). The form disables such a field rather than
+/// hiding it: a control that appears and vanishes as you work makes it harder, not easier, to see what shapes
+/// the result — a visibly inert one says "this exists, and right now it does nothing".
+/// </summary>
+public sealed record ParameterFieldRelevance(string Parameter, IReadOnlyList<object> Values);
+
 public sealed record ParameterFieldDescriptor(
     string Name,
     string Label,
@@ -37,7 +45,8 @@ public sealed record ParameterFieldDescriptor(
     double? Max,
     IReadOnlyList<ParameterFieldOption> Options,
     string? Unit,
-    string Help);
+    string Help,
+    ParameterFieldRelevance? RelevantWhen = null);
 
 /// <summary>
 /// The generic editor model for one operation: its identity/summary plus the projected parameter fields.
