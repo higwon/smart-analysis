@@ -718,6 +718,21 @@ public partial class MainWindow : Window
     // so a previous file's surface cannot linger beside the next file's curves.
     private void RenderSpectroscopySurface()
     {
+        if (_viewModel.IsVolumeView)
+        {
+            // The picture IS the preview — nothing is in the workspace to render until Keep as image. A stale
+            // surface stays up until the first one arrives rather than blanking the stage.
+            if (_viewModel.OperationPreviewInput is { } picture)
+            {
+                SpectroscopySurface.Render(picture);
+            }
+
+            // Every pixel of the volume image IS a measurement point, so a marker on each would be noise drawn on
+            // top of the thing it marks.
+            SpectroscopySurface.ClearPointMarkers();
+            return;
+        }
+
         if (_viewModel.SpectroscopyReferenceImage is { } surface)
         {
             SpectroscopySurface.Render(RenderInputFactory.ForImage(surface, _viewModel.Colormap, null));

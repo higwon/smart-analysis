@@ -297,6 +297,33 @@ public sealed class ShellForceVolumeTests
         }
     }
 
+    private sealed class VolumeLauncher : IOperationLauncher
+    {
+        public int Previews { get; private set; }
+
+        public IReadOnlyDictionary<string, object?>? LastPreviewValues { get; private set; }
+
+        public IReadOnlyList<OperationLauncherItem> ApplicableToActive() => Array.Empty<OperationLauncherItem>();
+
+        public OperationForm? GetForm(string operationId)
+            => operationId == "force-volume.volume-image"
+                ? new OperationForm(
+                    operationId, "Volume Image", "one pixel per point", OperationCategory.Process,
+                    [new ParameterFieldDescriptor("threshold", "Threshold", ParameterFieldKind.Number, 50.0, 0.0, 100.0, [], null, "")],
+                    DerivesImage: true)
+                : null;
+
+        public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+            => Task.FromResult(OperationRunResult.Derived(DatasetId.New(), []));
+
+        public Task<ImageRenderInput?> PreviewAsync(string operationId, IReadOnlyDictionary<string, object?> values, Colormap colormap, ValueRange? range, CancellationToken ct = default)
+        {
+            Previews++;
+            LastPreviewValues = values;
+            return Task.FromResult<ImageRenderInput?>(null);
+        }
+    }
+
     private sealed class FakePersistence : IWorkspacePersistence
     {
         public PersistenceOutcome Save(string path) => PersistenceOutcome.Ok;
@@ -727,5 +754,93 @@ public sealed class ShellForceVolumeTests
         Assert.Null(vm.SpectroscopyChannels);
         Assert.Equal(-1, launcher.RanWith!["xChannel"]);
         Assert.Equal(-1, launcher.RanWith["yChannel"]);
+    }
+
+    [Fact]
+    public void The_volume_view_is_offered_only_for_a_map_that_could_produce_a_picture()
+    {
+        // Without a grid there is no shape to lay the points out in, so the operation refuses. Offering the
+        // toggle anyway would put a control on the toolbar whose only outcome is a validation error.
+        Assert.True(WithActiveMap(new Workspace(), Map(6, Grid(3, 2))).CanShowVolume);
+        Assert.False(WithActiveMap(new Workspace(), Map(4)).CanShowVolume);
+        Assert.False(NewShell(new Workspace()).CanShowVolume);
+    }
+
+    [Fact]
+    public void Showing_the_volume_hands_the_stage_to_the_picture()
+    {
+        // doc 26 SS22.3: the picture is a VIEW of the same Stage, so it replaces the surface rather than opening
+        // a compare pane or a second stage.
+        var launcher = new VolumeLauncher();
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.False(vm.IsVolumeView);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.True(vm.IsVolumeView);
+        Assert.True(vm.ShowSpectroscopyImage);
+        Assert.False(vm.ShowCurveOnStage);
+        Assert.False(vm.ShowComparePanes);   // a view mode, not a before/after
+        Assert.Equal(InspectorRole.Operation, vm.InspectorRole);
+    }
+
+    [Fact]
+    public void Nothing_enters_the_workspace_while_the_picture_is_only_previewed()
+    {
+        // Materialising an image per threshold tweak would bury the workspace in near-identical pictures and make
+        // provenance meaningless. Only Keep as image commits one.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        int before = ws.Datasets.Count;
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.True(vm.IsVolumeView);
+        Assert.Equal(before, ws.Datasets.Count);
+    }
+
+    [Fact]
+    public void Leaving_the_volume_view_gives_the_surface_back()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.ShowVolumeCommand.Execute(null);
+        vm.ShowSurfaceCommand.Execute(null);
+
+        Assert.False(vm.IsVolumeView);
+        Assert.True(vm.HasReferenceSurface);
+        Assert.True(vm.ShowSpectroscopyImage);
+    }
+
+    [Fact]
+    public void A_map_with_no_surface_still_gets_the_picture_rather_than_the_curve()
+    {
+        // ShowCurveOnStage exists so a surface-less map is not blank. The picture is a better answer than the
+        // curve when there is one, and both on the stage at once is nothing.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));   // no reference surface
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.True(vm.ShowCurveOnStage);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.True(vm.IsVolumeView);
+        Assert.False(vm.ShowCurveOnStage);
+        Assert.True(vm.ShowSpectroscopyImage);
     }
 }

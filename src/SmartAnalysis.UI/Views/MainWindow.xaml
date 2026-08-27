@@ -344,6 +344,13 @@
                                             Margin="{DynamicResource SA.Gap.Left1}"
                                             Visibility="{Binding IsForceVolume, Converter={StaticResource Bool2Vis}}"
                                             IsEnabled="{Binding CanStepMapPointForward}" Click="MapPointForward_Click"/>
+                                    <Button x:Name="ShowSurface" DockPanel.Dock="Right" Content="Surface" MinWidth="64"
+                                            Visibility="{Binding CanShowVolume, Converter={StaticResource Bool2Vis}}"
+                                            Command="{Binding ShowSurfaceCommand}"/>
+                                    <Button x:Name="ShowVolume" DockPanel.Dock="Right" Content="Volume" MinWidth="64"
+                                            Margin="{DynamicResource SA.Gap.Left1}"
+                                            Visibility="{Binding CanShowVolume, Converter={StaticResource Bool2Vis}}"
+                                            Command="{Binding ShowVolumeCommand}"/>
                                     <TextBlock Text="{Binding SpectroscopyLabel}" Margin="{DynamicResource SA.Gap.Left2}"
                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </DockPanel>
@@ -353,7 +360,7 @@
                                  the file carried one; otherwise the curve takes the Stage, because a map with no
                                  surface has nothing spatial to show. -->
                             <ctl:AfmImageView Grid.Row="1" x:Name="SpectroscopySurface"
-                                              Visibility="{Binding HasReferenceSurface, Converter={StaticResource Bool2Vis}}"/>
+                                              Visibility="{Binding ShowSpectroscopyImage, Converter={StaticResource Bool2Vis}}"/>
                             <ctl:AfmCurveView Grid.Row="1" x:Name="SpectroscopyCurve"
                                               Visibility="{Binding ShowCurveOnStage, Converter={StaticResource Bool2Vis}}"/>
                         </Grid>
@@ -560,7 +567,7 @@
                                         </Border>
 
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource SA.Gap.Top2}">
-                                            <Button Content="Apply" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
+                                            <Button Content="{Binding ApplyLabel}" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
@@ -601,7 +608,7 @@
                                         </Border>
 
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource SA.Gap.Top2}">
-                                            <Button Content="Apply" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
+                                            <Button Content="{Binding ApplyLabel}" Command="{Binding ApplyCommand}" Style="{StaticResource SA.Button.Primary}"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
