@@ -6,7 +6,8 @@ namespace SmartAnalysis.Visualization.Colormaps;
 /// <summary>
 /// A 256-entry RGB lookup table mapping normalized data values to color — the AFM <b>data</b> colormap
 /// (doc 15/ADR-008). It is <b>theme-independent</b>: Light/Dark never changes it (chart/image chrome is
-/// themed separately). Immutable; used by image and surface render inputs.
+/// themed separately). Immutable; used by image and surface render inputs. A sample that is not a number is
+/// not part of the ramp at all — see <see cref="NoData"/>.
 /// </summary>
 public sealed class Colormap
 {
@@ -27,12 +28,27 @@ public sealed class Colormap
 
     public IReadOnlyList<Rgb> Entries => new ReadOnlyCollection<Rgb>(_lut);
 
-    /// <summary>Samples at a normalized position; input is clamped to [0, 1] (non-finite → first entry).</summary>
+    /// <summary>
+    /// What a sample that is not a number looks like: a hole, not a value.
+    /// <para>
+    /// A non-finite sample used to take the colormap's first entry — which for every ramp here is the same
+    /// colour as a real minimum. A point the instrument never measured was therefore indistinguishable from the
+    /// lowest one it did, and a force-volume map's unmeasured points read as a genuine dark region.
+    /// </para>
+    /// <para>
+    /// Magenta because no ramp in this catalogue passes through it, and because a hole should be loud: a map
+    /// with many unmeasured points is a fact about the measurement, not a blemish to blend away. A procedural
+    /// colormap could in principle contain this colour; nothing prevents that, and nothing depends on it.
+    /// </para>
+    /// </summary>
+    public static Rgb NoData { get; } = new(255, 0, 255);
+
+    /// <summary>Samples at a normalized position; input is clamped to [0, 1] (non-finite → <see cref="NoData"/>).</summary>
     public Rgb SampleNormalized(double t)
     {
         if (!double.IsFinite(t))
         {
-            return _lut[0]; // NaN and ±Infinity are all "invalid" → the first entry
+            return NoData; // NaN and ±Infinity are all "not a measurement", not "the smallest measurement"
         }
 
         t = t < 0.0 ? 0.0 : t > 1.0 ? 1.0 : t;
@@ -40,7 +56,7 @@ public sealed class Colormap
         return _lut[index];
     }
 
-    /// <summary>Maps a data value through <paramref name="range"/> to a color; non-finite → the first entry.</summary>
+    /// <summary>Maps a data value through <paramref name="range"/> to a color; non-finite → <see cref="NoData"/>.</summary>
     public Rgb Map(double value, ValueRange range) => SampleNormalized(range.Normalize(value));
 
     /// <summary>Grayscale black→white.</summary>

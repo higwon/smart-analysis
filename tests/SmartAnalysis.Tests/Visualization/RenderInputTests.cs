@@ -57,8 +57,29 @@ public sealed class RenderInputTests
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
     [InlineData(double.NegativeInfinity)]
-    public void SampleNormalized_maps_all_non_finite_to_the_first_entry(double t)
-        => Assert.Equal(Colormap.AfmGold.Entries[0], Colormap.AfmGold.SampleNormalized(t));
+    public void SampleNormalized_maps_all_non_finite_to_the_no_data_colour(double t)
+        => Assert.Equal(Colormap.NoData, Colormap.AfmGold.SampleNormalized(t));
+
+    [Fact]
+    public void The_no_data_colour_is_not_in_any_catalogued_ramp()
+    {
+        // It only says "not measured" if it cannot also mean a value. Every ramp offered to a user is checked;
+        // a procedural colormap could still contain it, and nothing here depends on that not happening.
+        foreach (var colormap in ColormapCatalog.All)
+        {
+            Assert.DoesNotContain(Colormap.NoData, colormap.Map.Entries);
+        }
+    }
+
+    [Fact]
+    public void A_flat_image_is_not_mistaken_for_a_hole()
+    {
+        // A degenerate range normalizes to 0, not NaN. Painting a uniform image entirely as "not measured"
+        // would be the same defect with the sign flipped.
+        var flat = new ValueRange(5, 5);
+
+        Assert.Equal(Colormap.AfmGold.Entries[0], Colormap.AfmGold.Map(5, flat));
+    }
 
     [Fact]
     public void Colormap_requires_256_entries()

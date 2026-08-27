@@ -6,7 +6,7 @@ namespace SmartAnalysis.Visualization.Rendering;
 /// Maps an <see cref="ImageRenderInput"/> to a row-major <see cref="Rgb"/> array through its colormap and
 /// value range (V02). Pure and WPF-free, so it is unit-testable and stays backend-neutral — a concrete
 /// backend (the WPF <c>AfmImageView</c>) packs the result into its own bitmap format. Non-finite samples
-/// map to the colormap's first entry (matching <see cref="Colormap.Map"/>).
+/// map to <see cref="Colormap.NoData"/> — a hole, not the bottom of the ramp.
 /// </summary>
 public static class ImagePixelMapper
 {

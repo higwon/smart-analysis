@@ -28,16 +28,21 @@ public sealed class ImagePixelMapperTests
     }
 
     [Fact]
-    public void Non_finite_samples_map_to_the_first_colormap_entry()
+    public void A_non_finite_sample_is_painted_as_a_hole_not_as_the_bottom_of_the_ramp()
     {
-        var input = Input(new[] { float.NaN, float.PositiveInfinity }, width: 2, height: 1,
+        // A point the instrument never measured must not look like the lowest one it did. Taking the colormap's
+        // first entry made an unmeasured region read as a genuine dark feature.
+        var input = Input(new[] { float.NaN, float.PositiveInfinity, 0f }, width: 3, height: 1,
             Colormap.AfmGold, new ValueRange(0, 10));
 
         var pixels = ImagePixelMapper.Map(input);
 
-        var first = Colormap.AfmGold.Entries[0];
-        Assert.Equal(first, pixels[0]);
-        Assert.Equal(first, pixels[1]);
+        Assert.Equal(Colormap.NoData, pixels[0]);
+        Assert.Equal(Colormap.NoData, pixels[1]);
+
+        // The real minimum still gets the ramp's own bottom, and the two are not the same colour.
+        Assert.Equal(Colormap.AfmGold.Entries[0], pixels[2]);
+        Assert.NotEqual(pixels[2], pixels[0]);
     }
 
     [Fact]
