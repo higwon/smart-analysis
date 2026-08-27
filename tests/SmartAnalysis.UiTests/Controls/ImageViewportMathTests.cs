@@ -110,4 +110,64 @@ public sealed class ImageViewportMathTests
         var (inRange, _) = ImageViewportMath.ClampTranslate(-50, 0, 1.0, 200, 200, 400, 200);
         Assert.Equal(-50.0, inRange, 9);
     }
+
+    // --- PixelAt (UX09) ---
+
+    /// <summary>An 8x8 image drawn at 20 device pixels per sample, offset 10 right and 30 down.</summary>
+    private static (int X, int Y)? At(double x, double y)
+        => ImageViewportMath.PixelAt(x, y, scale: 20.0, translateX: 10.0, translateY: 30.0, imageW: 8, imageH: 8);
+
+    [Fact]
+    public void The_sample_under_a_point_is_the_one_whose_cell_contains_it()
+    {
+        // A sample owns the whole cell from its own index to the next, so anywhere inside it answers the same.
+        Assert.Equal((0, 0), At(10, 30));         // the image origin
+        Assert.Equal((0, 0), At(29.9, 49.9));     // still inside the first cell
+        Assert.Equal((1, 1), At(30, 50));         // the next cell begins
+        Assert.Equal((3, 2), At(10 + 70, 30 + 50));
+    }
+
+    [Fact]
+    public void The_far_corner_is_inside_and_one_step_past_it_is_not()
+    {
+        Assert.Equal((7, 7), At(10 + 159.9, 30 + 159.9));
+        Assert.Null(At(10 + 160, 30 + 160));
+    }
+
+    [Theory]
+    [InlineData(9.9, 100)]      // left of the image
+    [InlineData(100, 29.9)]     // above it
+    [InlineData(200, 100)]      // right of it
+    [InlineData(100, 250)]      // below it
+    public void A_point_beside_the_image_is_not_on_it(double x, double y)
+    {
+        // Clamping to the nearest edge sample would turn a click on the background — which is most of a
+        // fitted viewport — into a selection the viewer did not make.
+        Assert.Null(At(x, y));
+    }
+
+    [Fact]
+    public void A_view_with_no_image_has_no_sample_under_anything()
+    {
+        Assert.Null(ImageViewportMath.PixelAt(50, 50, 20.0, 0, 0, imageW: 0, imageH: 0));
+        Assert.Null(ImageViewportMath.PixelAt(50, 50, 20.0, 0, 0, imageW: 8, imageH: 0));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void A_scale_that_cannot_place_anything_answers_nothing(double scale)
+    {
+        // Zero would divide by it; a non-finite one would produce a non-finite index that casts to something
+        // arbitrary rather than throwing.
+        Assert.Null(ImageViewportMath.PixelAt(50, 50, scale, 0, 0, 8, 8));
+    }
+
+    [Theory]
+    [InlineData(double.NaN, 50)]
+    [InlineData(50, double.NaN)]
+    public void A_point_that_is_not_a_point_answers_nothing(double x, double y)
+        => Assert.Null(ImageViewportMath.PixelAt(x, y, 20.0, 0, 0, 8, 8));
 }

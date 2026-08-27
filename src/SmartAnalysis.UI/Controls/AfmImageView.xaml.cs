@@ -35,6 +35,7 @@ public partial class AfmImageView : UserControl, IImageView
     private int _bmpH;
     private bool _needsFit;
     private bool _dragging;
+    private Point? _pressedAt;
     private Point _lastPos;
     private const double HandleSize = 9.0;
 
@@ -553,9 +554,14 @@ public partial class AfmImageView : UserControl, IImageView
 
         if (e.ClickCount == 2)
         {
+            _pressedAt = null;
             Fit();
             return;
         }
+
+        // A press that does not move is a click on a pixel; one that moves is a pan. Which it was is only known
+        // on release, so the position is remembered here either way.
+        _pressedAt = e.GetPosition(Viewport);
 
         // Pan only when zoomed in past fit — at fit the image is fully shown and stays centred.
         if (!ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale))
@@ -599,6 +605,9 @@ public partial class AfmImageView : UserControl, IImageView
 
     private void Viewport_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        var pressed = _pressedAt;
+        _pressedAt = null;
+
         if (_regionHandle != RegionHandle.None)
         {
             _regionHandle = RegionHandle.None;
@@ -613,13 +622,42 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
+        bool panned = _dragging;
         if (_dragging)
         {
             _dragging = false;
             Viewport.ReleaseMouseCapture();
             Cursor = Cursors.Arrow;
         }
+
+        if (panned || pressed is not { } start)
+        {
+            return;
+        }
+
+        // The OS's own idea of how far a press may travel and still be a click, rather than a number invented
+        // here: a viewer whose hand shakes the same way in every application should get the same answer.
+        var end = e.GetPosition(Viewport);
+        if (Math.Abs(end.X - start.X) > SystemParameters.MinimumHorizontalDragDistance
+            || Math.Abs(end.Y - start.Y) > SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        if (ToPixel(end) is { } pixel)
+        {
+            PixelClicked?.Invoke(this, pixel);
+        }
     }
+
+    /// <summary>Raised when a click lands on the image, with the sample it landed on in image-pixel coordinates.</summary>
+    public event EventHandler<(int X, int Y)>? PixelClicked;
+
+    // The inverse of the marker placement; the maths lives in ImageViewportMath so it can be checked without a
+    // rendered control, the same split as the zoom/pan/fit rules beside it.
+    private (int X, int Y)? ToPixel(Point p)
+        => ImageViewportMath.PixelAt(
+            p.X, p.Y, ImgScale.ScaleX, ImgTranslate.X, ImgTranslate.Y, _bmpW, _bmpH);
 
     // ---- Region overlay interaction (V06): drag the body to move, an edge/corner handle to resize ----
 

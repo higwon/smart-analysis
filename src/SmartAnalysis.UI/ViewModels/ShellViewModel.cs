@@ -980,6 +980,30 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(CurveHorizontalMarkers));
     }
 
+    /// <summary>
+    /// Selects the map point a volume-image pixel was computed from.
+    /// <para>
+    /// Only in the Volume view, and only there because that is the one picture whose pixels ARE the map's points
+    /// — one each, laid out on its grid. A pixel of the reference surface is not a measurement position: a
+    /// 128x128 surface carries an 8x8 map, so treating one as the other would silently select whichever point
+    /// happened to share an index.
+    /// </para>
+    /// </summary>
+    public void SelectMapPointAt(int column, int row)
+    {
+        if (!IsVolumeView || _activeForceVolume?.Geometry is not { } grid)
+        {
+            return;
+        }
+
+        if (column < 0 || column >= grid.Columns || row < 0 || row >= grid.Rows)
+        {
+            return;
+        }
+
+        SelectedMapPoint = (row * grid.Columns) + column;
+    }
+
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
 
     // Switching maps resets the selection: point 7 of the map you were looking at has nothing to do with

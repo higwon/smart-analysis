@@ -37,6 +37,38 @@ public static class ImageViewportMath
         return Clamp(scale, MinScale, MaxScale);
     }
 
+    /// <summary>
+    /// The sample under a viewport point, or <c>null</c> when the point is not on the image.
+    /// <para>
+    /// Null rather than a clamped edge sample: the space around a fitted image is not part of it, and reporting
+    /// the nearest pixel there would turn a click on the background into a selection the viewer did not make.
+    /// </para>
+    /// </summary>
+    public static (int X, int Y)? PixelAt(
+        double viewportX, double viewportY, double scale, double translateX, double translateY,
+        int imageW, int imageH)
+    {
+        if (!(scale > 0) || !double.IsFinite(scale) || imageW <= 0 || imageH <= 0)
+        {
+            return null;
+        }
+
+        if (!double.IsFinite(viewportX) || !double.IsFinite(viewportY)
+            || !double.IsFinite(translateX) || !double.IsFinite(translateY))
+        {
+            return null;
+        }
+
+        double x = (viewportX - translateX) / scale;
+        double y = (viewportY - translateY) / scale;
+
+        // Floor, not round: a sample occupies the whole cell from its own index to the next, so the sample under
+        // a point is the one whose cell contains it — rounding would snap the second half of every cell forward.
+        int px = (int)Math.Floor(x);
+        int py = (int)Math.Floor(y);
+        return px >= 0 && px < imageW && py >= 0 && py < imageH ? (px, py) : null;
+    }
+
     /// <summary>The translate that centres an image of the given scale in the viewport.</summary>
     public static (double X, double Y) Center(double scale, double viewportW, double viewportH, int imageW, int imageH)
         => ((viewportW - (imageW * scale)) / 2.0, (viewportH - (imageH * scale)) / 2.0);

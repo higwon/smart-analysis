@@ -1275,4 +1275,77 @@ public sealed class ShellForceVolumeTests
         Assert.Equal(1.0, x, 6);      // 1000 nm on a um axis of 1 um/pixel
         Assert.Equal(1000.0, y, 6);   // 1000 nm on a nm axis of 1 nm/pixel
     }
+
+    [Fact]
+    public void Clicking_a_volume_pixel_selects_the_point_it_was_computed_from()
+    {
+        // The picture is the map laid out on its own grid, one pixel per point, so the mapping is exact — no
+        // nearest-neighbour, no interpolation. This is the shortest route from a value on the picture to the
+        // curve behind it, and from a hole to the reason it is one.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        // Row-major, and chosen so it cannot agree with the column-major reading: on a 3x2 grid (1,1) is point 4
+        // going along X first and point 3 going down Y first.
+        vm.SelectMapPointAt(column: 1, row: 1);
+
+        Assert.Equal(4, vm.SelectedMapPoint);
+    }
+
+    [Fact]
+    public void A_click_on_the_surface_is_not_a_point_selection()
+    {
+        // A 128x128 surface can carry an 8x8 map. Treating one of its pixels as a point would silently select
+        // whichever point happened to share an index — a selection the viewer never made.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.False(vm.IsVolumeView);
+        vm.SelectMapPointAt(column: 1, row: 0);
+
+        Assert.Equal(0, vm.SelectedMapPoint);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(3, 0)]
+    [InlineData(0, -1)]
+    [InlineData(0, 2)]
+    public void A_click_outside_the_grid_selects_nothing(int column, int row)
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+        vm.SelectedMapPoint = 4;
+
+        vm.SelectMapPointAt(column, row);
+
+        Assert.Equal(4, vm.SelectedMapPoint);
+    }
+
+    [Fact]
+    public void A_map_with_no_grid_has_no_pixel_to_click()
+    {
+        // Without a grid there is no volume image either, so there is nothing on screen to click — but the
+        // guard belongs here rather than relying on that.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(4);
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.SelectMapPointAt(0, 0);
+
+        Assert.Equal(0, vm.SelectedMapPoint);
+    }
 }

@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         _viewModel.MapPointChanged += RedrawMapPoint;
         SpectroscopySurface.PointMarkerClicked += SurfacePointMarker_Clicked;
+        SpectroscopySurface.PixelClicked += SurfacePixel_Clicked;
 
         RenderImages();
     }
@@ -777,6 +778,11 @@ public partial class MainWindow : Window
         SpectroscopyCurve.Clear();
         InspectorCurve.Clear();
     }
+
+    // In the Volume view every pixel is a point, so clicking one is the shortest route from a value on the
+    // picture to the curve behind it — including from a hole to the reason it is one.
+    private void SurfacePixel_Clicked(object? sender, (int X, int Y) pixel)
+        => _viewModel.SelectMapPointAt(pixel.X, pixel.Y);
 
     private void SurfacePointMarker_Clicked(object? sender, int index)
         => _viewModel.SelectedMapPoint = index;
