@@ -954,6 +954,10 @@ public sealed class ShellViewModel : ObservableObject
             ? d
             : null;
 
+    // Convertibility is checked before the loop, so this cannot fail here.
+    private static double OnAxis(double value, Unit from, Unit to)
+        => new PhysicalValue(value, from).TryConvertTo(to).Value.Value;
+
     private void RaiseVolumeViewChanged()
     {
         OnPropertyChanged(nameof(IsVolumeView));
@@ -1117,7 +1121,6 @@ public sealed class ShellViewModel : ObservableObject
                 return [];
             }
 
-            // Positions are in the surface's own length unit; the overlay wants pixels.
             double stepX = surface.X.Step;
             double stepY = surface.Y.Step;
             if (!(stepX > 0) || !(stepY > 0))
@@ -1125,10 +1128,25 @@ public sealed class ShellViewModel : ObservableObject
                 return [];
             }
 
+            // A recorded position and a surface axis are both lengths, but not necessarily the SAME length: the
+            // reader that exists happens to give micrometres for both, which is luck, not a Domain invariant. One
+            // that recorded nanometres would put every marker within a thousandth of the corner — a picture that
+            // looks like a tight cluster of measurements rather than like a bug.
+            //
+            // A layout that cannot be expressed on these axes at all places nothing: a marker somewhere arbitrary
+            // is a claim about where a curve was measured.
+            var from = layout.LengthUnit;
+            if (!from.IsConvertibleTo(surface.X.Unit) || !from.IsConvertibleTo(surface.Y.Unit))
+            {
+                return [];
+            }
+
             var markers = new List<(double X, double Y)>(layout.Count);
             foreach (var p in layout.Positions)
             {
-                markers.Add((p.X / stepX, p.Y / stepY));
+                markers.Add((
+                    OnAxis(p.X, from, surface.X.Unit) / stepX,
+                    OnAxis(p.Y, from, surface.Y.Unit) / stepY));
             }
 
             return markers;

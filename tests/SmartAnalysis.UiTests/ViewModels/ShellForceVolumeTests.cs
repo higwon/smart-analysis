@@ -563,11 +563,15 @@ public sealed class ShellForceVolumeTests
         Assert.Null(vm.SpectroscopyReferenceImage);
     }
     private static MapPointLayout Layout(params (double X, double Y)[] points)
-        => new([.. points.Select(p => new MapPointPosition(p.X, p.Y))], StandardUnits.Micrometre);
+        => Layout(StandardUnits.Micrometre, points);
+
+    private static MapPointLayout Layout(Unit unit, params (double X, double Y)[] points)
+        => new([.. points.Select(p => new MapPointPosition(p.X, p.Y))], unit);
 
     /// <summary>A map with a 4x4-pixel surface over 4x4 um, so one pixel is exactly 1 um.</summary>
     private static ForceVolumeDataset MapOnSurface(
-        MapPointLayout? layout, int points = 2, ForceVolumeGeometry? geometry = null)
+        MapPointLayout? layout, int points = 2, ForceVolumeGeometry? geometry = null,
+        Unit? surfaceUnit = null, Unit? surfaceUnitY = null)
         => new(
             DatasetId.New(), new DataSource("test", null),
             ScanBuffer<float>.TakeOwnership(new float[points * Samples], Samples, points),
@@ -577,8 +581,8 @@ public sealed class ShellForceVolumeTests
             geometry, ScanMetadata.Unknown, ProvenanceRecord.Root, null,
             new ScanImageDataset(
                 DatasetId.New(), new DataSource("test", null),
-                new Axis("X", StandardUnits.Micrometre, 0.0, 1.0, 4),
-                new Axis("Y", StandardUnits.Micrometre, 0.0, 1.0, 4),
+                new Axis("X", surfaceUnit ?? StandardUnits.Micrometre, 0.0, 1.0, 4),
+                new Axis("Y", surfaceUnitY ?? surfaceUnit ?? StandardUnits.Micrometre, 0.0, 1.0, 4),
                 new ChannelDescriptor("Z Height", ChannelKind.Topography, StandardUnits.Nanometre),
                 ScanBuffer<float>.Allocate(4, 4), ScanMetadata.Unknown, ProvenanceRecord.Root),
             layout);
@@ -1200,5 +1204,75 @@ public sealed class ShellForceVolumeTests
         vm.ShowSurfaceCommand.Execute(null);
 
         Assert.True(vm.InspectorCurveFollowsChannelPicker);
+    }
+
+    [Fact]
+    public void A_position_recorded_in_another_length_is_converted_before_it_is_placed()
+    {
+        // The one reader that exists gives micrometres for both the layout and the surface axes, which is luck
+        // rather than a rule. Dividing 1000 nm by a step of 1 um/pixel puts the marker a thousand pixels off the
+        // image; dividing 1 um by it puts it where the curve was actually measured.
+        var ws = new Workspace();
+        var vm = WithActiveMap(
+            ws,
+            MapOnSurface(Layout(StandardUnits.Nanometre, (1000, 2000)), points: 1, surfaceUnit: StandardUnits.Micrometre));
+
+        var (x, y) = Assert.Single(vm.PointMarkers);
+
+        Assert.Equal(1.0, x, 6);   // 1000 nm = 1 um, one pixel along
+        Assert.Equal(2.0, y, 6);
+    }
+
+    [Fact]
+    public void The_same_unit_on_both_sides_still_places_the_marker_where_it_was()
+    {
+        // The conversion must be a no-op on the path that already worked, not a scale factor applied twice.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
+
+        Assert.Equal((1.0, 1.0), vm.PointMarkers[0]);
+        Assert.Equal((3.0, 2.0), vm.PointMarkers[1]);
+    }
+
+    [Theory]
+    [InlineData(false)]   // neither axis is a length
+    [InlineData(true)]    // X is, Y is not — checking only the first would pass this one through
+    public void A_layout_that_cannot_be_expressed_on_these_axes_places_nothing(bool xIsALength)
+    {
+        // A marker put somewhere arbitrary is a claim about where a curve was measured. There is no honest
+        // position for a length on an axis that is not one — and a failed conversion reads as zero, which would
+        // pile every marker into the corner rather than announce itself.
+        var ws = new Workspace();
+        var vm = WithActiveMap(
+            ws,
+            MapOnSurface(
+                Layout((1, 1)),
+                points: 1,
+                surfaceUnit: xIsALength ? StandardUnits.Micrometre : StandardUnits.Volt,
+                surfaceUnitY: StandardUnits.Volt));
+
+        Assert.True(vm.HasReferenceSurface);
+        Assert.Empty(vm.PointMarkers);
+    }
+
+    [Fact]
+    public void Each_axis_is_converted_against_its_own_unit()
+    {
+        // An axis carries its own unit, so the two need not agree. Converting Y against the X axis is the kind
+        // of slip that is invisible on every square, single-unit image and wrong by a thousand on the first one
+        // that is not.
+        var ws = new Workspace();
+        var vm = WithActiveMap(
+            ws,
+            MapOnSurface(
+                Layout(StandardUnits.Nanometre, (1000, 1000)),
+                points: 1,
+                surfaceUnit: StandardUnits.Micrometre,
+                surfaceUnitY: StandardUnits.Nanometre));
+
+        var (x, y) = Assert.Single(vm.PointMarkers);
+
+        Assert.Equal(1.0, x, 6);      // 1000 nm on a um axis of 1 um/pixel
+        Assert.Equal(1000.0, y, 6);   // 1000 nm on a nm axis of 1 nm/pixel
     }
 }
