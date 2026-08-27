@@ -384,7 +384,9 @@ public sealed class ShellViewModel : ObservableObject
                 // another is on screen beside it.
                 SetVolumeUnavailable(
                     IsVolumeView && output.Image is null
-                        ? ExplainVolume() ?? "This map cannot be measured with these settings."
+                        // Only the launcher can name a cause. A preview also fails on an unexpected error,
+                        // which is not the settings' fault, so the fallback says what happened and no more.
+                        ? ExplainVolume() ?? "No picture could be computed for this map."
                         : null);
 
                 OnPropertyChanged(nameof(OperationPreviewInput));
