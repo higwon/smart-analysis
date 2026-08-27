@@ -776,8 +776,21 @@ parameter there has a cursor or a draggable line.
 **Consequence.** A wrong baseline shifts every downstream measure by a constant, invisible in the shape of the
 curve and in the resulting image.
 
-**In the new product.** Not carried over as a percentage. Doc 26 §22.6 records that a baseline, when it is
-added, has to be a region shown on the curve.
+**In the new product.** The concept is essential and is now implemented (**A40**), but not the way legacy does
+it. Three differences:
+
+- The level is read from the **far end of the measured half's own travel**, expressed as a fraction of the
+  separation *span* rather than of the sample count. "The far fifth of the travel" is a statement about the
+  curve; "the far fifth of the samples" changes meaning the moment sampling density does.
+- Flatness is **checked and reported** (`BaselineIsFlat`, and a `baseline-not-flat` warning on both operations,
+  with a count of the affected curves on a map). Legacy assumes the tail is flat and says nothing when it is
+  not, which is precisely how a truncated curve goes wrong in silence.
+- The fraction is a schema parameter, recorded in provenance, and doc 26 §22.6 requires it to be drawn on the
+  curve once the parameters move there.
+
+Leaving it out was **our** defect first: an adhesion map of a real file came out uniformly zero — colour bar 0
+to 0 — because that file's force never crosses zero, and adhesion was being measured from absolute zero. It
+threw nothing and produced no NaN; it just looked like a sample nothing sticks to.
 
 ---
 

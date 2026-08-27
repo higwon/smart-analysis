@@ -53,6 +53,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
     public const string MeasureParameter = "measure";
     public const string ThresholdParameter = "threshold";
     public const string PhaseParameter = "phase";
+    public const string BaselineParameter = "baseline";
 
     // The default measure and the default half have to make sense TOGETHER: the peak force belongs to the push,
     // so the pair that runs when nothing is chosen is MaxForce on the approach.
@@ -80,6 +81,10 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 help: "Percentage of the maximum force that bounds the stiffness/deformation window (0–100).",
                 relevantWhen: new ParameterRelevance(
                     MeasureParameter, [VolumeMeasure.Stiffness, VolumeMeasure.Deformation])),
+            new ParameterDescriptor(
+                BaselineParameter, typeof(double), defaultValue: ForceDistanceMeasures.DefaultBaselinePercent,
+                min: 1.0, max: 100.0,
+                help: "Percentage of each curve's separation travel, at the far end, taken to be out of contact (1-100). Every force is measured from the level found there."),
         ]),
         output: OutputKind.DerivedDataset,
         isDeterministic: true,
@@ -142,9 +147,13 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         var measure = parameters.TryGet<VolumeMeasure>(MeasureParameter, out var m) ? m : DefaultMeasure;
         var phase = parameters.TryGet<CurvePhase>(PhaseParameter, out var p) ? p : DefaultPhase;
         double threshold = parameters.TryGet<double>(ThresholdParameter, out var t) ? t : DefaultThreshold;
+        double baselinePercent = parameters.TryGet<double>(BaselineParameter, out var b)
+            ? b
+            : ForceDistanceMeasures.DefaultBaselinePercent;
 
         var pixels = new float[map.PointCount];
         int unmeasured = 0;
+        int sloping = 0;
 
         for (int point = 0; point < map.PointCount; point++)
         {
@@ -154,7 +163,12 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 progress?.Report(new OperationProgress((double)point / map.PointCount, "Measuring the map."));
             }
 
-            double value = MeasureAt(map, point, phase, threshold, measure);
+            var (value, flat) = MeasureAt(map, point, phase, threshold, baselinePercent, measure);
+            if (!flat)
+            {
+                sloping++;
+            }
+
             pixels[point] = (float)value;
             if (!double.IsFinite(value))
             {
@@ -170,6 +184,15 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 $"{unmeasured} of {map.PointCount} points yielded no {measure}; those pixels are NaN."));
         }
 
+        // A sloping far end is not a non-contact level, so those pixels are shifted by a constant. They still
+        // LOOK like measurements, which is why the count is worth stating.
+        if (sloping > 0)
+        {
+            warnings.Add(new OperationWarning(
+                "volume.baseline-not-flat",
+                $"{sloping} of {map.PointCount} curves do not flatten out at their far end; those pixels are measured from a sloping level."));
+        }
+
         var imageId = DatasetId.New();
         var step = new ProvenanceStep(
             stepId: Guid.NewGuid().ToString("D"),
@@ -179,7 +202,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
             operationVersion: Descriptor.Version,
             order: 0,
             environment: _environment.Capture(),
-            parameters: Recorded(measure, phase, threshold),
+            parameters: Recorded(measure, phase, threshold, baselinePercent),
             warnings: warnings,
             parentResultId: imageId);
 
@@ -211,8 +234,9 @@ public sealed class VolumeImageOperation : IAnalysisOperation
     // One point's curve, split, measured on the requested half. A point with no run of that phase has no value:
     // returning the whole round trip's number instead would put a mixed-phase measure in the picture and nothing
     // on screen would say so.
-    private static double MeasureAt(
-        ForceVolumeDataset map, int point, CurvePhase phase, double threshold, VolumeMeasure measure)
+    private static (double Value, bool BaselineIsFlat) MeasureAt(
+        ForceVolumeDataset map, int point, CurvePhase phase, double threshold, double baselinePercent,
+        VolumeMeasure measure)
     {
         var separation = map.SeparationAt(point).Span;
         var force = map.ForceAt(point).Span;
@@ -231,14 +255,14 @@ public sealed class VolumeImageOperation : IAnalysisOperation
 
         if (longest is null)
         {
-            return double.NaN;
+            return (double.NaN, true);   // nothing was measured here, so nothing was measured from a bad level
         }
 
         int start = longest.Start, length = longest.Length;
         var measures = ForceDistanceMeasures.Of(
-            force.Slice(start, length), separation.Slice(start, length), threshold);
+            force.Slice(start, length), separation.Slice(start, length), threshold, baselinePercent);
 
-        return measure switch
+        double value = measure switch
         {
             VolumeMeasure.MaxForce => measures.MaxForce,
             VolumeMeasure.Adhesion => measures.Adhesion,
@@ -246,16 +270,20 @@ public sealed class VolumeImageOperation : IAnalysisOperation
             VolumeMeasure.Deformation => measures.Deformation,
             _ => double.NaN,
         };
+
+        return (value, measures.BaselineIsFlat);
     }
 
     // Only what actually shaped the picture. A step naming a threshold the measure never read would put a false
     // cause in the record: someone reproducing it would tune a number that changes nothing.
-    private static Dictionary<string, PhysicalValue> Recorded(VolumeMeasure measure, CurvePhase phase, double threshold)
+    private static Dictionary<string, PhysicalValue> Recorded(
+        VolumeMeasure measure, CurvePhase phase, double threshold, double baselinePercent)
     {
         var recorded = new Dictionary<string, PhysicalValue>(StringComparer.Ordinal)
         {
             [MeasureParameter] = new((int)measure, StandardUnits.One),
             [PhaseParameter] = new((int)phase, StandardUnits.One),
+            [BaselineParameter] = new(baselinePercent, StandardUnits.One),
         };
 
         if (measure is VolumeMeasure.Stiffness or VolumeMeasure.Deformation)
