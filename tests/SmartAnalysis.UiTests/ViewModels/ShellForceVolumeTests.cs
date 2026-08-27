@@ -316,12 +316,17 @@ public sealed class ShellForceVolumeTests
         public Task<OperationRunResult> RunAsync(string operationId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
             => Task.FromResult(OperationRunResult.Derived(DatasetId.New(), []));
 
+        /// <summary>When set, the launcher refuses these values the way a schema violation would.</summary>
+        public string? Refusal { get; set; }
+
         public Task<ImageRenderInput?> PreviewAsync(string operationId, IReadOnlyDictionary<string, object?> values, Colormap colormap, ValueRange? range, CancellationToken ct = default)
         {
             Previews++;
             LastPreviewValues = values;
             return Task.FromResult<ImageRenderInput?>(null);
         }
+
+        public string? Explain(string operationId, IReadOnlyDictionary<string, object?> values) => Refusal;
     }
 
     private sealed class FakePersistence : IWorkspacePersistence
@@ -919,5 +924,56 @@ public sealed class ShellForceVolumeTests
 
         Assert.Equal(0, vm.SelectedYChannel);
         Assert.Contains(nameof(vm.SelectedYChannel), raised);
+    }
+
+    [Fact]
+    public void A_setting_the_map_cannot_be_measured_with_says_so()
+    {
+        // The Volume view's preview IS the stage. Leaving the previous picture up would show one set of settings
+        // on the stage and another in the panel beside it, with nothing saying which produced what.
+        var launcher = new VolumeLauncher { Refusal = "Baseline must be at most 100." };
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.True(vm.HasVolumeUnavailable);
+        Assert.Equal("Baseline must be at most 100.", vm.VolumeUnavailable);
+    }
+
+    [Fact]
+    public void A_refusal_with_no_reason_still_says_something()
+    {
+        // A launcher that declines to explain is not a licence to show nothing at all.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.True(vm.HasVolumeUnavailable);
+        Assert.False(string.IsNullOrWhiteSpace(vm.VolumeUnavailable));
+    }
+
+    [Fact]
+    public void Leaving_the_volume_view_takes_the_message_with_it()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher { Refusal = "nope" });
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.ShowVolumeCommand.Execute(null);
+        Assert.True(vm.HasVolumeUnavailable);
+
+        vm.ShowSurfaceCommand.Execute(null);
+
+        Assert.False(vm.HasVolumeUnavailable);
     }
 }

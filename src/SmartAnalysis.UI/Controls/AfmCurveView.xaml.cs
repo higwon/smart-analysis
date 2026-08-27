@@ -16,7 +16,15 @@ namespace SmartAnalysis.UI.Controls;
 /// </summary>
 public partial class AfmCurveView : UserControl, ICurveView
 {
-    public AfmCurveView() => InitializeComponent();
+    public AfmCurveView()
+    {
+        InitializeComponent();
+
+        // ScottPlot ships a benchmark overlay on a key press. It is a development tool: a viewer who triggers it
+        // by accident sees a frame-rate badge over their data with no way to know what it is or how to dismiss it.
+        Plot.UserInputProcessor.UserActionResponses.RemoveAll(r => r.GetType().Name.Contains("Benchmark"));
+        Plot.Plot.Benchmark.IsVisible = false;
+    }
 
     /// <summary>V01 port entry point: render <paramref name="input"/> now (borrowed data is copied, not retained).</summary>
     public void Render(CurveRenderInput input)

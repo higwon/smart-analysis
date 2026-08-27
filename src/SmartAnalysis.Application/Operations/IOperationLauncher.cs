@@ -52,6 +52,18 @@ public interface IOperationLauncher
         => Task.FromResult<CurveRenderInput?>(null);
 
     /// <summary>
+    /// Why <paramref name="operationId"/> cannot run on the active dataset with <paramref name="values"/>, or
+    /// <c>null</c> when it can.
+    /// <para>
+    /// <see cref="PreviewAsync"/> is best-effort and swallows the reason, which is right when the preview is a
+    /// side pane the user can ignore. It is wrong when the preview <b>is</b> the stage: the picture would simply
+    /// stop responding, with a setting on screen that does not describe what is being shown. A default of
+    /// <c>null</c> keeps test doubles simple.
+    /// </para>
+    /// </summary>
+    string? Explain(string operationId, IReadOnlyDictionary<string, object?> values) => null;
+
+    /// <summary>
     /// The display name of an <b>enum</b> parameter value for <paramref name="operationId"/> — e.g. "BandStop"
     /// for <c>kind = 3</c> — so provenance/history shows the member name instead of the raw code. Returns
     /// <c>null</c> (the caller then formats the number) when the parameter is not a known enum on that operation,
