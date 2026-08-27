@@ -6,7 +6,13 @@ namespace SmartAnalysis.Visualization.Rendering;
 /// sane size (a 4k scan would otherwise be 16M vertices). The footprint is normalized to a unit square centred on
 /// the origin (aspect-preserving) and the height to a centred, exaggerated band, so any scan frames consistently;
 /// per-vertex normals are the averaged adjacent face normals (smooth shading), and each vertex carries its
-/// normalized height as a colormap texture coordinate. Non-finite samples are treated as the range minimum (flat).
+/// normalized height as a colormap texture coordinate.
+/// <para>
+/// A non-finite sample leaves a <b>hole</b>: every triangle touching it is omitted. Flattening it to the range
+/// minimum instead would put a real-looking low point in the geometry where nothing was measured — the same
+/// mistake the 2D view made before it painted such a sample as <c>Colormap.NoData</c>, in a medium where a
+/// colour cannot say it.
+/// </para>
 /// </summary>
 public static class SurfaceMeshBuilder
 {
@@ -46,6 +52,7 @@ public static class SurfaceMeshBuilder
 
         var positions = new double[gw * gh * 3];
         var textureU = new double[gw * gh];
+        var measured = new bool[gw * gh];
 
         for (int gy = 0; gy < gh; gy++)
         {
@@ -54,12 +61,16 @@ public static class SurfaceMeshBuilder
             {
                 int sx = Src(gx, gw, width);
                 double t = range.Normalize(z[(sy * width) + sx]);
-                if (double.IsNaN(t))
+                int v = (gy * gw) + gx;
+
+                // A vertex no triangle will reference still needs a position: anything walking the array for
+                // bounds must not meet a NaN. The floor is the harmless choice precisely because nothing draws it.
+                measured[v] = !double.IsNaN(t);
+                if (!measured[v])
                 {
-                    t = 0.0; // non-finite → the floor
+                    t = 0.0;
                 }
 
-                int v = (gy * gw) + gx;
                 positions[(v * 3) + 0] = ((double)sx / Math.Max(1, width - 1) * 2.0 - 1.0) * halfX;
                 positions[(v * 3) + 1] = ((double)sy / Math.Max(1, height - 1) * 2.0 - 1.0) * halfY;
                 positions[(v * 3) + 2] = (t - 0.5) * heightScale;
@@ -67,8 +78,9 @@ public static class SurfaceMeshBuilder
             }
         }
 
-        var indices = new int[(gw - 1) * (gh - 1) * 6];
-        int k = 0;
+        // A triangle is drawn only when all three of its corners were measured, so an unmeasured sample takes
+        // the (up to six) triangles around it with it and leaves a hole.
+        var indices = new List<int>((gw - 1) * (gh - 1) * 6);
         for (int gy = 0; gy < gh - 1; gy++)
         {
             for (int gx = 0; gx < gw - 1; gx++)
@@ -77,13 +89,26 @@ public static class SurfaceMeshBuilder
                 int v10 = v00 + 1;
                 int v01 = v00 + gw;
                 int v11 = v01 + 1;
+
                 // Two triangles, counter-clockwise seen from +Z so the outward normal points up.
-                indices[k++] = v00; indices[k++] = v10; indices[k++] = v11;
-                indices[k++] = v00; indices[k++] = v11; indices[k++] = v01;
+                if (measured[v00] && measured[v10] && measured[v11])
+                {
+                    indices.Add(v00);
+                    indices.Add(v10);
+                    indices.Add(v11);
+                }
+
+                if (measured[v00] && measured[v11] && measured[v01])
+                {
+                    indices.Add(v00);
+                    indices.Add(v11);
+                    indices.Add(v01);
+                }
             }
         }
 
-        return new SurfaceMesh(gw, gh, positions, ComputeNormals(positions, indices, gw * gh), textureU, indices);
+        var triangles = indices.ToArray();
+        return new SurfaceMesh(gw, gh, positions, ComputeNormals(positions, triangles, gw * gh), textureU, triangles);
     }
 
     // Smooth per-vertex normals: sum the (area-weighted) face normals of the incident triangles, then normalize.

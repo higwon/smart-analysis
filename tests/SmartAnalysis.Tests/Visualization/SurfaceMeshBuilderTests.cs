@@ -170,4 +170,69 @@ public sealed class SurfaceMeshBuilderTests
         Assert.Equal(0, mesh.VertexCount);
         Assert.Empty(mesh.TriangleIndices);
     }
+
+    // --- Unmeasured samples (V05) ---
+
+    /// <summary>A 4x4 grid of 5s with one sample knocked out.</summary>
+    private static float[] WithHole(int index)
+    {
+        var z = Constant(4, 4, 5f);
+        z[index] = float.NaN;
+        return z;
+    }
+
+    [Fact]
+    public void A_surface_with_nothing_missing_is_fully_triangulated()
+    {
+        var mesh = SurfaceMeshBuilder.Build(Constant(4, 4, 5f), 4, 4, new ValueRange(0, 10));
+
+        Assert.Equal(3 * 3 * 6, mesh.TriangleIndices.Length);
+    }
+
+    [Fact]
+    public void An_unmeasured_sample_leaves_a_hole_rather_than_a_low_point()
+    {
+        // Flattening it to the range minimum puts a real-looking pit in the geometry where nothing was
+        // measured. In 2D that sample is painted as NoData; a surface has no colour to say it with, so the
+        // honest rendering is an absence.
+        const int hole = (1 * 4) + 1;   // an interior sample, so all six of its triangles exist to be dropped
+        var mesh = SurfaceMeshBuilder.Build(WithHole(hole), 4, 4, new ValueRange(0, 10));
+
+        Assert.DoesNotContain(hole, mesh.TriangleIndices);
+        Assert.Equal((3 * 3 * 6) - (6 * 3), mesh.TriangleIndices.Length);
+    }
+
+    [Fact]
+    public void A_corner_takes_only_the_triangles_that_touch_it()
+    {
+        // The far corner belongs to one triangle of one quad, not to six.
+        var mesh = SurfaceMeshBuilder.Build(WithHole(0), 4, 4, new ValueRange(0, 10));
+
+        Assert.DoesNotContain(0, mesh.TriangleIndices);
+        Assert.Equal((3 * 3 * 6) - (2 * 3), mesh.TriangleIndices.Length);
+    }
+
+    [Fact]
+    public void The_surviving_surface_is_unmoved_by_the_hole()
+    {
+        // Only the triangles go. A neighbour must not be dragged down toward the missing sample, which is what
+        // a floored vertex did through the averaged normals.
+        var whole = SurfaceMeshBuilder.Build(Constant(4, 4, 5f), 4, 4, new ValueRange(0, 10));
+        var holed = SurfaceMeshBuilder.Build(WithHole((1 * 4) + 1), 4, 4, new ValueRange(0, 10));
+
+        const int neighbour = (1 * 4) + 2;
+        Assert.Equal(whole.Positions[(neighbour * 3) + 2], holed.Positions[(neighbour * 3) + 2], 12);
+        Assert.Equal(whole.Normals[(neighbour * 3) + 2], holed.Normals[(neighbour * 3) + 2], 12);
+    }
+
+    [Fact]
+    public void A_surface_of_nothing_but_holes_draws_nothing()
+    {
+        var z = Constant(4, 4, float.NaN);
+
+        var mesh = SurfaceMeshBuilder.Build(z, 4, 4, new ValueRange(0, 10));
+
+        Assert.Empty(mesh.TriangleIndices);
+        Assert.Equal(16, mesh.VertexCount);   // the grid is still there; none of it is drawn
+    }
 }
