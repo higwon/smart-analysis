@@ -34,8 +34,7 @@ public partial class AfmImageView : UserControl, IImageView
     private int _bmpW;
     private int _bmpH;
     private bool _needsFit;
-    private bool _dragging;
-    private Point? _pressedAt;
+    private readonly PressGesture _press = new();
     private Point _lastPos;
     private const double HandleSize = 9.0;
 
@@ -554,25 +553,23 @@ public partial class AfmImageView : UserControl, IImageView
 
         if (e.ClickCount == 2)
         {
-            _pressedAt = null;
+            _press.Cancel();
             Fit();
             return;
         }
 
-        // A press that does not move is a click on a pixel; one that moves is a pan. Which it was is only known
-        // on release, so the position is remembered here either way.
-        _pressedAt = e.GetPosition(Viewport);
+        // Pan only when zoomed in past fit — at fit the image is fully shown and stays centred. Either way the
+        // press is remembered, because a press that does not travel is a click on a pixel.
+        var at = e.GetPosition(Viewport);
+        bool canPan = ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale);
+        _press.Press(at.X, at.Y, canPan);
 
-        // Pan only when zoomed in past fit — at fit the image is fully shown and stays centred.
-        if (!ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale))
+        if (canPan)
         {
-            return;
+            // Captured so the gesture cannot be lost mid-drag. Not yet a pan: that is decided by movement.
+            _lastPos = at;
+            Viewport.CaptureMouse();
         }
-
-        _dragging = true;
-        _lastPos = e.GetPosition(Viewport);
-        Viewport.CaptureMouse();
-        Cursor = Cursors.SizeAll;
     }
 
     private void Viewport_MouseMove(object sender, MouseEventArgs e)
@@ -589,7 +586,17 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        if (!_dragging)
+        var moved = e.GetPosition(Viewport);
+        if (_press.BeginsPan(
+                moved.X, moved.Y,
+                SystemParameters.MinimumHorizontalDragDistance,
+                SystemParameters.MinimumVerticalDragDistance))
+        {
+            _lastPos = moved;
+            Cursor = Cursors.SizeAll;
+        }
+
+        if (!_press.IsPanning)
         {
             // Hint pannability while zoomed in.
             Cursor = ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale) ? Cursors.SizeAll : Cursors.Arrow;
@@ -605,11 +612,7 @@ public partial class AfmImageView : UserControl, IImageView
 
     private void Viewport_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        var pressed = _pressedAt;
-        _pressedAt = null;
-
-        if (_regionHandle != RegionHandle.None)
-        {
+        if (_regionHandle != RegionHandle.None)        {
             _regionHandle = RegionHandle.None;
             Viewport.ReleaseMouseCapture();
             return;
@@ -622,29 +625,18 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        bool panned = _dragging;
-        if (_dragging)
+        if (Viewport.IsMouseCaptured)
         {
-            _dragging = false;
             Viewport.ReleaseMouseCapture();
             Cursor = Cursors.Arrow;
         }
 
-        if (panned || pressed is not { } start)
-        {
-            return;
-        }
-
-        // The OS's own idea of how far a press may travel and still be a click, rather than a number invented
-        // here: a viewer whose hand shakes the same way in every application should get the same answer.
         var end = e.GetPosition(Viewport);
-        if (Math.Abs(end.X - start.X) > SystemParameters.MinimumHorizontalDragDistance
-            || Math.Abs(end.Y - start.Y) > SystemParameters.MinimumVerticalDragDistance)
-        {
-            return;
-        }
-
-        if (ToPixel(end) is { } pixel)
+        if (_press.Release(
+                end.X, end.Y,
+                SystemParameters.MinimumHorizontalDragDistance,
+                SystemParameters.MinimumVerticalDragDistance) is { } click
+            && ToPixel(new Point(click.X, click.Y)) is { } pixel)
         {
             PixelClicked?.Invoke(this, pixel);
         }

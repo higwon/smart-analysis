@@ -38,6 +38,14 @@ public static class ImageViewportMath
     }
 
     /// <summary>
+    /// Whether a press that has travelled <paramref name="dx"/>/<paramref name="dy"/> is a drag rather than a
+    /// click. The thresholds are the caller's — in the app they are the OS's own, so a viewer whose hand shakes
+    /// the same way in every application gets the same answer everywhere.
+    /// </summary>
+    public static bool IsDrag(double dx, double dy, double minX, double minY)
+        => Math.Abs(dx) > minX || Math.Abs(dy) > minY;
+
+    /// <summary>
     /// The sample under a viewport point, or <c>null</c> when the point is not on the image.
     /// <para>
     /// Null rather than a clamped edge sample: the space around a fitted image is not part of it, and reporting
