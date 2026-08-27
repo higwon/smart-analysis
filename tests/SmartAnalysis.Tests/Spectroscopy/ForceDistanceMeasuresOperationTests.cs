@@ -27,15 +27,31 @@ public sealed class ForceDistanceMeasuresOperationTests
             new ChannelDescriptor("force", ChannelKind.Unknown, StandardUnits.Nanonewton, "Force"),
             ScanMetadata.Unknown, ProvenanceRecord.Root);
 
-    // An approach half: separation falls 10 → 0 while force rises linearly 0 → 100 (a perfect spring).
-    private static ForceCurveDataset LinearApproach(int n = 11)
+    /// <summary>
+    /// An approach half shaped like a real one: flat and out of contact from separation 20 down to 10, then a
+    /// perfect spring from 10 to 0 as the force rises 0 → 100 (10 nN/nm).
+    /// <para>
+    /// The flat stretch is not decoration. Every force measure is read from the curve's own non-contact level, and
+    /// a curve that is ramping everywhere has no such level — the old fixture was the ramp alone, so it could only
+    /// ever have been measured from absolute zero.
+    /// </para>
+    /// </summary>
+    private static ForceCurveDataset LinearApproach(int rampSamples = 11, float offset = 0f)
     {
-        var separation = new float[n];
-        var force = new float[n];
-        for (int i = 0; i < n; i++)
+        const int flat = 10;
+        var separation = new float[flat + rampSamples];
+        var force = new float[flat + rampSamples];
+
+        for (int i = 0; i < flat; i++)
         {
-            separation[i] = 10f - i;
-            force[i] = i * (100f / (n - 1));
+            separation[i] = 20f - i;
+            force[i] = offset;
+        }
+
+        for (int i = 0; i < rampSamples; i++)
+        {
+            separation[flat + i] = 10f - i;
+            force[flat + i] = offset + (i * (100f / (rampSamples - 1)));
         }
 
         return Curve(separation, force);
@@ -181,8 +197,9 @@ public sealed class ForceDistanceMeasuresOperationTests
     [Fact]
     public async Task Non_finite_samples_are_excluded_and_warned()
     {
-        var separation = new float[] { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
-        var force = new float[] { 0, 10, float.NaN, 30, 40, 50, 60, 70, 80, 90, 100 };
+        // Flat and out of contact from 14 down to 11, then the ramp — with a dropout partway up it.
+        var separation = new float[] { 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+        var force = new float[] { 0, 0, 0, 0, 0, 10, float.NaN, 30, 40, 50, 60, 70, 80, 90, 100 };
         using var curve = Curve(separation, force);
 
         var result = await Op().RunAsync(new OperationInput(curve), ParameterSet.Empty, null, CancellationToken.None);

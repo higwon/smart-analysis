@@ -20,6 +20,9 @@ public sealed class VolumeImageOperationTests
 {
     private const int Samples = 20;
 
+    /// <summary>Separation at which the tip meets the surface; beyond it the curve is flat and out of contact.</summary>
+    private const float Contact = 8f;
+
     private sealed class FixedEnvironment : IExecutionEnvironmentProvider
     {
         public ExecutionEnvironment Capture() => new("test", "1.0", "test", DateTimeOffset.UnixEpoch);
@@ -35,7 +38,12 @@ public sealed class VolumeImageOperationTests
     /// pushes. Point p pushes (p+1)x as hard, so each pixel is distinguishable. The retract dips below zero, so
     /// there is a real adhesion to find on that half and not on the other.
     /// </summary>
-    private static ForceVolumeDataset Map(int points, ForceVolumeGeometry? geometry = null, bool oneWay = false)
+    private static ForceVolumeDataset Map(
+        int points,
+        ForceVolumeGeometry? geometry = null,
+        bool oneWay = false,
+        float forceOffset = 0f,
+        bool alwaysInContact = false)
     {
         var separation = new float[points * Samples];
         var force = new float[points * Samples];
@@ -48,10 +56,23 @@ public sealed class VolumeImageOperationTests
                 // Approach: 10 down to 1. Retract: 1 back up to 10 — unless the curve is one-way.
                 float z = i < half ? half - i : (oneWay ? half - i : i - half + 1);
                 separation[(p * Samples) + i] = z;
-                // Quadratic, so the threshold edge actually moves the chord: a linear push would make stiffness
-                // the same slope at every threshold and the cross-check below could not see a divergence.
-                float push = (half - z) * (half - z) * (p + 1) / 4f;
-                force[(p * Samples) + i] = i < half ? push : push - 5;
+
+                // Out of contact beyond Contact, so each half has a real non-contact level to be measured from.
+                // A curve that is pushing everywhere has no baseline, and every force read off it is shifted by
+                // whatever the detector's offset happens to be.
+                //
+                // Quadratic in contact, so the threshold edge actually moves the chord: a linear push would make
+                // stiffness the same slope at every threshold and the cross-check below could not see a divergence.
+                // alwaysInContact: a ramp over the WHOLE span, so the far end is still sloping and there is no
+                // non-contact level anywhere on the curve.
+                float push = alwaysInContact
+                    ? (10f - z) * (p + 1)
+                    : (z >= Contact ? 0f : (Contact - z) * (Contact - z) * (p + 1) / 4f);
+
+                // The pull-off sits on the retract only, one step outside contact — so the two halves genuinely
+                // differ and measuring the whole round trip cannot pass for measuring one of them.
+                bool pullOff = i >= half && !oneWay && z == Contact;
+                force[(p * Samples) + i] = forceOffset + (pullOff ? -5f : push);
             }
         }
 
@@ -222,6 +243,68 @@ public sealed class VolumeImageOperationTests
         Assert.DoesNotContain(
             VolumeImageOperation.ThresholdParameter, peak.Provenance.Steps[0].Parameters.Keys);
         Assert.Equal(30.0, slope.Provenance.Steps[0].Parameters[VolumeImageOperation.ThresholdParameter].Value);
+    }
+
+    [Fact]
+    public async Task A_picture_of_a_measure_does_not_move_when_the_whole_signal_does()
+    {
+        // The defect that reached the screen: an adhesion map came out uniformly zero because that file's force
+        // never crosses zero. A detector offset is not a property of the sample, so no pixel may follow it.
+        using var atZero = Map(4, Grid(2, 2));
+        using var shifted = Map(4, Grid(2, 2), forceOffset: 267f);
+
+        using var a = await RunAsync(atZero, VolumeMeasure.Adhesion, CurvePhase.Retract);
+        using var b = await RunAsync(shifted, VolumeMeasure.Adhesion, CurvePhase.Retract);
+
+        Assert.Equal(5.0, a.Data.Memory.Span[0], precision: 4);
+        Assert.Equal(a.Data.Memory.Span[0], b.Data.Memory.Span[0], precision: 4);
+    }
+
+    [Fact]
+    public async Task Curves_that_never_leave_contact_are_counted_rather_than_quietly_measured()
+    {
+        // Without a flat far end there is no non-contact level, so those pixels are shifted by whatever the far
+        // end happened to sit at. They still look like measurements, so the count has to be said out loud.
+        using var map = Map(2, Grid(2, 1), oneWay: true, alwaysInContact: true);
+
+        var result = await Operation().RunAsync(
+            new OperationInput(map), Params(VolumeMeasure.MaxForce, CurvePhase.Approach), null, CancellationToken.None);
+        using var _ = result.DerivedDataset;
+
+        Assert.Contains(result.Warnings, w => w.Code == "volume.baseline-not-flat");
+    }
+
+    [Fact]
+    public async Task A_well_behaved_map_is_not_warned_about_its_baseline()
+    {
+        using var map = Map(4, Grid(2, 2));
+
+        var result = await Operation().RunAsync(
+            new OperationInput(map), Params(VolumeMeasure.Adhesion, CurvePhase.Retract), null, CancellationToken.None);
+        using var _ = result.DerivedDataset;
+
+        Assert.DoesNotContain(result.Warnings, w => w.Code == "volume.baseline-not-flat");
+    }
+
+    [Fact]
+    public async Task The_step_records_the_baseline_the_forces_were_measured_from()
+    {
+        // Two pictures of the same map taken with different non-contact windows are different measurements.
+        using var map = Map(4, Grid(2, 2));
+
+        var result = await Operation().RunAsync(
+            new OperationInput(map),
+            new ParameterSet(new Dictionary<string, object?>
+            {
+                [VolumeImageOperation.MeasureParameter] = VolumeMeasure.Adhesion,
+                [VolumeImageOperation.PhaseParameter] = CurvePhase.Retract,
+                [VolumeImageOperation.BaselineParameter] = 0.3,
+            }),
+            null,
+            CancellationToken.None);
+        using var image = (ScanImageDataset)result.DerivedDataset!;
+
+        Assert.Equal(0.3, image.Provenance.Steps[0].Parameters[VolumeImageOperation.BaselineParameter].Value);
     }
 
     [Fact]
