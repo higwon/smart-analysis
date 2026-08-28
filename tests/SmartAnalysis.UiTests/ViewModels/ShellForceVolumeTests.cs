@@ -721,11 +721,11 @@ public sealed class ShellForceVolumeTests
     {
         // Drawing the same curve on the stage AND in the Inspector says nothing the stage did not already say.
         var onSurface = WithActiveMap(new Workspace(), MapOnSurface(Layout((1, 1), (3, 2))));
-        Assert.True(onSurface.ShowCurveInInspector);
+        Assert.True(onSurface.ShowCurveBelowStage);
 
         var noSurface = WithActiveMap(new Workspace(), Map(3));
         Assert.True(noSurface.ShowCurveOnStage);
-        Assert.False(noSurface.ShowCurveInInspector);
+        Assert.False(noSurface.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -852,12 +852,12 @@ public sealed class ShellForceVolumeTests
         ws.Add(map);
         ws.SetActive(map.Id);
 
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
 
         vm.ShowVolumeCommand.Execute(null);
 
         Assert.True(vm.IsVolumeView);
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -872,12 +872,12 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
 
         Assert.True(vm.ShowCurveOnStage);
-        Assert.False(vm.ShowCurveInInspector);
+        Assert.False(vm.ShowCurveBelowStage);
 
         vm.ShowVolumeCommand.Execute(null);
 
         Assert.False(vm.ShowCurveOnStage);
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -895,7 +895,7 @@ public sealed class ShellForceVolumeTests
 
         vm.ShowVolumeCommand.Execute(null);
 
-        Assert.Contains(nameof(vm.ShowCurveInInspector), raised);
+        Assert.Contains(nameof(vm.ShowCurveBelowStage), raised);
     }
 
     [Fact]
@@ -1177,16 +1177,16 @@ public sealed class ShellForceVolumeTests
         ws.Add(map);
         ws.SetActive(map.Id);
 
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+        Assert.True(vm.CurveFollowsChannelPicker);
 
         // Leave the picker somewhere other than the designated pair, the way UX04 lets a viewer do.
         vm.SelectedYChannel = 2;
         Assert.False(vm.IsDesignatedChannelPair);
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);   // the Surface view is still the picker's
+        Assert.True(vm.CurveFollowsChannelPicker);   // the Surface view is still the picker's
 
         vm.ShowVolumeCommand.Execute(null);
 
-        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+        Assert.False(vm.CurveFollowsChannelPicker);
     }
 
     [Fact]
@@ -1199,11 +1199,11 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
 
         vm.ShowVolumeCommand.Execute(null);
-        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+        Assert.False(vm.CurveFollowsChannelPicker);
 
         vm.ShowSurfaceCommand.Execute(null);
 
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+        Assert.True(vm.CurveFollowsChannelPicker);
     }
 
     [Fact]
