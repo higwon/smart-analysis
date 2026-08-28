@@ -8,7 +8,7 @@ using Xunit;
 namespace SmartAnalysis.Tests.Application;
 
 /// <summary>
-/// TASK-U09, the seam: the Analysis schema states a rule in CLR values, the form holds UI primitives. If the
+/// TASK-U10, the seam: the Analysis schema states a rule in CLR values, the form holds UI primitives. If the
 /// rule is not projected the same way the defaults and choices are, the two never compare equal and the field
 /// is dead in every setting — with nothing failing anywhere to say so.
 /// </summary>

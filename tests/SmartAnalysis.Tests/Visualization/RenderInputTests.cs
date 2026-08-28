@@ -85,7 +85,7 @@ public sealed class RenderInputTests
     public void Colormap_requires_256_entries()
         => Assert.Throws<ArgumentException>(() => new Colormap([new Rgb(0, 0, 0)]));
 
-    // --- Unmeasured samples (V06) ---
+    // --- Unmeasured samples (V11) ---
 
     private static ImageRenderInput Image(params float[] z)
         => new(
