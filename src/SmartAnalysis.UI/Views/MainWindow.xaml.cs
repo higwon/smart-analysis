@@ -540,9 +540,9 @@ public partial class MainWindow : Window
 
     // The vertical marker X positions (axis units) for a crop form's kept range on the source curve, clamped the same
     // way the crop op clamps (start ∈ [0, n-1], count ∈ [1, n-start]). False when no crop form is open.
-    private bool TryCropRangeMarkers(LineProfileDataset curve, out double[] markers)
+    private bool TryCropRangeMarkers(LineProfileDataset curve, out CurveMark[] markers)
     {
-        markers = Array.Empty<double>();
+        markers = [];
         int n = curve.X.Count;
         if (_rangeFields.Count == 0 || n <= 0)
         {
@@ -551,7 +551,11 @@ public partial class MainWindow : Window
 
         int start = Math.Clamp(AsInt(_rangeFields.FirstOrDefault(f => f.Name == "start")?.Value), 0, n - 1);
         int count = Math.Clamp(AsInt(_rangeFields.FirstOrDefault(f => f.Name == "count")?.Value), 1, n - start);
-        markers = new[] { curve.X.RawToReal(start), curve.X.RawToReal(start + count - 1) };
+        markers =
+        [
+            new(curve.X.RawToReal(start), "keep from", CurveMarkKind.Setting),
+            new(curve.X.RawToReal(start + count - 1), "keep to", CurveMarkKind.Setting),
+        ];
         return true;
     }
 

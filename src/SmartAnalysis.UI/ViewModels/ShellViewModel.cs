@@ -922,12 +922,24 @@ public sealed class ShellViewModel : ObservableObject
     /// Separations at which to mark the selected point's curve: where the threshold window begins and ends.
     /// Empty unless the Volume view is showing, because the marks belong to ITS settings (doc 26 §22.6).
     /// </summary>
-    public IReadOnlyList<double> CurveVerticalMarkers
-        => CurrentWindow() is { } w ? [w.PeakSeparation, w.WindowSeparation] : [];
+    public IReadOnlyList<CurveMark> CurveVerticalMarkers
+        => CurrentWindow() is { } w
+            ?
+            [
+                new(w.PeakSeparation, "peak", CurveMarkKind.Feature),
+                new(w.WindowSeparation, "window edge", CurveMarkKind.Setting),
+            ]
+            : [];
 
     /// <summary>Force levels to mark: the non-contact level every force is measured from, and what the threshold means.</summary>
-    public IReadOnlyList<double> CurveHorizontalMarkers
-        => CurrentWindow() is { } w ? [w.Baseline, w.ThresholdForce] : [];
+    public IReadOnlyList<CurveMark> CurveHorizontalMarkers
+        => CurrentWindow() is { } w
+            ?
+            [
+                new(w.Baseline, "baseline", CurveMarkKind.Reference),
+                new(w.ThresholdForce, "threshold force", CurveMarkKind.Setting),
+            ]
+            : [];
 
     // Both marker lists describe one window, and a drag will ask for them many times a second. Computed once
     // per refresh and dropped whenever anything it depends on moves.

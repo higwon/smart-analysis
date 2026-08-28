@@ -125,8 +125,8 @@ public sealed record CurveRenderInput
         IReadOnlyList<XySeries> series,
         AxisView x,
         AxisView y,
-        IReadOnlyList<double>? verticalMarkers = null,
-        IReadOnlyList<double>? horizontalMarkers = null)
+        IReadOnlyList<CurveMark>? verticalMarkers = null,
+        IReadOnlyList<CurveMark>? horizontalMarkers = null)
     {
         ArgumentNullException.ThrowIfNull(series);
         var copy = new XySeries[series.Count];
@@ -144,17 +144,17 @@ public sealed record CurveRenderInput
 
     // A non-finite position has no place on the plot. Dropping it is what makes "there is no window here" draw
     // as no lines at all, rather than as a line at whichever edge the axis happens to end on.
-    private static IReadOnlyList<double> Finite(IReadOnlyList<double>? values)
+    private static IReadOnlyList<CurveMark> Finite(IReadOnlyList<CurveMark>? values)
     {
         if (values is null)
         {
             return [];
         }
 
-        var kept = new List<double>(values.Count);
+        var kept = new List<CurveMark>(values.Count);
         foreach (var v in values)
         {
-            if (double.IsFinite(v))
+            if (double.IsFinite(v.Position))
             {
                 kept.Add(v);
             }
@@ -166,18 +166,18 @@ public sealed record CurveRenderInput
     /// <summary>The same plot with reference lines added. What a parameter MEANS is the caller's knowledge, not
     /// the factory's — so the shell adds the marks to a plot the factory built from data alone.</summary>
     public CurveRenderInput WithMarkers(
-        IReadOnlyList<double>? vertical, IReadOnlyList<double>? horizontal)
+        IReadOnlyList<CurveMark>? vertical, IReadOnlyList<CurveMark>? horizontal)
         => new(Series, X, Y, vertical, horizontal);
 
     public IReadOnlyList<XySeries> Series { get; }
 
     /// <summary>X positions (axis units) at which to draw vertical reference lines — e.g. a crop range's boundaries on
     /// the source curve. Empty for a plain plot.</summary>
-    public IReadOnlyList<double> VerticalMarkers { get; }
+    public IReadOnlyList<CurveMark> VerticalMarkers { get; }
 
     /// <summary>Y positions (axis units) at which to draw horizontal reference lines — e.g. the non-contact level
     /// a force is measured from. Non-finite positions are dropped, so an absent level draws nothing.</summary>
-    public IReadOnlyList<double> HorizontalMarkers { get; }
+    public IReadOnlyList<CurveMark> HorizontalMarkers { get; }
 
     public AxisView X { get; }
 
