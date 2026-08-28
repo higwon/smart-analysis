@@ -1151,14 +1151,55 @@ public sealed class ShellForceVolumeTests
         Assert.Equal(2, vm.CurveHorizontalMarkers.Count);
 
         // The baseline is the curve's own out-of-contact level, not zero.
-        Assert.Equal(267.0, vm.CurveHorizontalMarkers[0], 3);
-        Assert.True(vm.CurveHorizontalMarkers[1] > vm.CurveHorizontalMarkers[0]);
+        Assert.Equal(267.0, vm.CurveHorizontalMarkers[0].Position, 3);
+        Assert.True(vm.CurveHorizontalMarkers[1].Position > vm.CurveHorizontalMarkers[0].Position);
 
         // And the threshold line is where the BOX says, not where a default says.
-        double atHalf = vm.CurveHorizontalMarkers[1];
+        double atHalf = vm.CurveHorizontalMarkers[1].Position;
         ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "threshold").Value = 25.0;
 
-        Assert.True(vm.CurveHorizontalMarkers[1] < atHalf);
+        Assert.True(vm.CurveHorizontalMarkers[1].Position < atHalf);
+    }
+
+    [Fact]
+    public void Every_mark_says_what_it_is()
+    {
+        // Four lines at once. Drawn in one style with no names they are four identical dashes: a viewer can see
+        // that something was marked but not which one is the baseline and which is the threshold.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = RoundTripMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        var labels = vm.CurveVerticalMarkers.Concat(vm.CurveHorizontalMarkers).Select(m => m.Label).ToArray();
+
+        Assert.Equal(4, labels.Length);
+        Assert.Equal(4, labels.Distinct().Count());
+        Assert.All(labels, l => Assert.False(string.IsNullOrWhiteSpace(l)));
+        Assert.Contains("baseline", labels);
+        Assert.Contains("peak", labels);
+    }
+
+    [Fact]
+    public void A_level_a_measure_is_taken_from_is_not_drawn_like_a_setting()
+    {
+        // The kinds are what the pattern separates, so a label clipped at the plot edge still leaves the three
+        // apart. The baseline is the curve's own level; the threshold is a number the viewer typed.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = RoundTripMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.Equal(CurveMarkKind.Reference, vm.CurveHorizontalMarkers[0].Kind);
+        Assert.Equal(CurveMarkKind.Setting, vm.CurveHorizontalMarkers[1].Kind);
+
+        // The peak is where the curve puts it; no setting moved it there.
+        Assert.Equal(CurveMarkKind.Feature, vm.CurveVerticalMarkers[0].Kind);
+        Assert.Equal(CurveMarkKind.Setting, vm.CurveVerticalMarkers[1].Kind);
     }
 
     [Fact]
@@ -1173,13 +1214,13 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
         vm.ShowVolumeCommand.Execute(null);
 
-        double onApproach = vm.CurveHorizontalMarkers[1];
+        double onApproach = vm.CurveHorizontalMarkers[1].Position;
 
         var phase = ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "phase");
         phase.Value = "Retract";
 
         // The retract pushes half as hard, so 50% of ITS peak is a lower force.
-        Assert.True(vm.CurveHorizontalMarkers[1] < onApproach);
+        Assert.True(vm.CurveHorizontalMarkers[1].Position < onApproach);
     }
 
     [Fact]
@@ -1211,13 +1252,13 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
         vm.ShowVolumeCommand.Execute(null);
 
-        double narrow = vm.CurveHorizontalMarkers[0];
+        double narrow = vm.CurveHorizontalMarkers[0].Position;
 
         var baseline = ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "baseline");
         baseline.Value = 60.0;
 
         // A wider window reaches further down the ramp, so the level it averages is higher up the force axis.
-        Assert.True(vm.CurveHorizontalMarkers[0] > narrow);
+        Assert.True(vm.CurveHorizontalMarkers[0].Position > narrow);
     }
 
     [Fact]
