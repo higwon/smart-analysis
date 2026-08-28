@@ -1,4 +1,17 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+
 namespace SmartAnalysis.Domain.Spectroscopy;
+
+/// <summary>Which rule placed a map's curves on its grid.</summary>
+public enum MapGridSource
+{
+    /// <summary>The file recorded no positions, so the order it acquired them in is the only rule left.</summary>
+    AcquisitionOrder,
+
+    /// <summary>The file's own positions, which is where the instrument says each curve was measured.</summary>
+    RecordedPositions,
+}
 
 /// <summary>
 /// Which cell of a map's grid each curve was measured in.
@@ -10,9 +23,12 @@ namespace SmartAnalysis.Domain.Spectroscopy;
 /// because a mirrored row of a noisy map looks like a row of a noisy map.
 /// </para>
 /// <para>
-/// The recorded positions are what the instrument wrote down, so they decide. A map with none, or one whose
-/// positions do not land on the grid one-to-one, falls back to acquisition order — a known-simple rule beats a
-/// layout inferred from positions that do not support it. <see cref="FromRecordedPositions"/> says which held.
+/// So there are three outcomes, not two. A file that recorded <b>no</b> positions falls back to acquisition
+/// order: nothing better exists, and that is a stated rule rather than a guess. A file that <b>did</b> record
+/// positions which cannot be laid on its grid is <b>refused</b> — that they disagree says the spatial layout
+/// cannot be trusted, which is not evidence that acquisition order is the spatial one. Falling back there would
+/// put every reader of this type (the picture, the mark, the click, the label) confidently on the same wrong
+/// mapping, which is worse than the bug it replaced.
 /// </para>
 /// </summary>
 public sealed class MapGridIndex
@@ -23,23 +39,33 @@ public sealed class MapGridIndex
     private readonly int[] _cellOfPoint;   // point -> row * columns + column
     private readonly int[] _pointOfCell;   // row * columns + column -> point, -1 where nothing was measured
 
-    private MapGridIndex(int columns, int rows, int[] cellOfPoint, int[] pointOfCell, bool fromRecorded)
+    private MapGridIndex(int columns, int rows, int[] cellOfPoint, int[] pointOfCell, MapGridSource source)
     {
         Columns = columns;
         Rows = rows;
         _cellOfPoint = cellOfPoint;
         _pointOfCell = pointOfCell;
-        FromRecordedPositions = fromRecorded;
+        Source = source;
     }
 
     public int Columns { get; }
 
     public int Rows { get; }
 
-    /// <summary>Whether the cells come from the file's own positions rather than from acquisition order.</summary>
-    public bool FromRecordedPositions { get; }
+    /// <summary>Which rule placed the curves — the file's positions, or the order it acquired them in.</summary>
+    public MapGridSource Source { get; }
 
-    public static MapGridIndex Of(ForceVolumeGeometry grid, MapPointLayout? layout, int pointCount)
+    /// <summary>
+    /// The cells each curve was measured in, or <paramref name="problem"/> saying why the recorded positions
+    /// cannot be laid on this grid. A map with no recorded positions succeeds on
+    /// <see cref="MapGridSource.AcquisitionOrder"/>; one whose positions contradict the grid does not succeed.
+    /// </summary>
+    public static bool TryCreate(
+        ForceVolumeGeometry grid,
+        MapPointLayout? layout,
+        int pointCount,
+        [NotNullWhen(true)] out MapGridIndex? index,
+        [NotNullWhen(false)] out string? problem)
     {
         DomainGuard.NotNull(grid, nameof(grid));
         if (pointCount < 0)
@@ -47,7 +73,14 @@ public sealed class MapGridIndex
             throw new ArgumentOutOfRangeException(nameof(pointCount), pointCount, "A map has no negative point count.");
         }
 
-        return FromLayout(grid, layout, pointCount) ?? RowMajor(grid, pointCount);
+        if (layout is null)
+        {
+            index = RowMajor(grid, pointCount);
+            problem = null;
+            return true;
+        }
+
+        return FromLayout(grid, layout, pointCount, out index, out problem);
     }
 
     /// <summary>The cell point <paramref name="point"/> was measured in.</summary>
@@ -85,14 +118,28 @@ public sealed class MapGridIndex
             }
         }
 
-        return new MapGridIndex(grid.Columns, grid.Rows, cellOfPoint, pointOfCell, fromRecorded: false);
+        return new MapGridIndex(grid.Columns, grid.Rows, cellOfPoint, pointOfCell, MapGridSource.AcquisitionOrder);
     }
 
-    private static MapGridIndex? FromLayout(ForceVolumeGeometry grid, MapPointLayout? layout, int pointCount)
+    private static bool FromLayout(
+        ForceVolumeGeometry grid,
+        MapPointLayout layout,
+        int pointCount,
+        [NotNullWhen(true)] out MapGridIndex? index,
+        [NotNullWhen(false)] out string? problem)
     {
-        if (layout is null || layout.Count != pointCount || pointCount == 0)
+        index = null;
+
+        if (layout.Count != pointCount)
         {
-            return null;
+            problem = Say($"the file recorded {layout.Count} positions for {pointCount} curves");
+            return false;
+        }
+
+        if (pointCount == 0)
+        {
+            problem = Say("the map holds no curves");
+            return false;
         }
 
         double minX = double.PositiveInfinity, maxX = double.NegativeInfinity;
@@ -108,9 +155,16 @@ public sealed class MapGridIndex
         // A single column has no spacing to divide by, and every position in it is that one column.
         double stepX = grid.Columns > 1 ? (maxX - minX) / (grid.Columns - 1) : 0.0;
         double stepY = grid.Rows > 1 ? (maxY - minY) / (grid.Rows - 1) : 0.0;
-        if ((grid.Columns > 1 && stepX <= 0.0) || (grid.Rows > 1 && stepY <= 0.0))
+        if (grid.Columns > 1 && stepX <= 0.0)
         {
-            return null;
+            problem = Say($"every recorded position shares one x ({Number(minX)}), so {grid.Columns} columns cannot be told apart");
+            return false;
+        }
+
+        if (grid.Rows > 1 && stepY <= 0.0)
+        {
+            problem = Say($"every recorded position shares one y ({Number(minY)}), so {grid.Rows} rows cannot be told apart");
+            return false;
         }
 
         int cells = grid.Columns * grid.Rows;
@@ -123,24 +177,34 @@ public sealed class MapGridIndex
             if (Line(layout[p].X, minX, stepX, grid.Columns) is not { } column
                 || Line(layout[p].Y, minY, stepY, grid.Rows) is not { } row)
             {
-                return null;
+                problem = Say(
+                    $"curve {p + 1} was recorded at ({Number(layout[p].X)}, {Number(layout[p].Y)}) {layout.LengthUnit.Symbol}, "
+                    + "which is between grid lines rather than on one");
+                return false;
             }
 
             int cell = (row * grid.Columns) + column;
-
-            // Two curves claiming one cell means these positions do not describe this grid, and one of them
-            // would silently overwrite the other.
-            if (pointOfCell[cell] >= 0)
+            if (pointOfCell[cell] is var taken && taken >= 0)
             {
-                return null;
+                problem = Say(
+                    $"curves {taken + 1} and {p + 1} were both recorded in column {column + 1}, row {row + 1}");
+                return false;
             }
 
             cellOfPoint[p] = cell;
             pointOfCell[cell] = p;
         }
 
-        return new MapGridIndex(grid.Columns, grid.Rows, cellOfPoint, pointOfCell, fromRecorded: true);
+        index = new MapGridIndex(grid.Columns, grid.Rows, cellOfPoint, pointOfCell, MapGridSource.RecordedPositions);
+        problem = null;
+        return true;
     }
+
+    private static string Say(string detail)
+        => $"The recorded positions do not describe this map's grid: {detail}.";
+
+    private static string Number(double value)
+        => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     private static int? Line(double value, double min, double step, int count)
     {

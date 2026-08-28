@@ -67,6 +67,7 @@ public sealed class ShellViewModel : ObservableObject
     private ForceCurveDataset? _activeForceCurve;
     private ForceVolumeDataset? _activeForceVolume;
     private MapGridIndex? _mapCells;
+    private bool _mapCellsComputed;
     private int _selectedMapPoint;
     private int _selectedXChannel;
     private int _selectedYChannel;
@@ -1018,17 +1019,24 @@ public sealed class ShellViewModel : ObservableObject
 
     /// <summary>
     /// Which cell of the grid each curve was measured in — the picture's layout, not the acquisition order.
-    /// Cached because it is read once per marker and per click, and the layout cannot change while a map is
-    /// active.
+    /// Null when the file's own positions contradict the grid: no cell can be named, and naming one anyway
+    /// would make every reader of this agree on the same wrong place. Cached — the layout cannot change while
+    /// a map is active.
     /// </summary>
     private MapGridIndex? MapCells()
     {
-        if (_activeForceVolume is not { Geometry: { } grid } map)
+        if (_mapCellsComputed)
         {
-            return null;
+            return _mapCells;
         }
 
-        return _mapCells ??= MapGridIndex.Of(grid, map.PointLayout, map.PointCount);
+        _mapCellsComputed = true;
+        if (_activeForceVolume is { Geometry: { } grid } map)
+        {
+            MapGridIndex.TryCreate(grid, map.PointLayout, map.PointCount, out _mapCells, out _);
+        }
+
+        return _mapCells;
     }
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
@@ -1042,6 +1050,7 @@ public sealed class ShellViewModel : ObservableObject
         if (changed)
         {
             _mapCells = null;
+            _mapCellsComputed = false;
             _selectedMapPoint = 0;
             OnPropertyChanged(nameof(SelectedMapPoint));
         }

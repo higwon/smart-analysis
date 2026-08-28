@@ -56,12 +56,26 @@ public sealed class MapGridIndexTests
             })
             .ToArray());
 
+    private static MapGridIndex Cells(ForceVolumeGeometry grid, MapPointLayout? layout, int points)
+    {
+        Assert.True(
+            MapGridIndex.TryCreate(grid, layout, points, out var index, out var problem),
+            $"expected a layout, got: {problem}");
+        return index;
+    }
+
+    private static string Refused(ForceVolumeGeometry grid, MapPointLayout? layout, int points)
+    {
+        Assert.False(MapGridIndex.TryCreate(grid, layout, points, out _, out var problem), "expected a refusal.");
+        return problem;
+    }
+
     [Fact]
     public void A_map_scanned_one_way_sits_where_its_acquisition_order_says()
     {
-        var cells = MapGridIndex.Of(Grid(4, 3), RowMajorLayout(4, 3), 12);
+        var cells = Cells(Grid(4, 3), RowMajorLayout(4, 3), 12);
 
-        Assert.True(cells.FromRecordedPositions);
+        Assert.Equal(MapGridSource.RecordedPositions, cells.Source);
         Assert.Equal((0, 0), cells.CellOf(0));
         Assert.Equal((3, 0), cells.CellOf(3));
         Assert.Equal((0, 1), cells.CellOf(4));
@@ -73,9 +87,9 @@ public sealed class MapGridIndexTests
     {
         // The defect. Point 4 is the FIRST of the second row in acquisition order, and the instrument measured
         // it at the RIGHT-hand end because it was coming back. Laid out by index it lands on the left.
-        var cells = MapGridIndex.Of(Grid(4, 3), SnakeLayout(4, 3), 12);
+        var cells = Cells(Grid(4, 3), SnakeLayout(4, 3), 12);
 
-        Assert.True(cells.FromRecordedPositions);
+        Assert.Equal(MapGridSource.RecordedPositions, cells.Source);
         Assert.Equal((0, 0), cells.CellOf(0));
         Assert.Equal((3, 0), cells.CellOf(3));
         Assert.Equal((3, 1), cells.CellOf(4));
@@ -86,7 +100,7 @@ public sealed class MapGridIndexTests
     [Fact]
     public void A_pixel_of_a_boustrophedon_map_names_the_curve_it_was_measured_from()
     {
-        var cells = MapGridIndex.Of(Grid(4, 3), SnakeLayout(4, 3), 12);
+        var cells = Cells(Grid(4, 3), SnakeLayout(4, 3), 12);
 
         // Clicking the right-hand end of the second row must select point 4, not point 7.
         Assert.Equal(4, cells.PointAt(3, 1));
@@ -97,18 +111,20 @@ public sealed class MapGridIndexTests
     public void A_map_that_recorded_no_positions_falls_back_to_acquisition_order()
     {
         // A known-simple rule, stated as such — not a layout guessed from positions that do not exist.
-        var cells = MapGridIndex.Of(Grid(4, 3), null, 12);
+        var cells = Cells(Grid(4, 3), null, 12);
 
-        Assert.False(cells.FromRecordedPositions);
+        Assert.Equal(MapGridSource.AcquisitionOrder, cells.Source);
         Assert.Equal((0, 1), cells.CellOf(4));
         Assert.Equal(4, cells.PointAt(0, 1));
     }
 
     [Fact]
-    public void Positions_that_do_not_land_on_the_grid_fall_back_rather_than_guess()
+    public void Positions_that_do_not_land_on_the_grid_are_refused_not_replaced_by_acquisition_order()
     {
-        // Half a cell off is not a rounding error, and rounding it to the nearest line would place a curve
-        // somewhere the instrument never went.
+        // That the positions disagree with the grid says the SPATIAL layout cannot be trusted. It is not
+        // evidence that acquisition order is the spatial one — that inference is the very defect this type
+        // exists to close, and taking it here would put the picture, the mark, the click and the label
+        // confidently on one wrong mapping.
         var off = new MapPointLayout(
             [
                 new(0.0, 0.0), new(Step, 0.0), new(Step * 1.5, 0.0), new(Step * 3, 0.0),
@@ -116,28 +132,65 @@ public sealed class MapGridIndexTests
             ],
             StandardUnits.Micrometre);
 
-        Assert.False(MapGridIndex.Of(Grid(4, 2), off, 8).FromRecordedPositions);
+        Assert.Contains("between grid lines", Refused(Grid(4, 2), off, 8));
     }
 
     [Fact]
-    public void Two_curves_claiming_one_cell_falls_back_rather_than_overwrite_one()
+    public void Two_curves_claiming_one_cell_are_refused_not_silently_overwritten()
     {
         var collide = Layout((0, 0), (0, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1), (3, 1));
 
-        Assert.False(MapGridIndex.Of(Grid(4, 2), collide, 8).FromRecordedPositions);
+        // Which two, so the reason names something a person can go and look at.
+        Assert.Contains("curves 1 and 2", Refused(Grid(4, 2), collide, 8));
     }
 
     [Fact]
-    public void A_layout_that_does_not_cover_the_map_is_not_used()
+    public void A_layout_that_does_not_cover_the_map_is_refused()
     {
         // Positions for four of eight curves cannot say where the other four are.
-        Assert.False(MapGridIndex.Of(Grid(4, 2), Layout((0, 0), (1, 0), (2, 0), (3, 0)), 8).FromRecordedPositions);
+        Assert.Contains("4 positions for 8 curves", Refused(Grid(4, 2), Layout((0, 0), (1, 0), (2, 0), (3, 0)), 8));
+    }
+
+    [Fact]
+    public void Positions_that_share_one_column_cannot_tell_four_columns_apart()
+    {
+        var line = Layout((0, 0), (0, 0), (0, 0), (0, 0), (0, 1), (0, 1), (0, 1), (0, 1));
+
+        Assert.Contains("shares one x", Refused(Grid(4, 2), line, 8));
+    }
+
+    [Fact]
+    public async Task A_map_whose_positions_contradict_its_grid_yields_no_picture_and_says_why()
+    {
+        // The reason has to reach the screen. A refusal the UI cannot explain looks like a broken button.
+        var collide = Layout((0, 0), (0, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1), (3, 1));
+        using var map = Map(4, 2, collide);
+
+        var result = new VolumeImageOperation(new FixedEnvironment())
+            .Validate(new OperationInput(map), new ParameterSet(new Dictionary<string, object?>()));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("do not describe this map's grid", StringComparison.Ordinal));
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public void A_map_that_recorded_nothing_still_yields_a_picture()
+    {
+        // The other half of the policy: no positions at all is not a contradiction, it is a file that offers
+        // nothing better than the order it measured in.
+        using var map = Map(4, 2, layout: null);
+
+        var result = new VolumeImageOperation(new FixedEnvironment())
+            .Validate(new OperationInput(map), new ParameterSet(new Dictionary<string, object?>()));
+
+        Assert.True(result.IsValid);
     }
 
     [Fact]
     public void A_cell_nothing_was_measured_in_has_no_point()
     {
-        var cells = MapGridIndex.Of(Grid(4, 2), Layout((0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1)), 7);
+        var cells = Cells(Grid(4, 2), null, 7);
 
         Assert.Equal(6, cells.PointAt(2, 1));
         Assert.Equal(-1, cells.PointAt(3, 1));
@@ -148,9 +201,9 @@ public sealed class MapGridIndexTests
     [Fact]
     public void A_single_column_map_has_no_spacing_to_divide_by()
     {
-        var cells = MapGridIndex.Of(Grid(1, 3), Layout((0, 0), (0, 1), (0, 2)), 3);
+        var cells = Cells(Grid(1, 3), Layout((0, 0), (0, 1), (0, 2)), 3);
 
-        Assert.True(cells.FromRecordedPositions);
+        Assert.Equal(MapGridSource.RecordedPositions, cells.Source);
         Assert.Equal((0, 2), cells.CellOf(2));
     }
 
@@ -187,7 +240,7 @@ public sealed class MapGridIndexTests
     /// A map whose point k pushes <c>k+1</c> as hard, so a mirrored row is visible as one. A round trip, because
     /// a monotone ramp is classified <c>Undetermined</c> and has no approach half to measure.
     /// </summary>
-    private static ForceVolumeDataset Map(int columns, int rows, MapPointLayout layout)
+    private static ForceVolumeDataset Map(int columns, int rows, MapPointLayout? layout)
     {
         int points = columns * rows;
         int half = Samples / 2;

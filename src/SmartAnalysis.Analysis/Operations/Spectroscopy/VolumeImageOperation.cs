@@ -116,6 +116,14 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 "This map has no grid, so its points cannot be laid out as an image. Hand-placed points have positions but no shape.");
         }
 
+        // Positions that contradict the grid say the spatial layout cannot be trusted. That is NOT evidence
+        // that acquisition order is the spatial one, and a picture drawn on that assumption would look exactly
+        // as authoritative as a correct one.
+        if (!MapGridIndex.TryCreate(map.Geometry, map.PointLayout, map.PointCount, out _, out var problem))
+        {
+            return ValidationResult.Fail(problem);
+        }
+
         // The same reason A24 checks: the stiffness unit is built as force-per-length and carries the Stiffness
         // dimension, so a curve of volts against amps would yield a "V/A" claiming to be a stiffness — convertible
         // against N/m. That is a corrupted measurement, not a label bug.
@@ -154,7 +162,8 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         // Where each curve sits on the surface, which is NOT the order it was acquired in: a boustrophedon
         // scan mirrors every other row, and laying points out by index would put half the picture's rows
         // backwards while leaving it looking entirely plausible.
-        var cells = MapGridIndex.Of(grid, map.PointLayout, map.PointCount);
+        // Validate is the gate (F04): a layout that cannot be laid on this grid never reaches here.
+        MapGridIndex.TryCreate(grid, map.PointLayout, map.PointCount, out var cells, out _);
 
         // Every cell gets written: the dataset will not exist unless it holds exactly one curve per cell.
         var pixels = new float[grid.Columns * grid.Rows];
@@ -175,7 +184,7 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 sloping++;
             }
 
-            var (column, row) = cells.CellOf(point);
+            var (column, row) = cells!.CellOf(point);
             pixels[(row * grid.Columns) + column] = (float)value;
             if (!double.IsFinite(value))
             {
