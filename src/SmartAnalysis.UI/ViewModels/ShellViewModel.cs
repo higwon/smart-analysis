@@ -1060,7 +1060,7 @@ public sealed class ShellViewModel : ObservableObject
     /// The placeholder is for having nothing to inspect, not for the active dataset being something other than
     /// an image. A map or a curve has properties; telling its viewer to "select an image" is just wrong.
     /// </summary>
-    public bool HasNothingToInspect => !HasActiveImage && !IsSpectroscopy;
+    public bool HasNothingToInspect => !HasActiveImage && !IsSpectroscopy && _activeCurve is null;
 
     /// <summary>
     /// Derives a force curve from the point the viewer has selected (A39) — the explicit step from inspecting a
@@ -1093,6 +1093,37 @@ public sealed class ShellViewModel : ObservableObject
             OnPropertyChanged(nameof(HasStatus));
         }
     }
+
+    /// <summary>A profile is a slice: how far it runs, in its own axis unit.</summary>
+    public string ProfileSummary
+    {
+        get
+        {
+            if (_activeCurve is not { } profile)
+            {
+                return string.Empty;
+            }
+
+            double span = Math.Abs(profile.X.Step) * Math.Max(0, profile.X.Count - 1);
+            return FormattableString.Invariant(
+                $"{profile.X.Count} samples · {span:0.###} {profile.X.Unit.Symbol}");
+        }
+    }
+
+    /// <summary>
+    /// Where on its source image the profile was sampled, in that image's pixels.
+    /// <para>
+    /// A profile with no recorded line says so rather than showing a position it does not have — the same rule
+    /// the map's point position follows. A curve read straight from a file was never sliced out of anything.
+    /// </para>
+    /// </summary>
+    public string ProfileSource
+        => CurveSourceLine is { } line
+            ? FormattableString.Invariant(
+                $"({line.X0:0.#}, {line.Y0:0.#}) → ({line.X1:0.#}, {line.Y1:0.#}) px")
+            : "not sampled from an image";
+
+    public bool IsProfile => _activeCurve is not null;
 
     /// <summary>How much of the sample the map covers, in its own terms: the grid when it has one, else points.</summary>
     public string MapSummary
@@ -1356,6 +1387,10 @@ public sealed class ShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(ShowCurveSourceImage));
                 OnPropertyChanged(nameof(ShowSourceImagePane));
                 OnPropertyChanged(nameof(IsSingleCurve));
+        OnPropertyChanged(nameof(IsProfile));
+        OnPropertyChanged(nameof(ProfileSummary));
+        OnPropertyChanged(nameof(ProfileSource));
+        OnPropertyChanged(nameof(HasNothingToInspect));
             }
         }
     }
@@ -1755,6 +1790,10 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowComparePanes));
         OnPropertyChanged(nameof(IsSingleImage));
         OnPropertyChanged(nameof(IsSingleCurve));
+        OnPropertyChanged(nameof(IsProfile));
+        OnPropertyChanged(nameof(ProfileSummary));
+        OnPropertyChanged(nameof(ProfileSource));
+        OnPropertyChanged(nameof(HasNothingToInspect));
         OnPropertyChanged(nameof(IsSingleForceCurve));
         OnPropertyChanged(nameof(ShowCurveSourceImage));
         OnPropertyChanged(nameof(ShowSourceImagePane));
@@ -1897,6 +1936,11 @@ public sealed class ShellViewModel : ObservableObject
         if (dataset is ForceCurveDataset curve)
         {
             return ($"Force curve · {curve.Length} samples · {curve.ForceChannel.DisplayName}", Instrument(dataset));
+        }
+
+        if (dataset is LineProfileDataset profile)
+        {
+            return ($"Profile · {profile.X.Count} samples · {profile.Channel.DisplayName}", Instrument(dataset));
         }
 
         return (dataset.GetType().Name, dataset.Source.FormatId);
