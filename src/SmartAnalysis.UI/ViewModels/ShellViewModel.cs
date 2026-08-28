@@ -1346,7 +1346,32 @@ public sealed class ShellViewModel : ObservableObject
         => _activeForceVolume?.Channels ?? _activeForceCurve?.Channels;
 
     /// <summary>What a channel picker lists, in the order the instrument declared them.</summary>
-    public IReadOnlyList<string> ChannelChoices { get; private set; } = [];
+    public IReadOnlyList<ChannelChoice> ChannelChoices { get; private set; } = [];
+
+    /// <summary>
+    /// The picker's selection as the <b>item</b> it shows, not as a position into a list that gets replaced.
+    /// <para>
+    /// A selector rebuilds when the active dataset changes, and a position that comes back unchanged is invisible
+    /// to the binding: the control had already dropped the item it resolved that position to, so it kept an index
+    /// with nothing behind it and drew an empty box beside a populated one. An item differs from the null the
+    /// control is left holding, so it is always re-read.
+    /// </para>
+    /// </summary>
+    public ChannelChoice? SelectedXChannelItem
+    {
+        get => ChoiceAt(_selectedXChannel);
+        set => SelectedXChannel = value?.Index ?? _selectedXChannel;
+    }
+
+    /// <inheritdoc cref="SelectedXChannelItem"/>
+    public ChannelChoice? SelectedYChannelItem
+    {
+        get => ChoiceAt(_selectedYChannel);
+        set => SelectedYChannel = value?.Index ?? _selectedYChannel;
+    }
+
+    private ChannelChoice? ChoiceAt(int index)
+        => index >= 0 && index < ChannelChoices.Count ? ChannelChoices[index] : null;
 
     /// <summary>Whether there is more than one channel to plot, and so anything worth choosing between.</summary>
     public bool CanPickChannels => ChannelChoices.Count > 1;
@@ -1381,6 +1406,7 @@ public sealed class ShellViewModel : ObservableObject
         if (SpectroscopyChannels is not { } set)
         {
             OnPropertyChanged(name);
+            OnPropertyChanged(name + "Item");
             return;
         }
 
@@ -1390,10 +1416,13 @@ public sealed class ShellViewModel : ObservableObject
             if (clamped != value)
             {
                 OnPropertyChanged(name);
+                OnPropertyChanged(name + "Item");
             }
 
             return;
         }
+
+        OnPropertyChanged(name + "Item");
 
         OnPropertyChanged(nameof(IsDesignatedChannelPair));
         OnPropertyChanged(nameof(SpectroscopyLabel));
@@ -1409,7 +1438,7 @@ public sealed class ShellViewModel : ObservableObject
         var set = SpectroscopyChannels;
         ChannelChoices = set is null
             ? []
-            : [.. set.Channels.Select(c => $"{c.DisplayName} [{c.Unit.Symbol}]")];
+            : [.. set.Channels.Select((c, i) => new ChannelChoice(i, $"{c.DisplayName} [{c.Unit.Symbol}]"))];
 
         // The file's own designated pair is the starting point; a set whose keys do not match falls back to the
         // first two channels rather than to an arbitrary single one.
@@ -1423,6 +1452,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPickChannels));
         OnPropertyChanged(nameof(SelectedXChannel));
         OnPropertyChanged(nameof(SelectedYChannel));
+        OnPropertyChanged(nameof(SelectedXChannelItem));
+        OnPropertyChanged(nameof(SelectedYChannelItem));
         OnPropertyChanged(nameof(IsDesignatedChannelPair));
         OnPropertyChanged(nameof(IsSpectroscopy));
         OnPropertyChanged(nameof(SpectroscopyReferenceImage));
