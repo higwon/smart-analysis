@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         _viewModel.MapPointChanged += RedrawMapPoint;
         SpectroscopySurface.PointMarkerClicked += SurfacePointMarker_Clicked;
+        SpectroscopySurface.PixelClicked += SurfacePixel_Clicked;
 
         RenderImages();
     }
@@ -732,9 +733,8 @@ public partial class MainWindow : Window
                 SpectroscopySurface.Clear();
             }
 
-            // Every pixel of the volume image IS a measurement point, so a marker on each would be noise drawn on
-            // top of the thing it marks.
-            SpectroscopySurface.ClearPointMarkers();
+            // One mark: the selected point, in the picture's own pixels. The view-model decides which and where.
+            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
             return;
         }
 
@@ -778,8 +778,14 @@ public partial class MainWindow : Window
         InspectorCurve.Clear();
     }
 
-    private void SurfacePointMarker_Clicked(object? sender, int index)
-        => _viewModel.SelectedMapPoint = index;
+    // In the Volume view every pixel is a point, so clicking one is the shortest route from a value on the
+    // picture to the curve behind it — including from a hole to the reason it is one.
+    private void SurfacePixel_Clicked(object? sender, (int X, int Y) pixel)
+        => _viewModel.SelectMapPointAt(pixel.X, pixel.Y);
+
+    // The marker reports the POINT it stands for, so this is a selection and not a list lookup.
+    private void SurfacePointMarker_Clicked(object? sender, int point)
+        => _viewModel.SelectedMapPoint = point;
 
     private void MapPointBack_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(-1);
 

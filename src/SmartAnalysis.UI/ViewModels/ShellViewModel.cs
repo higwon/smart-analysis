@@ -966,6 +966,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowCurveOnStage));
         OnPropertyChanged(nameof(ShowCurveInInspector));
         OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
+        OnPropertyChanged(nameof(PointMarkers));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
         _showSurface.RaiseCanExecuteChanged();
@@ -978,6 +979,30 @@ public sealed class ShellViewModel : ObservableObject
         _window = null;
         OnPropertyChanged(nameof(CurveVerticalMarkers));
         OnPropertyChanged(nameof(CurveHorizontalMarkers));
+    }
+
+    /// <summary>
+    /// Selects the map point a volume-image pixel was computed from.
+    /// <para>
+    /// Only in the Volume view, and only there because that is the one picture whose pixels ARE the map's points
+    /// — one each, laid out on its grid. A pixel of the reference surface is not a measurement position: a
+    /// 128x128 surface carries an 8x8 map, so treating one as the other would silently select whichever point
+    /// happened to share an index.
+    /// </para>
+    /// </summary>
+    public void SelectMapPointAt(int column, int row)
+    {
+        if (!IsVolumeView || _activeForceVolume?.Geometry is not { } grid)
+        {
+            return;
+        }
+
+        if (column < 0 || column >= grid.Columns || row < 0 || row >= grid.Rows)
+        {
+            return;
+        }
+
+        SelectedMapPoint = (row * grid.Columns) + column;
     }
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
@@ -1111,10 +1136,27 @@ public sealed class ShellViewModel : ObservableObject
     /// space. Empty when the file recorded no positions or carried no surface, so nothing is marked on a
     /// picture that cannot place it.
     /// </summary>
-    public IReadOnlyList<(double X, double Y)> PointMarkers
+    public IReadOnlyList<(double X, double Y, int Point)> PointMarkers
     {
         get
         {
+            // The Volume view marks ONE point: the selected one, at the centre of its own pixel.
+            //
+            // Not all of them — on a picture where every pixel is already a point that would be noise drawn on
+            // top of the thing it marks. But not none either: the mark is the only thing on screen saying which
+            // of the curves the panel beside it describes, and, since a click on a pixel is how that curve is
+            // chosen, the only confirmation that the click landed where the viewer meant.
+            //
+            // In the picture's OWN pixels. The recorded positions below are in the surface's, which the volume
+            // image does not share — mixing them is what put a stray mark in the far corner.
+            if (IsVolumeView)
+            {
+                return _activeForceVolume?.Geometry is { } cells
+                    && _selectedMapPoint >= 0 && _selectedMapPoint < cells.Columns * cells.Rows
+                        ? [((_selectedMapPoint % cells.Columns) + 0.5, (_selectedMapPoint / cells.Columns) + 0.5, _selectedMapPoint)]
+                        : [];
+            }
+
             var layout = _activeForceVolume?.PointLayout ?? _activeForceCurve?.PointLayout;
             if (layout is null || SpectroscopyReferenceImage is not { } surface)
             {
@@ -1141,12 +1183,14 @@ public sealed class ShellViewModel : ObservableObject
                 return [];
             }
 
-            var markers = new List<(double X, double Y)>(layout.Count);
-            foreach (var p in layout.Positions)
+            var markers = new List<(double X, double Y, int Point)>(layout.Count);
+            for (int i = 0; i < layout.Count; i++)
             {
+                var p = layout.Positions[i];
                 markers.Add((
                     OnAxis(p.X, from, surface.X.Unit) / stepX,
-                    OnAxis(p.Y, from, surface.Y.Unit) / stepY));
+                    OnAxis(p.Y, from, surface.Y.Unit) / stepY,
+                    i));
             }
 
             return markers;

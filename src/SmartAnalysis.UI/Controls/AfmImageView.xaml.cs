@@ -34,7 +34,7 @@ public partial class AfmImageView : UserControl, IImageView
     private int _bmpW;
     private int _bmpH;
     private bool _needsFit;
-    private bool _dragging;
+    private readonly PressGesture _press = new();
     private Point _lastPos;
     private const double HandleSize = 9.0;
 
@@ -203,8 +203,8 @@ public partial class AfmImageView : UserControl, IImageView
 
     // ---- Measurement-point markers (UX03) ----------------------------------------------------------------
 
-    private IReadOnlyList<(double X, double Y)> _pointMarkers = [];
-    private int _selectedMarker = -1;
+    private IReadOnlyList<(double X, double Y, int Point)> _pointMarkers = [];
+    private int _selectedPoint = -1;
     private readonly List<System.Windows.Shapes.Ellipse> _markerShapes = [];
 
     /// <summary>Raised when a marker is clicked, with its index.</summary>
@@ -214,10 +214,16 @@ public partial class AfmImageView : UserControl, IImageView
     /// Shows the places a spectroscopy acquisition measured, in image-pixel space, with one marked as selected.
     /// The markers keep a constant screen size so a dense map stays clickable at any zoom.
     /// </summary>
-    public void SetPointMarkers(IReadOnlyList<(double X, double Y)> points, int selectedIndex)
+    /// <param name="points">
+    /// Where to draw, each carrying the <b>point it stands for</b> rather than its position in this list. The
+    /// two agree when every point is marked and part ways the moment a view marks a subset — which is what a
+    /// click then reports as the wrong curve.
+    /// </param>
+    /// <param name="selectedPoint">Which point is the selected one; a marker for any other is drawn hollow.</param>
+    public void SetPointMarkers(IReadOnlyList<(double X, double Y, int Point)> points, int selectedPoint)
     {
         _pointMarkers = points ?? [];
-        _selectedMarker = selectedIndex;
+        _selectedPoint = selectedPoint;
         RebuildPointMarkers();
     }
 
@@ -225,7 +231,7 @@ public partial class AfmImageView : UserControl, IImageView
     public void ClearPointMarkers()
     {
         _pointMarkers = [];
-        _selectedMarker = -1;
+        _selectedPoint = -1;
         RebuildPointMarkers();
     }
 
@@ -243,23 +249,24 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        for (int i = 0; i < _pointMarkers.Count; i++)
+        foreach (var marker in _pointMarkers)
         {
+            bool selected = marker.Point == _selectedPoint;
             var dot = new System.Windows.Shapes.Ellipse
             {
                 Width = MarkerSize,
                 Height = MarkerSize,
                 StrokeThickness = 1.5,
                 Cursor = System.Windows.Input.Cursors.Hand,
-                Tag = i,
+                Tag = marker.Point,
             };
 
             // Unselected markers are hollow so they never hide the surface underneath; the selected one is
             // filled, because "which curve am I looking at" has to be answerable at a glance.
             dot.SetResourceReference(
                 System.Windows.Shapes.Shape.StrokeProperty,
-                i == _selectedMarker ? "SA.Brush.Accent.Primary" : "SA.Brush.Text.Secondary");
-            if (i == _selectedMarker)
+                selected ? "SA.Brush.Accent.Primary" : "SA.Brush.Text.Secondary");
+            if (selected)
             {
                 dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "SA.Brush.Accent.Primary");
             }
@@ -290,7 +297,7 @@ public partial class AfmImageView : UserControl, IImageView
         double s = ImgScale.ScaleX;
         for (int i = 0; i < _markerShapes.Count; i++)
         {
-            var (x, y) = _pointMarkers[i];
+            var (x, y, _) = _pointMarkers[i];
             Canvas.SetLeft(_markerShapes[i], (x * s) + ImgTranslate.X - (MarkerSize / 2));
             Canvas.SetTop(_markerShapes[i], (y * s) + ImgTranslate.Y - (MarkerSize / 2));
         }
@@ -553,20 +560,23 @@ public partial class AfmImageView : UserControl, IImageView
 
         if (e.ClickCount == 2)
         {
+            _press.Cancel();
             Fit();
             return;
         }
 
-        // Pan only when zoomed in past fit — at fit the image is fully shown and stays centred.
-        if (!ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale))
-        {
-            return;
-        }
+        // Pan only when zoomed in past fit — at fit the image is fully shown and stays centred. Either way the
+        // press is remembered, because a press that does not travel is a click on a pixel.
+        var at = e.GetPosition(Viewport);
+        bool canPan = ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale);
+        _press.Press(at.X, at.Y, canPan);
 
-        _dragging = true;
-        _lastPos = e.GetPosition(Viewport);
-        Viewport.CaptureMouse();
-        Cursor = Cursors.SizeAll;
+        if (canPan)
+        {
+            // Captured so the gesture cannot be lost mid-drag. Not yet a pan: that is decided by movement.
+            _lastPos = at;
+            Viewport.CaptureMouse();
+        }
     }
 
     private void Viewport_MouseMove(object sender, MouseEventArgs e)
@@ -583,7 +593,17 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        if (!_dragging)
+        var moved = e.GetPosition(Viewport);
+        if (_press.BeginsPan(
+                moved.X, moved.Y,
+                SystemParameters.MinimumHorizontalDragDistance,
+                SystemParameters.MinimumVerticalDragDistance))
+        {
+            _lastPos = moved;
+            Cursor = Cursors.SizeAll;
+        }
+
+        if (!_press.IsPanning)
         {
             // Hint pannability while zoomed in.
             Cursor = ImageViewportMath.CanPan(ImgScale.ScaleX, _fitScale) ? Cursors.SizeAll : Cursors.Arrow;
@@ -599,8 +619,7 @@ public partial class AfmImageView : UserControl, IImageView
 
     private void Viewport_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_regionHandle != RegionHandle.None)
-        {
+        if (_regionHandle != RegionHandle.None)        {
             _regionHandle = RegionHandle.None;
             Viewport.ReleaseMouseCapture();
             return;
@@ -613,13 +632,31 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        if (_dragging)
+        if (Viewport.IsMouseCaptured)
         {
-            _dragging = false;
             Viewport.ReleaseMouseCapture();
             Cursor = Cursors.Arrow;
         }
+
+        var end = e.GetPosition(Viewport);
+        if (_press.Release(
+                end.X, end.Y,
+                SystemParameters.MinimumHorizontalDragDistance,
+                SystemParameters.MinimumVerticalDragDistance) is { } click
+            && ToPixel(new Point(click.X, click.Y)) is { } pixel)
+        {
+            PixelClicked?.Invoke(this, pixel);
+        }
     }
+
+    /// <summary>Raised when a click lands on the image, with the sample it landed on in image-pixel coordinates.</summary>
+    public event EventHandler<(int X, int Y)>? PixelClicked;
+
+    // The inverse of the marker placement; the maths lives in ImageViewportMath so it can be checked without a
+    // rendered control, the same split as the zoom/pan/fit rules beside it.
+    private (int X, int Y)? ToPixel(Point p)
+        => ImageViewportMath.PixelAt(
+            p.X, p.Y, ImgScale.ScaleX, ImgTranslate.X, ImgTranslate.Y, _bmpW, _bmpH);
 
     // ---- Region overlay interaction (V06): drag the body to move, an edge/corner handle to resize ----
 

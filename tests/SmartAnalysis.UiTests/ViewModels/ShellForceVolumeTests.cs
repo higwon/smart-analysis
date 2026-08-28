@@ -617,8 +617,8 @@ public sealed class ShellForceVolumeTests
         var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
 
         Assert.Equal(2, vm.PointMarkers.Count);
-        Assert.Equal((1.0, 1.0), vm.PointMarkers[0]);   // 1 um / 1 um-per-pixel
-        Assert.Equal((3.0, 2.0), vm.PointMarkers[1]);
+        Assert.Equal((1.0, 1.0, 0), vm.PointMarkers[0]);   // 1 um / 1 um-per-pixel
+        Assert.Equal((3.0, 2.0, 1), vm.PointMarkers[1]);
     }
 
     [Fact]
@@ -662,7 +662,7 @@ public sealed class ShellForceVolumeTests
         vm.SelectedMapPoint = 1;
 
         var surface = vm.SpectroscopyReferenceImage!;
-        var (markerX, markerY) = vm.PointMarkers[1];
+        var (markerX, markerY, _) = vm.PointMarkers[1];
         string place = FormattableString.Invariant(
             $"({markerX * surface.X.Step:0.###}, {markerY * surface.Y.Step:0.###})");
 
@@ -1217,7 +1217,7 @@ public sealed class ShellForceVolumeTests
             ws,
             MapOnSurface(Layout(StandardUnits.Nanometre, (1000, 2000)), points: 1, surfaceUnit: StandardUnits.Micrometre));
 
-        var (x, y) = Assert.Single(vm.PointMarkers);
+        var (x, y, _) = Assert.Single(vm.PointMarkers);
 
         Assert.Equal(1.0, x, 6);   // 1000 nm = 1 um, one pixel along
         Assert.Equal(2.0, y, 6);
@@ -1230,8 +1230,8 @@ public sealed class ShellForceVolumeTests
         var ws = new Workspace();
         var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
 
-        Assert.Equal((1.0, 1.0), vm.PointMarkers[0]);
-        Assert.Equal((3.0, 2.0), vm.PointMarkers[1]);
+        Assert.Equal((1.0, 1.0, 0), vm.PointMarkers[0]);
+        Assert.Equal((3.0, 2.0, 1), vm.PointMarkers[1]);
     }
 
     [Theory]
@@ -1270,9 +1270,183 @@ public sealed class ShellForceVolumeTests
                 surfaceUnit: StandardUnits.Micrometre,
                 surfaceUnitY: StandardUnits.Nanometre));
 
-        var (x, y) = Assert.Single(vm.PointMarkers);
+        var (x, y, _) = Assert.Single(vm.PointMarkers);
 
         Assert.Equal(1.0, x, 6);      // 1000 nm on a um axis of 1 um/pixel
         Assert.Equal(1000.0, y, 6);   // 1000 nm on a nm axis of 1 nm/pixel
+    }
+
+    [Fact]
+    public void Clicking_a_volume_pixel_selects_the_point_it_was_computed_from()
+    {
+        // The picture is the map laid out on its own grid, one pixel per point, so the mapping is exact — no
+        // nearest-neighbour, no interpolation. This is the shortest route from a value on the picture to the
+        // curve behind it, and from a hole to the reason it is one.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        // Row-major, and chosen so it cannot agree with the column-major reading: on a 3x2 grid (1,1) is point 4
+        // going along X first and point 3 going down Y first.
+        vm.SelectMapPointAt(column: 1, row: 1);
+
+        Assert.Equal(4, vm.SelectedMapPoint);
+    }
+
+    [Fact]
+    public void A_click_on_the_surface_is_not_a_point_selection()
+    {
+        // A 128x128 surface can carry an 8x8 map. Treating one of its pixels as a point would silently select
+        // whichever point happened to share an index — a selection the viewer never made.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.False(vm.IsVolumeView);
+        vm.SelectMapPointAt(column: 1, row: 0);
+
+        Assert.Equal(0, vm.SelectedMapPoint);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(3, 0)]
+    [InlineData(0, -1)]
+    [InlineData(0, 2)]
+    public void A_click_outside_the_grid_selects_nothing(int column, int row)
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+        vm.SelectedMapPoint = 4;
+
+        vm.SelectMapPointAt(column, row);
+
+        Assert.Equal(4, vm.SelectedMapPoint);
+    }
+
+    [Fact]
+    public void A_map_with_no_grid_has_no_pixel_to_click()
+    {
+        // Without a grid there is no volume image either, so there is nothing on screen to click — but the
+        // guard belongs here rather than relying on that.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(4);
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.SelectMapPointAt(0, 0);
+
+        Assert.Equal(0, vm.SelectedMapPoint);
+    }
+
+    [Fact]
+    public void A_mark_carries_the_point_it_stands_for_not_its_place_in_the_list()
+    {
+        // The Volume view marks a SUBSET — one mark for point 35, at list position 0. A control that reports the
+        // list position turns a click on the mark for point 35 into a jump to point 0, and because the marker
+        // handles the press the pixel path never runs to correct it.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+        vm.SelectedMapPoint = 5;
+
+        var mark = Assert.Single(vm.PointMarkers);
+
+        Assert.Equal(5, mark.Point);
+        Assert.NotEqual(0, mark.Point);
+    }
+
+    [Fact]
+    public void The_volume_picture_marks_the_selected_point_and_only_it()
+    {
+        // Not all of them: on a picture where every pixel is a point, a mark on each is noise drawn over the
+        // thing it marks. Not none either: the mark is the only thing saying which of the curves the panel
+        // beside it describes, and the only confirmation that a click landed where the viewer meant.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        vm.SelectMapPointAt(column: 1, row: 1);
+
+        // The centre of that point's OWN pixel — the picture's coordinates, not the surface's.
+        // The centre of that point's OWN pixel, carrying the point it stands for.
+        Assert.Equal((1.5, 1.5, 4), Assert.Single(vm.PointMarkers));
+    }
+
+    [Fact]
+    public void The_surface_marks_every_point_and_says_which_is_selected()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        vm.SelectedMapPoint = 1;
+
+        Assert.Equal(2, vm.PointMarkers.Count);
+        Assert.Equal([0, 1], vm.PointMarkers.Select(m => m.Point));
+    }
+
+    [Fact]
+    public void The_mark_follows_the_point_through_the_volume_view()
+    {
+        // The redraw path asks again on every point change; a mark left behind would point at the previous
+        // curve while the panel describes this one.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        var before = Assert.Single(vm.PointMarkers);
+        vm.StepMapPoint(1);
+
+        Assert.NotEqual(before, Assert.Single(vm.PointMarkers));
+    }
+
+    [Fact]
+    public void A_volume_view_of_a_map_with_no_grid_marks_nothing()
+    {
+        // Without a grid there is no picture either, so there is no pixel for a mark to sit on.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(4);
+        ws.Add(map);
+        ws.SetActive(map.Id);
+
+        Assert.Empty(vm.PointMarkers);
+    }
+
+    [Fact]
+    public void Leaving_the_volume_view_puts_the_markers_back()
+    {
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = MapOnSurface(Layout((1, 1), (3, 2)), geometry: Grid(2, 1));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        vm.ShowSurfaceCommand.Execute(null);
+
+        Assert.Equal(2, vm.PointMarkers.Count);
     }
 }
