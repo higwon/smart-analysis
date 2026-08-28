@@ -97,6 +97,7 @@ public sealed class ShellViewModel : ObservableObject
     private Func<DatasetId, CancellationToken, Task<PreviewOutput>>? _computePreview;
     private CancellationTokenSource? _previewCts;
     private int _previewGeneration;
+    private bool _previewInFlight;
     private HistoryRowViewModel? _selectedStep;
     private Colormap _colormap = ColormapCatalog.Default.Map;
     private string _colormapName = ColormapCatalog.Default.Name;
@@ -370,6 +371,7 @@ public sealed class ShellViewModel : ObservableObject
         CancelOperationPreview();
         _previewCts = new CancellationTokenSource();
         var generation = ++_previewGeneration;
+        SetPreviewInFlight(true);
         _operationPreviewTask = ComputeOperationPreviewAsync(compute, id, generation, _previewCts.Token);
     }
 
@@ -382,36 +384,48 @@ public sealed class ShellViewModel : ObservableObject
 
     private async Task ComputeOperationPreviewAsync(Func<DatasetId, CancellationToken, Task<PreviewOutput>> compute, DatasetId id, int generation, CancellationToken cancellationToken)
     {
+        PreviewOutput output;
+
+        // ONLY the run is best-effort. Wrapping the bookkeeping below in the same catch hid a real failure once:
+        // the picture never reached the stage and nothing said so, because the exception that explained it was
+        // swallowed on its way out. A preview swallows a cancelled or failed RUN, not a bug in itself.
         try
         {
-            var output = await compute(id, cancellationToken).ConfigureAwait(true);
-
-            // Apply only if this is still the newest request for the still-previewed active dataset. The generation
-            // check is what defeats out-of-order completion; the ActiveId check drops a preview for a replaced dataset.
-            if (_isOperationPreview && generation == _previewGeneration && _workspace.Active.ActiveId == id)
-            {
-                _operationPreviewInput = output.Image;
-                _operationPreviewCurve = output.Curve;
-
-                // An attempt that produced nothing is not the same as no attempt yet. On the Volume view the
-                // preview IS the stage, so leaving the previous picture up would show one set of settings while
-                // another is on screen beside it.
-                SetVolumeUnavailable(
-                    IsVolumeView && output.Image is null
-                        // Only the launcher can name a cause. A preview also fails on an unexpected error,
-                        // which is not the settings' fault, so the fallback says what happened and no more.
-                        ? ExplainVolume() ?? "No picture could be computed for this map."
-                        : null);
-
-                OnPropertyChanged(nameof(OperationPreviewInput));
-                OnPropertyChanged(nameof(OperationPreviewCurve));
-                ImagesChanged?.Invoke(this, EventArgs.Empty);
-            }
+            output = await compute(id, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;   // superseded, or the dataset went away; whoever superseded it owns the stage now
         }
         catch
         {
-            // Best-effort preview: a cancellation or failure just shows no PREVIEW, never an error banner.
+            output = default;   // a failed run shows no picture, never an error banner
         }
+
+        // Apply only if this is still the newest request for the still-previewed active dataset. The generation
+        // check is what defeats out-of-order completion; the ActiveId check drops a preview for a replaced dataset.
+        if (!_isOperationPreview || generation != _previewGeneration || _workspace.Active.ActiveId != id)
+        {
+            return;
+        }
+
+        SetPreviewInFlight(false);
+        _operationPreviewInput = output.Image;
+        _operationPreviewCurve = output.Curve;
+
+        // An attempt that produced nothing is not the same as no attempt yet. On the Volume view the
+        // preview IS the stage, so leaving the previous picture up would show one set of settings while
+        // another is on screen beside it.
+        SetVolumeUnavailable(
+            IsVolumeView && output.Image is null
+                // Only the launcher can name a cause. A preview also fails on an unexpected error,
+                // which is not the settings' fault, so the fallback says what happened and no more.
+                ? ExplainVolume() ?? "No picture could be computed for this map."
+                : null);
+
+        OnPropertyChanged(nameof(OperationPreviewInput));
+        OnPropertyChanged(nameof(OperationPreviewCurve));
+        ImagesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Whether an interactive image-overlay operation (region or line profile) editor is open. While it
@@ -886,6 +900,29 @@ public sealed class ShellViewModel : ObservableObject
         => $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
             + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {unit.Symbol}";
 
+    /// <summary>
+    /// The Volume view has asked for a picture and none has arrived yet.
+    /// <para>
+    /// Entering the view clears the preview, and until the first one lands there is nothing to draw — so the
+    /// Stage kept showing the SURFACE while the panel beside it described a volume image. On a small map that
+    /// window is a few milliseconds; on a large one it is long enough to read as nothing having happened. A
+    /// re-compute is not this state: the previous picture is still the same map, so it stays up rather than
+    /// flickering through a blank on every keystroke.
+    /// </para>
+    /// </summary>
+    public bool IsVolumeComputing => IsVolumeView && _previewInFlight && _operationPreviewInput is null;
+
+    private void SetPreviewInFlight(bool inFlight)
+    {
+        if (_previewInFlight == inFlight)
+        {
+            return;
+        }
+
+        _previewInFlight = inFlight;
+        OnPropertyChanged(nameof(IsVolumeComputing));
+    }
+
     /// <summary>Why the Volume view has no picture for the current settings, or null when it has one.</summary>
     public string? VolumeUnavailable => _volumeUnavailable;
 
@@ -987,6 +1024,7 @@ public sealed class ShellViewModel : ObservableObject
     private void RaiseVolumeViewChanged()
     {
         OnPropertyChanged(nameof(IsVolumeView));
+        OnPropertyChanged(nameof(IsVolumeComputing));
         OnPropertyChanged(nameof(CanShowVolume));
         OnPropertyChanged(nameof(ShowSpectroscopyImage));
         OnPropertyChanged(nameof(ShowCurveOnStage));

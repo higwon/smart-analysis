@@ -382,6 +382,13 @@
                                 <ctl:AfmCurveView Grid.Row="1" x:Name="PointCurve" MinHeight="180"/>
                             </Grid>
 
+                            <!-- Until the first picture arrives there is nothing on the stage. Saying so is the
+                                 difference between "working" and "nothing happened". -->
+                            <TextBlock Grid.Row="1" Text="Measuring the map…"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Style="{StaticResource SA.Text.Secondary}"
+                                       Visibility="{Binding IsVolumeComputing, Converter={StaticResource Bool2Vis}}"/>
+
                             <!-- A setting the map cannot be measured with leaves no picture. Saying so beats an
                                  empty stage, and both beat the previous settings' picture left standing. -->
                             <TextBlock Grid.Row="1" Text="{Binding VolumeUnavailable}" TextWrapping="Wrap"
