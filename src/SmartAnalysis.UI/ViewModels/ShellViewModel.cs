@@ -66,6 +66,7 @@ public sealed class ShellViewModel : ObservableObject
     private LineProfileDataset? _activeCurve;
     private ForceCurveDataset? _activeForceCurve;
     private ForceVolumeDataset? _activeForceVolume;
+    private MapGridIndex? _mapCells;
     private int _selectedMapPoint;
     private int _selectedXChannel;
     private int _selectedYChannel;
@@ -854,11 +855,14 @@ public sealed class ShellViewModel : ObservableObject
             }
 
             string label = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
-            if (map.Geometry is { } cells)
+
+            // The cell it was MEASURED in, not the one its acquisition index falls on. Deriving the column one
+            // way and the position beside it another is how "col 7/8 · surface (0.375, …)" reached the screen:
+            // two coordinate frames in one line, disagreeing.
+            if (MapCells() is { } cells && _selectedMapPoint < map.PointCount)
             {
-                int column = (_selectedMapPoint % cells.Columns) + 1;
-                int row = (_selectedMapPoint / cells.Columns) + 1;
-                label += $" · col {column}/{cells.Columns}, row {row}/{cells.Rows}";
+                var (column, row) = cells.CellOf(_selectedMapPoint);
+                label += $" · col {column + 1}/{cells.Columns}, row {row + 1}/{cells.Rows}";
             }
 
             if (map.PointLayout is { } layout && _selectedMapPoint < layout.Count)
@@ -1001,17 +1005,30 @@ public sealed class ShellViewModel : ObservableObject
     /// </summary>
     public void SelectMapPointAt(int column, int row)
     {
-        if (!IsVolumeView || _activeForceVolume?.Geometry is not { } grid)
+        if (!IsVolumeView || MapCells() is not { } cells)
         {
             return;
         }
 
-        if (column < 0 || column >= grid.Columns || row < 0 || row >= grid.Rows)
+        if (cells.PointAt(column, row) is var point && point >= 0)
         {
-            return;
+            SelectedMapPoint = point;
+        }
+    }
+
+    /// <summary>
+    /// Which cell of the grid each curve was measured in — the picture's layout, not the acquisition order.
+    /// Cached because it is read once per marker and per click, and the layout cannot change while a map is
+    /// active.
+    /// </summary>
+    private MapGridIndex? MapCells()
+    {
+        if (_activeForceVolume is not { Geometry: { } grid } map)
+        {
+            return null;
         }
 
-        SelectedMapPoint = (row * grid.Columns) + column;
+        return _mapCells ??= MapGridIndex.Of(grid, map.PointLayout, map.PointCount);
     }
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
@@ -1024,6 +1041,7 @@ public sealed class ShellViewModel : ObservableObject
         ActiveForceVolume = map;
         if (changed)
         {
+            _mapCells = null;
             _selectedMapPoint = 0;
             OnPropertyChanged(nameof(SelectedMapPoint));
         }
@@ -1221,10 +1239,13 @@ public sealed class ShellViewModel : ObservableObject
             // image does not share — mixing them is what put a stray mark in the far corner.
             if (IsVolumeView)
             {
-                return _activeForceVolume?.Geometry is { } cells
-                    && _selectedMapPoint >= 0 && _selectedMapPoint < cells.Columns * cells.Rows
-                        ? [((_selectedMapPoint % cells.Columns) + 0.5, (_selectedMapPoint / cells.Columns) + 0.5, _selectedMapPoint)]
-                        : [];
+                if (MapCells() is not { } cells || _selectedMapPoint < 0 || _selectedMapPoint >= MapPointCount)
+                {
+                    return [];
+                }
+
+                var (column, row) = cells.CellOf(_selectedMapPoint);
+                return [(column + 0.5, row + 0.5, _selectedMapPoint)];
             }
 
             var layout = _activeForceVolume?.PointLayout ?? _activeForceCurve?.PointLayout;

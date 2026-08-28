@@ -151,7 +151,13 @@ public sealed class VolumeImageOperation : IAnalysisOperation
             ? b
             : ForceDistanceMeasures.DefaultBaselinePercent;
 
-        var pixels = new float[map.PointCount];
+        // Where each curve sits on the surface, which is NOT the order it was acquired in: a boustrophedon
+        // scan mirrors every other row, and laying points out by index would put half the picture's rows
+        // backwards while leaving it looking entirely plausible.
+        var cells = MapGridIndex.Of(grid, map.PointLayout, map.PointCount);
+
+        // Every cell gets written: the dataset will not exist unless it holds exactly one curve per cell.
+        var pixels = new float[grid.Columns * grid.Rows];
         int unmeasured = 0;
         int sloping = 0;
 
@@ -169,7 +175,8 @@ public sealed class VolumeImageOperation : IAnalysisOperation
                 sloping++;
             }
 
-            pixels[point] = (float)value;
+            var (column, row) = cells.CellOf(point);
+            pixels[(row * grid.Columns) + column] = (float)value;
             if (!double.IsFinite(value))
             {
                 unmeasured++;
