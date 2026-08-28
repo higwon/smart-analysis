@@ -459,6 +459,78 @@ public sealed class ShellForceVolumeTests
     }
 
     [Fact]
+    public void A_picker_holds_the_item_it_shows_not_a_position_in_a_list_that_gets_replaced()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        Assert.Equal(vm.ChannelChoices[vm.SelectedXChannel], vm.SelectedXChannelItem);
+        Assert.Equal(vm.ChannelChoices[vm.SelectedYChannel], vm.SelectedYChannelItem);
+    }
+
+    [Fact]
+    public void Coming_back_to_a_map_re_announces_the_item_even_when_the_position_did_not_move()
+    {
+        // The defect, at the seam the control depends on. Switching away and back rebuilds the list, and the
+        // selector drops the item it had resolved. A position that comes back UNCHANGED tells it nothing, so it
+        // kept an index with nothing behind it and drew an empty box beside a populated one — which is exactly
+        // what Y did while X, whose position differed, came back fine.
+        var ws = new Workspace();
+        var map = MapWithChannels(2);
+        var other = Map(3);
+        var vm = NewShell(ws);
+        ws.Add(map);
+        ws.Add(other);
+        ws.SetActive(map.Id);
+
+        int before = vm.SelectedYChannel;
+        ws.SetActive(other.Id);
+
+        var raised = new List<string>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName!);
+        ws.SetActive(map.Id);
+
+        Assert.Equal(before, vm.SelectedYChannel);   // the position did not move ...
+        Assert.Contains(nameof(vm.SelectedYChannelItem), raised);   // ... and the item was still announced
+        Assert.Equal(vm.ChannelChoices[before], vm.SelectedYChannelItem);
+    }
+
+    [Fact]
+    public void Choosing_an_item_moves_the_selection_to_that_channel()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        vm.SelectedYChannelItem = vm.ChannelChoices[2];
+
+        Assert.Equal(2, vm.SelectedYChannel);
+        Assert.False(vm.IsDesignatedChannelPair);
+    }
+
+    [Fact]
+    public void A_selector_clearing_itself_does_not_move_the_channel()
+    {
+        // A control writes null while its list is being swapped. Taking that as "channel 0" would silently
+        // re-plot a different quantity every time the viewer looked at another dataset and came back.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        vm.SelectedYChannelItem = null;
+
+        Assert.Equal(1, vm.SelectedYChannel);
+    }
+
+    [Fact]
+    public void A_dataset_with_no_channels_has_no_item_to_show()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(3));
+
+        Assert.Null(vm.SelectedXChannelItem);
+        Assert.Null(vm.SelectedYChannelItem);
+    }
+
+    [Fact]
     public void A_dataset_that_kept_no_channels_offers_no_choice()
     {
         var ws = new Workspace();

@@ -553,9 +553,11 @@
                             <StackPanel Visibility="{Binding CanPickChannels, Converter={StaticResource Bool2Vis}}">
                                 <TextBlock Text="CHANNEL PAIR" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
                                 <TextBlock Text="X" Style="{StaticResource SA.Text.Caption}"/>
-                                <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedXChannel}"/>
+                                <ComboBox ItemsSource="{Binding ChannelChoices}" DisplayMemberPath="Label"
+                                          SelectedItem="{Binding SelectedXChannelItem}"/>
                                 <TextBlock Text="Y" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Top1}"/>
-                                <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedYChannel}"/>
+                                <ComboBox ItemsSource="{Binding ChannelChoices}" DisplayMemberPath="Label"
+                                          SelectedItem="{Binding SelectedYChannelItem}"/>
                             </StackPanel>
 
                             <Button Content="Extract this point" Style="{StaticResource SA.Button.Primary}"
