@@ -734,14 +734,14 @@ public partial class MainWindow : Window
             }
 
             // One mark: the selected point, in the picture's own pixels. The view-model decides which and where.
-            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedPointMarker);
+            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
             return;
         }
 
         if (_viewModel.SpectroscopyReferenceImage is { } surface)
         {
             SpectroscopySurface.Render(RenderInputFactory.ForImage(surface, _viewModel.Colormap, null));
-            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedPointMarker);
+            SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
         }
         else
         {
@@ -783,8 +783,9 @@ public partial class MainWindow : Window
     private void SurfacePixel_Clicked(object? sender, (int X, int Y) pixel)
         => _viewModel.SelectMapPointAt(pixel.X, pixel.Y);
 
-    private void SurfacePointMarker_Clicked(object? sender, int index)
-        => _viewModel.SelectedMapPoint = index;
+    // The marker reports the POINT it stands for, so this is a selection and not a list lookup.
+    private void SurfacePointMarker_Clicked(object? sender, int point)
+        => _viewModel.SelectedMapPoint = point;
 
     private void MapPointBack_Click(object sender, RoutedEventArgs e) => _viewModel.StepMapPoint(-1);
 
@@ -793,7 +794,7 @@ public partial class MainWindow : Window
     // Only the plotted curve changes when the viewer steps through a map; the rest of the stage is untouched.
     private void RedrawMapPoint()
     {
-        SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedPointMarker);
+        SpectroscopySurface.SetPointMarkers(_viewModel.PointMarkers, _viewModel.SelectedMapPoint);
 
         // A channel change redraws a single curve too, not only a map point.
         if (SpectroscopyCurveInput() is { } input)

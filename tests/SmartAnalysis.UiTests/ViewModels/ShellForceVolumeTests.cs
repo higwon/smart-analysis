@@ -617,8 +617,8 @@ public sealed class ShellForceVolumeTests
         var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
 
         Assert.Equal(2, vm.PointMarkers.Count);
-        Assert.Equal((1.0, 1.0), vm.PointMarkers[0]);   // 1 um / 1 um-per-pixel
-        Assert.Equal((3.0, 2.0), vm.PointMarkers[1]);
+        Assert.Equal((1.0, 1.0, 0), vm.PointMarkers[0]);   // 1 um / 1 um-per-pixel
+        Assert.Equal((3.0, 2.0, 1), vm.PointMarkers[1]);
     }
 
     [Fact]
@@ -662,7 +662,7 @@ public sealed class ShellForceVolumeTests
         vm.SelectedMapPoint = 1;
 
         var surface = vm.SpectroscopyReferenceImage!;
-        var (markerX, markerY) = vm.PointMarkers[1];
+        var (markerX, markerY, _) = vm.PointMarkers[1];
         string place = FormattableString.Invariant(
             $"({markerX * surface.X.Step:0.###}, {markerY * surface.Y.Step:0.###})");
 
@@ -1217,7 +1217,7 @@ public sealed class ShellForceVolumeTests
             ws,
             MapOnSurface(Layout(StandardUnits.Nanometre, (1000, 2000)), points: 1, surfaceUnit: StandardUnits.Micrometre));
 
-        var (x, y) = Assert.Single(vm.PointMarkers);
+        var (x, y, _) = Assert.Single(vm.PointMarkers);
 
         Assert.Equal(1.0, x, 6);   // 1000 nm = 1 um, one pixel along
         Assert.Equal(2.0, y, 6);
@@ -1230,8 +1230,8 @@ public sealed class ShellForceVolumeTests
         var ws = new Workspace();
         var vm = WithActiveMap(ws, MapOnSurface(Layout((1, 1), (3, 2))));
 
-        Assert.Equal((1.0, 1.0), vm.PointMarkers[0]);
-        Assert.Equal((3.0, 2.0), vm.PointMarkers[1]);
+        Assert.Equal((1.0, 1.0, 0), vm.PointMarkers[0]);
+        Assert.Equal((3.0, 2.0, 1), vm.PointMarkers[1]);
     }
 
     [Theory]
@@ -1270,7 +1270,7 @@ public sealed class ShellForceVolumeTests
                 surfaceUnit: StandardUnits.Micrometre,
                 surfaceUnitY: StandardUnits.Nanometre));
 
-        var (x, y) = Assert.Single(vm.PointMarkers);
+        var (x, y, _) = Assert.Single(vm.PointMarkers);
 
         Assert.Equal(1.0, x, 6);      // 1000 nm on a um axis of 1 um/pixel
         Assert.Equal(1000.0, y, 6);   // 1000 nm on a nm axis of 1 nm/pixel
@@ -1350,6 +1350,26 @@ public sealed class ShellForceVolumeTests
     }
 
     [Fact]
+    public void A_mark_carries_the_point_it_stands_for_not_its_place_in_the_list()
+    {
+        // The Volume view marks a SUBSET — one mark for point 35, at list position 0. A control that reports the
+        // list position turns a click on the mark for point 35 into a jump to point 0, and because the marker
+        // handles the press the pixel path never runs to correct it.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = Map(6, Grid(3, 2));
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+        vm.SelectedMapPoint = 5;
+
+        var mark = Assert.Single(vm.PointMarkers);
+
+        Assert.Equal(5, mark.Point);
+        Assert.NotEqual(0, mark.Point);
+    }
+
+    [Fact]
     public void The_volume_picture_marks_the_selected_point_and_only_it()
     {
         // Not all of them: on a picture where every pixel is a point, a mark on each is noise drawn over the
@@ -1365,8 +1385,8 @@ public sealed class ShellForceVolumeTests
         vm.SelectMapPointAt(column: 1, row: 1);
 
         // The centre of that point's OWN pixel — the picture's coordinates, not the surface's.
-        Assert.Equal((1.5, 1.5), Assert.Single(vm.PointMarkers));
-        Assert.Equal(0, vm.SelectedPointMarker);
+        // The centre of that point's OWN pixel, carrying the point it stands for.
+        Assert.Equal((1.5, 1.5, 4), Assert.Single(vm.PointMarkers));
     }
 
     [Fact]
@@ -1381,7 +1401,7 @@ public sealed class ShellForceVolumeTests
         vm.SelectedMapPoint = 1;
 
         Assert.Equal(2, vm.PointMarkers.Count);
-        Assert.Equal(1, vm.SelectedPointMarker);
+        Assert.Equal([0, 1], vm.PointMarkers.Select(m => m.Point));
     }
 
     [Fact]

@@ -894,12 +894,6 @@ public sealed class ShellViewModel : ObservableObject
         => OperationEditor is ParameterFormViewModel form ? _launcher.Explain(form.Id, form.Values) : null;
 
     /// <summary>
-    /// Which of <see cref="PointMarkers"/> is the selected one. The Volume view offers exactly one mark — the
-    /// selected point — so it is that one; elsewhere the marks are every point in order.
-    /// </summary>
-    public int SelectedPointMarker => IsVolumeView ? 0 : _selectedMapPoint;
-
-    /// <summary>
     /// Whether the Inspector curve shows whatever pair the channel picker was left on.
     /// <para>
     /// False in the Volume view, where the curve's job changed: it is no longer somewhere to explore an
@@ -973,7 +967,6 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowCurveInInspector));
         OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
         OnPropertyChanged(nameof(PointMarkers));
-        OnPropertyChanged(nameof(SelectedPointMarker));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
         _showSurface.RaiseCanExecuteChanged();
@@ -1143,7 +1136,7 @@ public sealed class ShellViewModel : ObservableObject
     /// space. Empty when the file recorded no positions or carried no surface, so nothing is marked on a
     /// picture that cannot place it.
     /// </summary>
-    public IReadOnlyList<(double X, double Y)> PointMarkers
+    public IReadOnlyList<(double X, double Y, int Point)> PointMarkers
     {
         get
         {
@@ -1160,7 +1153,7 @@ public sealed class ShellViewModel : ObservableObject
             {
                 return _activeForceVolume?.Geometry is { } cells
                     && _selectedMapPoint >= 0 && _selectedMapPoint < cells.Columns * cells.Rows
-                        ? [((_selectedMapPoint % cells.Columns) + 0.5, (_selectedMapPoint / cells.Columns) + 0.5)]
+                        ? [((_selectedMapPoint % cells.Columns) + 0.5, (_selectedMapPoint / cells.Columns) + 0.5, _selectedMapPoint)]
                         : [];
             }
 
@@ -1190,12 +1183,14 @@ public sealed class ShellViewModel : ObservableObject
                 return [];
             }
 
-            var markers = new List<(double X, double Y)>(layout.Count);
-            foreach (var p in layout.Positions)
+            var markers = new List<(double X, double Y, int Point)>(layout.Count);
+            for (int i = 0; i < layout.Count; i++)
             {
+                var p = layout.Positions[i];
                 markers.Add((
                     OnAxis(p.X, from, surface.X.Unit) / stepX,
-                    OnAxis(p.Y, from, surface.Y.Unit) / stepY));
+                    OnAxis(p.Y, from, surface.Y.Unit) / stepY,
+                    i));
             }
 
             return markers;

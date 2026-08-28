@@ -203,8 +203,8 @@ public partial class AfmImageView : UserControl, IImageView
 
     // ---- Measurement-point markers (UX03) ----------------------------------------------------------------
 
-    private IReadOnlyList<(double X, double Y)> _pointMarkers = [];
-    private int _selectedMarker = -1;
+    private IReadOnlyList<(double X, double Y, int Point)> _pointMarkers = [];
+    private int _selectedPoint = -1;
     private readonly List<System.Windows.Shapes.Ellipse> _markerShapes = [];
 
     /// <summary>Raised when a marker is clicked, with its index.</summary>
@@ -214,10 +214,16 @@ public partial class AfmImageView : UserControl, IImageView
     /// Shows the places a spectroscopy acquisition measured, in image-pixel space, with one marked as selected.
     /// The markers keep a constant screen size so a dense map stays clickable at any zoom.
     /// </summary>
-    public void SetPointMarkers(IReadOnlyList<(double X, double Y)> points, int selectedIndex)
+    /// <param name="points">
+    /// Where to draw, each carrying the <b>point it stands for</b> rather than its position in this list. The
+    /// two agree when every point is marked and part ways the moment a view marks a subset — which is what a
+    /// click then reports as the wrong curve.
+    /// </param>
+    /// <param name="selectedPoint">Which point is the selected one; a marker for any other is drawn hollow.</param>
+    public void SetPointMarkers(IReadOnlyList<(double X, double Y, int Point)> points, int selectedPoint)
     {
         _pointMarkers = points ?? [];
-        _selectedMarker = selectedIndex;
+        _selectedPoint = selectedPoint;
         RebuildPointMarkers();
     }
 
@@ -225,7 +231,7 @@ public partial class AfmImageView : UserControl, IImageView
     public void ClearPointMarkers()
     {
         _pointMarkers = [];
-        _selectedMarker = -1;
+        _selectedPoint = -1;
         RebuildPointMarkers();
     }
 
@@ -243,23 +249,24 @@ public partial class AfmImageView : UserControl, IImageView
             return;
         }
 
-        for (int i = 0; i < _pointMarkers.Count; i++)
+        foreach (var marker in _pointMarkers)
         {
+            bool selected = marker.Point == _selectedPoint;
             var dot = new System.Windows.Shapes.Ellipse
             {
                 Width = MarkerSize,
                 Height = MarkerSize,
                 StrokeThickness = 1.5,
                 Cursor = System.Windows.Input.Cursors.Hand,
-                Tag = i,
+                Tag = marker.Point,
             };
 
             // Unselected markers are hollow so they never hide the surface underneath; the selected one is
             // filled, because "which curve am I looking at" has to be answerable at a glance.
             dot.SetResourceReference(
                 System.Windows.Shapes.Shape.StrokeProperty,
-                i == _selectedMarker ? "SA.Brush.Accent.Primary" : "SA.Brush.Text.Secondary");
-            if (i == _selectedMarker)
+                selected ? "SA.Brush.Accent.Primary" : "SA.Brush.Text.Secondary");
+            if (selected)
             {
                 dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "SA.Brush.Accent.Primary");
             }
@@ -290,7 +297,7 @@ public partial class AfmImageView : UserControl, IImageView
         double s = ImgScale.ScaleX;
         for (int i = 0; i < _markerShapes.Count; i++)
         {
-            var (x, y) = _pointMarkers[i];
+            var (x, y, _) = _pointMarkers[i];
             Canvas.SetLeft(_markerShapes[i], (x * s) + ImgTranslate.X - (MarkerSize / 2));
             Canvas.SetTop(_markerShapes[i], (y * s) + ImgTranslate.Y - (MarkerSize / 2));
         }
