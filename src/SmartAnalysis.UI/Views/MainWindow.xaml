@@ -492,6 +492,29 @@
                         </StackPanel>
                     </StackPanel>
 
+                    <!-- Profile props (doc 26 §5). A profile is a slice of an image; the Inspector says how far
+                         it runs and where it was taken, the same two questions the map answers for a point. -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding RoleIsDataset, Converter={StaticResource Bool2Vis}}">
+                        <StackPanel Margin="{DynamicResource SA.Pad.Panel}"
+                                    Visibility="{Binding IsProfile, Converter={StaticResource Bool2Vis}}">
+                            <TextBlock Text="DATASET" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom2}"/>
+                            <TextBlock Text="{Binding ActiveTitle}" Style="{StaticResource SA.Text.Title}"/>
+                            <TextBlock Text="{Binding ActiveSubtitle}" Style="{StaticResource SA.Text.Secondary}"/>
+
+                            <TextBlock Text="PROFILE" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
+                            <TextBlock Text="{Binding ProfileSummary}" Style="{StaticResource SA.Text.Numeric}"/>
+                            <TextBlock Text="{Binding ProfileSource}" Style="{StaticResource SA.Text.Caption}"
+                                       TextWrapping="Wrap" Margin="{DynamicResource SA.Gap.Top1}"/>
+
+                            <Border Style="{StaticResource SA.Card}" Background="{DynamicResource SA.Brush.Surface.Sunken}"
+                                    Margin="{DynamicResource SA.Gap.Top2}">
+                                <TextBlock Text="Fit · smooth · measure from Analyze ▾."
+                                           TextWrapping="Wrap" Style="{StaticResource SA.Text.Caption}"/>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
                     <!-- Map props / Curve props (doc 26 §22.2). The Inspector carries the selection: what the
                          point measured, on which channel pair, and the one step that turns it into a dataset. -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
