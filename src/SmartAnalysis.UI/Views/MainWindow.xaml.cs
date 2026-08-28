@@ -754,9 +754,9 @@ public partial class MainWindow : Window
     {
         SpectroscopyCurve.Render(input);
 
-        if (_viewModel.InspectorCurveFollowsChannelPicker)
+        if (_viewModel.CurveFollowsChannelPicker)
         {
-            InspectorCurve.Render(input);
+            PointCurve.Render(input);
             return;
         }
 
@@ -766,7 +766,7 @@ public partial class MainWindow : Window
         // measured. The stage's copy is unmarked: there the curve is the subject, not the thing being tuned.
         if (_viewModel.ActiveForceVolume is { } map)
         {
-            InspectorCurve.Render(
+            PointCurve.Render(
                 RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint)
                     .WithMarkers(_viewModel.CurveVerticalMarkers, _viewModel.CurveHorizontalMarkers));
         }
@@ -775,7 +775,7 @@ public partial class MainWindow : Window
     private void ClearSpectroscopyCurve()
     {
         SpectroscopyCurve.Clear();
-        InspectorCurve.Clear();
+        PointCurve.Clear();
     }
 
     // In the Volume view every pixel is a point, so clicking one is the shortest route from a value on the

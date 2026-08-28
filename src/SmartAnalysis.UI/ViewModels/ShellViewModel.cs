@@ -66,6 +66,8 @@ public sealed class ShellViewModel : ObservableObject
     private LineProfileDataset? _activeCurve;
     private ForceCurveDataset? _activeForceCurve;
     private ForceVolumeDataset? _activeForceVolume;
+    private MapGridIndex? _mapCells;
+    private bool _mapCellsComputed;
     private int _selectedMapPoint;
     private int _selectedXChannel;
     private int _selectedYChannel;
@@ -239,6 +241,13 @@ public sealed class ShellViewModel : ObservableObject
             IsInteractiveImageEditing = IsImageOverlayEditor(value);
             SetProperty(ref _operationEditor, value);
             SetOperationPreview(value);
+
+            // An Operation role with no editor draws nothing at all — the Inspector goes blank with no way back.
+            if (value is null && _inspectorRole == InspectorRole.Operation)
+            {
+                InspectorRole = InspectorRole.DatasetProperties;
+            }
+
             RaiseVolumeViewChanged();
         }
     }
@@ -652,6 +661,7 @@ public sealed class ShellViewModel : ObservableObject
                             RefreshOperationPreview();
                         }
                     };
+                    SeedMapSelection(editor);
                     OperationEditor = editor;
                     InspectorRole = InspectorRole.Operation;
                 }
@@ -817,6 +827,7 @@ public sealed class ShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanStepMapPointBack));
                 OnPropertyChanged(nameof(CanStepMapPointForward));
                 RaiseCurveMarkersChanged();
+                SeedMapSelection(OperationEditor as ParameterFormViewModel);
                 MapPointChanged?.Invoke();
             }
         }
@@ -845,11 +856,14 @@ public sealed class ShellViewModel : ObservableObject
             }
 
             string label = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
-            if (map.Geometry is { } cells)
+
+            // The cell it was MEASURED in, not the one its acquisition index falls on. Deriving the column one
+            // way and the position beside it another is how "col 7/8 · surface (0.375, …)" reached the screen:
+            // two coordinate frames in one line, disagreeing.
+            if (MapCells() is { } cells && _selectedMapPoint < map.PointCount)
             {
-                int column = (_selectedMapPoint % cells.Columns) + 1;
-                int row = (_selectedMapPoint / cells.Columns) + 1;
-                label += $" · col {column}/{cells.Columns}, row {row}/{cells.Rows}";
+                var (column, row) = cells.CellOf(_selectedMapPoint);
+                label += $" · col {column + 1}/{cells.Columns}, row {row + 1}/{cells.Rows}";
             }
 
             if (map.PointLayout is { } layout && _selectedMapPoint < layout.Count)
@@ -902,7 +916,7 @@ public sealed class ShellViewModel : ObservableObject
     /// of a measurement nothing made.
     /// </para>
     /// </summary>
-    public bool InspectorCurveFollowsChannelPicker => !IsVolumeView;
+    public bool CurveFollowsChannelPicker => !IsVolumeView;
 
     /// <summary>
     /// Separations at which to mark the selected point's curve: where the threshold window begins and ends.
@@ -964,8 +978,8 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(CanShowVolume));
         OnPropertyChanged(nameof(ShowSpectroscopyImage));
         OnPropertyChanged(nameof(ShowCurveOnStage));
-        OnPropertyChanged(nameof(ShowCurveInInspector));
-        OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
+        OnPropertyChanged(nameof(ShowCurveBelowStage));
+        OnPropertyChanged(nameof(CurveFollowsChannelPicker));
         OnPropertyChanged(nameof(PointMarkers));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
@@ -992,17 +1006,37 @@ public sealed class ShellViewModel : ObservableObject
     /// </summary>
     public void SelectMapPointAt(int column, int row)
     {
-        if (!IsVolumeView || _activeForceVolume?.Geometry is not { } grid)
+        if (!IsVolumeView || MapCells() is not { } cells)
         {
             return;
         }
 
-        if (column < 0 || column >= grid.Columns || row < 0 || row >= grid.Rows)
+        if (cells.PointAt(column, row) is var point && point >= 0)
         {
-            return;
+            SelectedMapPoint = point;
+        }
+    }
+
+    /// <summary>
+    /// Which cell of the grid each curve was measured in — the picture's layout, not the acquisition order.
+    /// Null when the file's own positions contradict the grid: no cell can be named, and naming one anyway
+    /// would make every reader of this agree on the same wrong place. Cached — the layout cannot change while
+    /// a map is active.
+    /// </summary>
+    private MapGridIndex? MapCells()
+    {
+        if (_mapCellsComputed)
+        {
+            return _mapCells;
         }
 
-        SelectedMapPoint = (row * grid.Columns) + column;
+        _mapCellsComputed = true;
+        if (_activeForceVolume is { Geometry: { } grid } map)
+        {
+            MapGridIndex.TryCreate(grid, map.PointLayout, map.PointCount, out _mapCells, out _);
+        }
+
+        return _mapCells;
     }
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
@@ -1015,6 +1049,8 @@ public sealed class ShellViewModel : ObservableObject
         ActiveForceVolume = map;
         if (changed)
         {
+            _mapCells = null;
+            _mapCellsComputed = false;
             _selectedMapPoint = 0;
             OnPropertyChanged(nameof(SelectedMapPoint));
         }
@@ -1051,10 +1087,11 @@ public sealed class ShellViewModel : ObservableObject
     public bool ShowCurveOnStage => IsSpectroscopy && !HasReferenceSurface && !IsVolumeView;
 
     /// <summary>
-    /// The Inspector previews the selected point's curve only when the stage is showing the surface instead —
-    /// a map with no surface already has the curve on the stage, and drawing it twice says nothing new.
+    /// The selected point's curve sits under the picture, across the Stage, only when the picture is what the
+    /// Stage is showing — a map with no surface already has the curve ON the stage, and drawing it twice says
+    /// nothing new.
     /// </summary>
-    public bool ShowCurveInInspector => IsForceVolume && !ShowCurveOnStage;
+    public bool ShowCurveBelowStage => IsForceVolume && !ShowCurveOnStage;
 
     /// <summary>
     /// The placeholder is for having nothing to inspect, not for the active dataset being something other than
@@ -1091,6 +1128,35 @@ public sealed class ShellViewModel : ObservableObject
         {
             StatusMessage = result.Error;
             OnPropertyChanged(nameof(HasStatus));
+        }
+    }
+
+    /// <summary>
+    /// Fills a form's map-point fields from the selection the Stage already holds (doc 26 SS22.2).
+    /// <para>
+    /// The toolbar arrows and the map markers ARE the point selector, so a form launched over a map must not ask
+    /// for the number again — it opened on a point the viewer had already chosen. Fields the form does not have
+    /// are skipped, so this is a no-op for every operation that is not about a map point.
+    /// </para>
+    /// </summary>
+    private void SeedMapSelection(ParameterFormViewModel? form)
+    {
+        if (form is null || _activeForceVolume is null)
+        {
+            return;
+        }
+
+        bool kept = SpectroscopyChannels is not null;
+        Set("point", _selectedMapPoint);
+        Set("xChannel", kept ? _selectedXChannel : -1);
+        Set("yChannel", kept ? _selectedYChannel : -1);
+
+        void Set(string name, int value)
+        {
+            if (form.Fields.FirstOrDefault(f => f.Name == name) is { } field)
+            {
+                field.Value = value;
+            }
         }
     }
 
@@ -1182,10 +1248,13 @@ public sealed class ShellViewModel : ObservableObject
             // image does not share — mixing them is what put a stray mark in the far corner.
             if (IsVolumeView)
             {
-                return _activeForceVolume?.Geometry is { } cells
-                    && _selectedMapPoint >= 0 && _selectedMapPoint < cells.Columns * cells.Rows
-                        ? [((_selectedMapPoint % cells.Columns) + 0.5, (_selectedMapPoint / cells.Columns) + 0.5, _selectedMapPoint)]
-                        : [];
+                if (MapCells() is not { } cells || _selectedMapPoint < 0 || _selectedMapPoint >= MapPointCount)
+                {
+                    return [];
+                }
+
+                var (column, row) = cells.CellOf(_selectedMapPoint);
+                return [(column + 0.5, row + 0.5, _selectedMapPoint)];
             }
 
             var layout = _activeForceVolume?.PointLayout ?? _activeForceCurve?.PointLayout;
@@ -1317,6 +1386,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(IsDesignatedChannelPair));
         OnPropertyChanged(nameof(SpectroscopyLabel));
         OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
+        SeedMapSelection(OperationEditor as ParameterFormViewModel);
         MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
     }
 
@@ -1346,7 +1416,7 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(SpectroscopyReferenceImage));
         OnPropertyChanged(nameof(HasReferenceSurface));
         OnPropertyChanged(nameof(ShowCurveOnStage));
-        OnPropertyChanged(nameof(ShowCurveInInspector));
+        OnPropertyChanged(nameof(ShowCurveBelowStage));
         OnPropertyChanged(nameof(HasNothingToInspect));
         OnPropertyChanged(nameof(MapSummary));
         OnPropertyChanged(nameof(PointMarkers));

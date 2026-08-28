@@ -562,6 +562,62 @@ public sealed class ShellForceVolumeTests
         Assert.False(vm.HasReferenceSurface);
         Assert.Null(vm.SpectroscopyReferenceImage);
     }
+    /// <summary>
+    /// A 4x2 map scanned boustrophedon: row 0 left to right, row 1 right to left. Points are 1 um apart, on the
+    /// 4x4-pixel/4 um surface MapOnSurface builds, so a position is also a surface pixel.
+    /// </summary>
+    private static ForceVolumeDataset SnakeMap()
+        => MapOnSurface(
+            Layout((0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (2, 1), (1, 1), (0, 1)),
+            points: 8,
+            geometry: new ForceVolumeGeometry(4, 2, 3.0, 1.0, 0.0, 0.0, StandardUnits.Micrometre));
+
+    [Fact]
+    public void The_column_a_point_is_called_is_the_column_it_was_measured_in()
+    {
+        // "col 7/8 · surface (0.375, ...)" reached the screen on a real file: the column came from the
+        // acquisition index and the position beside it from the recorded layout, and on a boustrophedon scan
+        // those are different places. One line cannot hold two frames.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, SnakeMap());
+        vm.SelectedMapPoint = 4;   // first of the second row, measured at its RIGHT-hand end
+
+        Assert.Contains("col 4/4, row 2/2", vm.MapPointLabel);
+        Assert.Contains("(3, 1)", vm.MapPointLabel);
+    }
+
+    [Fact]
+    public void The_mark_on_a_volume_picture_is_in_the_cell_the_curve_was_measured_in()
+    {
+        var launcher = new VolumeLauncher();
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = SnakeMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+        vm.SelectedMapPoint = 4;
+
+        // Centre of cell (3,1), not of cell (0,1) where its index would put it.
+        Assert.Equal([(3.5, 1.5, 4)], vm.PointMarkers);
+    }
+
+    [Fact]
+    public void Clicking_a_pixel_selects_the_curve_that_pixel_was_measured_from()
+    {
+        var launcher = new VolumeLauncher();
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = SnakeMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        vm.SelectMapPointAt(3, 1);
+
+        Assert.Equal(4, vm.SelectedMapPoint);
+    }
+
     private static MapPointLayout Layout(params (double X, double Y)[] points)
         => Layout(StandardUnits.Micrometre, points);
 
@@ -721,11 +777,11 @@ public sealed class ShellForceVolumeTests
     {
         // Drawing the same curve on the stage AND in the Inspector says nothing the stage did not already say.
         var onSurface = WithActiveMap(new Workspace(), MapOnSurface(Layout((1, 1), (3, 2))));
-        Assert.True(onSurface.ShowCurveInInspector);
+        Assert.True(onSurface.ShowCurveBelowStage);
 
         var noSurface = WithActiveMap(new Workspace(), Map(3));
         Assert.True(noSurface.ShowCurveOnStage);
-        Assert.False(noSurface.ShowCurveInInspector);
+        Assert.False(noSurface.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -852,12 +908,12 @@ public sealed class ShellForceVolumeTests
         ws.Add(map);
         ws.SetActive(map.Id);
 
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
 
         vm.ShowVolumeCommand.Execute(null);
 
         Assert.True(vm.IsVolumeView);
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -872,12 +928,12 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
 
         Assert.True(vm.ShowCurveOnStage);
-        Assert.False(vm.ShowCurveInInspector);
+        Assert.False(vm.ShowCurveBelowStage);
 
         vm.ShowVolumeCommand.Execute(null);
 
         Assert.False(vm.ShowCurveOnStage);
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -895,7 +951,7 @@ public sealed class ShellForceVolumeTests
 
         vm.ShowVolumeCommand.Execute(null);
 
-        Assert.Contains(nameof(vm.ShowCurveInInspector), raised);
+        Assert.Contains(nameof(vm.ShowCurveBelowStage), raised);
     }
 
     [Fact]
@@ -1177,16 +1233,16 @@ public sealed class ShellForceVolumeTests
         ws.Add(map);
         ws.SetActive(map.Id);
 
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+        Assert.True(vm.CurveFollowsChannelPicker);
 
         // Leave the picker somewhere other than the designated pair, the way UX04 lets a viewer do.
         vm.SelectedYChannel = 2;
         Assert.False(vm.IsDesignatedChannelPair);
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);   // the Surface view is still the picker's
+        Assert.True(vm.CurveFollowsChannelPicker);   // the Surface view is still the picker's
 
         vm.ShowVolumeCommand.Execute(null);
 
-        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+        Assert.False(vm.CurveFollowsChannelPicker);
     }
 
     [Fact]
@@ -1199,11 +1255,11 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
 
         vm.ShowVolumeCommand.Execute(null);
-        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+        Assert.False(vm.CurveFollowsChannelPicker);
 
         vm.ShowSurfaceCommand.Execute(null);
 
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+        Assert.True(vm.CurveFollowsChannelPicker);
     }
 
     [Fact]
