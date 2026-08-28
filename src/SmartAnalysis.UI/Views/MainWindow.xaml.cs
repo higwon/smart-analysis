@@ -732,8 +732,10 @@ public partial class MainWindow : Window
             {
                 SpectroscopySurface.Render(picture);
             }
-            else if (_viewModel.HasVolumeUnavailable)
+            else if (_viewModel.HasVolumeUnavailable || _viewModel.IsVolumeComputing)
             {
+                // Nothing to draw yet. Leaving the SURFACE up would put a picture of the sample on a stage whose
+                // panel describes a volume image — the two look alike enough that only the colour bar says which.
                 SpectroscopySurface.Clear();
             }
 
