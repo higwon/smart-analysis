@@ -171,7 +171,7 @@ public sealed class SurfaceMeshBuilderTests
         Assert.Empty(mesh.TriangleIndices);
     }
 
-    // --- Unmeasured samples (V05) ---
+    // --- Unmeasured samples (V10) ---
 
     /// <summary>A 4x4 grid of 5s with one sample knocked out.</summary>
     private static float[] WithHole(int index)

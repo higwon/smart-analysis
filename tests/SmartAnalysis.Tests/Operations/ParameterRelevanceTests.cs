@@ -4,7 +4,7 @@ using Xunit;
 namespace SmartAnalysis.Tests.Operations;
 
 /// <summary>
-/// TASK-U09: some parameters are only used for some settings of another. A form that offers every control at
+/// TASK-U10: some parameters are only used for some settings of another. A form that offers every control at
 /// once puts inert ones in front of the user — they change it, nothing happens, and nothing says whether the
 /// setting was ignored or the data simply did not respond.
 /// </summary>

@@ -7,7 +7,7 @@ using Xunit;
 namespace SmartAnalysis.UiTests.ViewModels;
 
 /// <summary>
-/// TASK-U09, the form's end: a field the current settings do not use must show that it does not, or the user
+/// TASK-U10, the form's end: a field the current settings do not use must show that it does not, or the user
 /// tunes a control that cannot change the result and has no way to tell.
 /// </summary>
 public sealed class ParameterFormRelevanceTests

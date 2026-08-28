@@ -9,7 +9,7 @@ using Xunit;
 namespace SmartAnalysis.UiTests.Controls;
 
 /// <summary>
-/// TASK-V06: V04 gave an unmeasured sample its own colour so it could not pass for the bottom of the ramp. That
+/// TASK-V11: V09 gave an unmeasured sample its own colour so it could not pass for the bottom of the ramp. That
 /// only helps a viewer who already knows what the colour means — the legend is the other half.
 /// </summary>
 public sealed class PaletteBarNoDataTests
