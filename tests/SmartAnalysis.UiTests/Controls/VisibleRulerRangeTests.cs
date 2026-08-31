@@ -35,7 +35,7 @@ public sealed class VisibleRulerRangeTests
         double scale = ImageViewportMath.FitScale(400, 400, ImageW, ImageH);
         var (x, y) = ImageViewportMath.Center(scale, 400, 400, ImageW, ImageH);
 
-        var visible = ImageViewportMath.VisiblePixels(400, 400, scale, x, y, ImageW, ImageH);
+        var visible = ImageViewportMath.VisibleSampleIndices(400, 400, scale, x, y, ImageW, ImageH);
 
         Assert.NotNull(visible);
         var (from, to) = Span(Axis(), visible.Value.Left, visible.Value.Right);
@@ -51,19 +51,49 @@ public sealed class VisibleRulerRangeTests
         double fit = ImageViewportMath.FitScale(400, 400, ImageW, ImageH);
         double zoomed = fit * 4;
 
-        var visible = ImageViewportMath.VisiblePixels(400, 400, zoomed, 0, 0, ImageW, ImageH);
+        var visible = ImageViewportMath.VisibleSampleIndices(400, 400, zoomed, 0, 0, ImageW, ImageH);
 
         Assert.NotNull(visible);
         Assert.Equal(0.0, visible.Value.Left, 9);
 
         // Derived from the same scale rather than written out: fit leaves a margin, so a hand-computed 25 would
         // be asserting my arithmetic instead of the code's.
-        Assert.Equal(400.0 / zoomed, visible.Value.Right, 9);
+        Assert.Equal((400.0 / zoomed) - 0.5, visible.Value.Right, 9);
 
         var (from, to) = Span(Axis(), visible.Value.Left, visible.Value.Right);
         Assert.Equal(0.0, from, 9);
-        Assert.Equal(2.0 * (400.0 / zoomed) / (ImageW - 1), to, 9);
+        Assert.Equal(2.0 * ((400.0 / zoomed) - 0.5) / (ImageW - 1), to, 9);
         Assert.True(to < 0.6, $"the ruler still claims {to:0.###} um of a quarter-width view.");
+    }
+
+    [Fact]
+    public void A_viewport_edge_on_a_cell_boundary_is_read_as_the_boundary_not_as_a_sample_centre()
+    {
+        // The half-sample this seam turns on. In bitmap coordinates sample i owns [i, i+1) — which is what
+        // PixelAt floors — so 25.0 is the BOUNDARY between samples 24 and 25, not the centre of 25. Both are
+        // doubles and nothing would complain if they were swapped, so it is pinned rather than assumed.
+        const double scale = 16.0;   // 400 px of viewport over exactly 25 image pixels
+        var visible = ImageViewportMath.VisibleSampleIndices(400, 400, scale, 0, 0, ImageW, ImageH);
+
+        Assert.NotNull(visible);
+        Assert.Equal(24.5, visible.Value.Right, 9);
+
+        // And in physical terms: halfway between the two samples the boundary separates.
+        var axis = Axis();
+        Assert.Equal((axis.At(24) + axis.At(25)) / 2, axis.At(visible.Value.Right), 9);
+    }
+
+    [Fact]
+    public void The_same_half_sample_applies_where_the_left_edge_is_clipped_inside_the_image()
+    {
+        // Both ends, not just the one the fit case happens to snap. Panned so the left edge sits on the boundary
+        // between samples 9 and 10.
+        const double scale = 16.0;
+        var visible = ImageViewportMath.VisibleSampleIndices(400, 400, scale, -10 * scale, 0, ImageW, ImageH);
+
+        Assert.NotNull(visible);
+        Assert.Equal(9.5, visible.Value.Left, 9);
+        Assert.Equal(34.5, visible.Value.Right, 9);
     }
 
     [Fact]
@@ -72,12 +102,12 @@ public sealed class VisibleRulerRangeTests
         double fit = ImageViewportMath.FitScale(400, 400, ImageW, ImageH);
         double zoomed = fit * 4;
 
-        var atLeft = ImageViewportMath.VisiblePixels(400, 400, zoomed, 0, 0, ImageW, ImageH);
-        var panned = ImageViewportMath.VisiblePixels(400, 400, zoomed, -zoomed * 50, 0, ImageW, ImageH);
+        var atLeft = ImageViewportMath.VisibleSampleIndices(400, 400, zoomed, 0, 0, ImageW, ImageH);
+        var panned = ImageViewportMath.VisibleSampleIndices(400, 400, zoomed, -zoomed * 50, 0, ImageW, ImageH);
 
         Assert.NotNull(atLeft);
         Assert.NotNull(panned);
-        Assert.Equal(50.0, panned.Value.Left, 9);
+        Assert.Equal(49.5, panned.Value.Left, 9);
         Assert.True(Span(Axis(), panned.Value.Left, panned.Value.Right).From
             > Span(Axis(), atLeft.Value.Left, atLeft.Value.Right).From);
     }
@@ -90,7 +120,7 @@ public sealed class VisibleRulerRangeTests
         double small = ImageViewportMath.FitScale(400, 400, ImageW, ImageH) / 2;
         var (x, y) = ImageViewportMath.Center(small, 400, 400, ImageW, ImageH);
 
-        var visible = ImageViewportMath.VisiblePixels(400, 400, small, x, y, ImageW, ImageH);
+        var visible = ImageViewportMath.VisibleSampleIndices(400, 400, small, x, y, ImageW, ImageH);
 
         Assert.NotNull(visible);
         Assert.Equal(0.0, visible.Value.Left, 9);
@@ -105,7 +135,7 @@ public sealed class VisibleRulerRangeTests
         // on screen at all.
         double fit = ImageViewportMath.FitScale(400, 400, ImageW, ImageH);
 
-        Assert.Null(ImageViewportMath.VisiblePixels(400, 400, fit, -100000, 0, ImageW, ImageH));
+        Assert.Null(ImageViewportMath.VisibleSampleIndices(400, 400, fit, -100000, 0, ImageW, ImageH));
     }
 
     [Fact]
@@ -114,7 +144,7 @@ public sealed class VisibleRulerRangeTests
         // A top-down Y axis: pixel 0 is the LARGER coordinate. Zoomed to the top quarter, the ruler must say
         // 2.0 down to about 1.5 — not 0 to 0.5.
         double fit = ImageViewportMath.FitScale(400, 400, ImageW, ImageH);
-        var visible = ImageViewportMath.VisiblePixels(400, 400, fit * 4, 0, 0, ImageW, ImageH);
+        var visible = ImageViewportMath.VisibleSampleIndices(400, 400, fit * 4, 0, 0, ImageW, ImageH);
 
         Assert.NotNull(visible);
         var (from, to) = Span(Reversed(), visible.Value.Top, visible.Value.Bottom);
@@ -130,7 +160,7 @@ public sealed class VisibleRulerRangeTests
         // End to end: viewport -> visible pixels -> physical span -> marks. This is the whole point of the seam,
         // so it is asserted as one thing rather than as three that happen to line up.
         double fit = ImageViewportMath.FitScale(400, 400, ImageW, ImageH);
-        var visible = ImageViewportMath.VisiblePixels(400, 400, fit * 4, 0, 0, ImageW, ImageH);
+        var visible = ImageViewportMath.VisibleSampleIndices(400, 400, fit * 4, 0, 0, ImageW, ImageH);
         Assert.NotNull(visible);
 
         var (from, to) = Span(Axis(), visible.Value.Left, visible.Value.Right);
@@ -151,12 +181,12 @@ public sealed class VisibleRulerRangeTests
 
     [Fact]
     public void A_viewport_with_no_size_shows_nothing()
-        => Assert.Null(ImageViewportMath.VisiblePixels(0, 400, 1.0, 0, 0, ImageW, ImageH));
+        => Assert.Null(ImageViewportMath.VisibleSampleIndices(0, 400, 1.0, 0, 0, ImageW, ImageH));
 
     [Fact]
     public void A_scale_that_is_not_a_number_shows_nothing()
     {
-        Assert.Null(ImageViewportMath.VisiblePixels(400, 400, double.NaN, 0, 0, ImageW, ImageH));
-        Assert.Null(ImageViewportMath.VisiblePixels(400, 400, 1.0, double.NaN, 0, ImageW, ImageH));
+        Assert.Null(ImageViewportMath.VisibleSampleIndices(400, 400, double.NaN, 0, 0, ImageW, ImageH));
+        Assert.Null(ImageViewportMath.VisibleSampleIndices(400, 400, 1.0, double.NaN, 0, ImageW, ImageH));
     }
 }
