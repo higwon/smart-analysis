@@ -39,14 +39,32 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
     /// only what it is (<see cref="OperationDescriptor.IsCpuBound"/>), not where it should run.
     /// </para>
     /// </summary>
-    private static Task<OperationResult> RunPreparedAsync(Prepared prepared, CancellationToken cancellationToken)
+    private async Task<OperationResult> RunPreparedAsync(Prepared prepared, CancellationToken cancellationToken)
     {
         var operation = prepared.Operation!;
-        return operation.Descriptor.IsCpuBound
-            ? Task.Run(
-                () => operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken),
-                cancellationToken)
-            : operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken);
+        if (!operation.Descriptor.IsCpuBound)
+        {
+            // Still on the caller's thread, which cannot remove a dataset while it is here. Nothing to guard.
+            return await operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        // The caller returns while this runs, so the datasets it reads can be removed underneath it. Leaving
+        // that to the cancellation token would not close it: a token asks a reader to stop, it does not wait for
+        // one, and Workspace.Remove disposes before anything downstream hears the active context changed.
+        using var lease = _workspace.Lease(Inputs(prepared.Input));
+        return await Task.Run(
+            () => operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static IEnumerable<DatasetId> Inputs(OperationInput input)
+    {
+        yield return input.Primary.Id;
+        foreach (var secondary in input.Secondary)
+        {
+            yield return secondary.Id;
+        }
     }
 
     public IReadOnlyList<OperationLauncherItem> ApplicableToActive()
@@ -137,6 +155,16 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
 
         if (result.DerivedDataset is { } derived)
         {
+            // The run no longer holds the caller's thread, so the source can be removed while it is in flight.
+            // Committing then would leave a dataset whose provenance names a parent that is not there — lineage
+            // pointing at nothing, and a result nobody can now say what it was derived from.
+            if (!_workspace.TryGet(prepared.Input.Primary.Id, out _))
+            {
+                derived.Dispose();
+                return OperationRunResult.Failed(
+                    "The dataset this was running on was removed before it finished, so the result has nothing to belong to.");
+            }
+
             // Transform policy: the derived dataset is added and becomes active. It is NOT forced into a Before/After
             // comparison — comparing to the source is a live settings preview now, not a post-apply artifact split.
             // Ownership transfers to the workspace only on a successful Add; dispose on failure (W01).

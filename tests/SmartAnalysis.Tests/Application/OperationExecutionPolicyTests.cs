@@ -18,9 +18,8 @@ namespace SmartAnalysis.Tests.Application;
 /// Whose thread an operation runs on.
 /// <para>
 /// Every operation computes straight through and returns an already-completed task, so awaiting one holds the
-/// caller's thread for the whole computation. On the UI thread that is a dead window: nothing repaints, nothing
-/// responds, and the <c>IProgress</c> the operation is handed has no thread left to report on. It scales with the
-/// data — a 64x64 force-volume map is 4096 curves, about 140 ms, and the Volume view recomputes on every
+/// caller's thread for the whole computation. On the UI thread that is a dead window: nothing repaints and
+/// nothing responds. It scales with the data — a 64x64 force-volume map is 4096 curves, about 140 ms, and the Volume view recomputes on every
 /// keystroke in its settings.
 /// </para>
 /// <para>
@@ -97,6 +96,107 @@ public sealed class OperationExecutionPolicyTests
         await launcher.PreviewAsync("test.io", new Dictionary<string, object?>(), Colormap.Grayscale, null);
 
         Assert.Equal(Environment.CurrentManagedThreadId, operation.RanOnThread);
+    }
+
+    [Fact]
+    public async Task A_running_operation_keeps_the_dataset_it_is_reading_alive()
+    {
+        // The barrier the offload removed. While an operation held the caller's thread, that thread could not
+        // also remove the dataset; now it can, and a ScanBuffer view must not outlive its owner.
+        var operation = new BlockingOperation("test.cpu");
+        var (ws, launcher) = With(operation);
+        var source = ws.Datasets.OfType<ScanImageDataset>().Single();
+
+        var run = launcher.RunAsync("test.cpu", new Dictionary<string, object?>());
+        Assert.True(operation.Entered.Wait(TimeSpan.FromSeconds(5)));
+
+        var removed = ws.Remove(source.Id, RemovalPolicy.Cascade);
+        Assert.True(removed.Removed);
+
+        // Gone from the workspace at once — the user said remove and it is removed ...
+        Assert.False(ws.TryGet(source.Id, out _));
+
+        // ... but its storage is still there for the reader that is mid-way through it.
+        Assert.True(ws.IsLeased(source.Id));
+        _ = source.Data.Memory;
+
+        operation.Release();
+        await run;
+
+        // And once the reader lets go, the disposal that was deferred actually happens.
+        Assert.False(ws.IsLeased(source.Id));
+        Assert.Throws<ObjectDisposedException>(() => source.Data.Memory);
+    }
+
+    [Fact]
+    public async Task A_result_whose_source_was_removed_mid_run_is_not_committed()
+    {
+        // Adding it would leave a dataset whose provenance names a parent that is not there.
+        var operation = new BlockingOperation("test.cpu");
+        var (ws, launcher) = With(operation);
+        var source = ws.Datasets.OfType<ScanImageDataset>().Single();
+
+        var run = launcher.RunAsync("test.cpu", new Dictionary<string, object?>());
+        Assert.True(operation.Entered.Wait(TimeSpan.FromSeconds(5)));
+        ws.Remove(source.Id, RemovalPolicy.Cascade);
+        operation.Release();
+
+        var result = await run;
+
+        Assert.False(result.Success);
+        Assert.Contains("removed before it finished", result.Error);
+        Assert.Empty(ws.Datasets);   // the source is gone and nothing orphaned took its place
+    }
+
+    [Fact]
+    public void Replacing_a_workspace_defers_a_leased_dataset_too()
+    {
+        // Open is another disposal path, and so is disposing the workspace. Guarding only Remove would leave the
+        // race in place for two of the three ways a dataset's storage goes away.
+        var ws = new Workspace();
+        var source = Image();
+        ws.Add(source);
+
+        using (ws.Lease([source.Id]))
+        {
+            using var replacement = new Workspace();
+            ws.ReplaceWith(replacement);
+            _ = source.Data.Memory;
+        }
+
+        Assert.Throws<ObjectDisposedException>(() => source.Data.Memory);
+        ws.Dispose();
+    }
+
+    [Fact]
+    public void Disposing_a_workspace_defers_a_leased_dataset_too()
+    {
+        var ws = new Workspace();
+        var source = Image();
+        ws.Add(source);
+
+        using (ws.Lease([source.Id]))
+        {
+            ws.Dispose();
+            _ = source.Data.Memory;
+        }
+
+        Assert.Throws<ObjectDisposedException>(() => source.Data.Memory);
+    }
+
+    [Fact]
+    public void A_dataset_nothing_is_reading_is_disposed_at_once()
+    {
+        // The lease must not turn every removal into a deferred one.
+        var ws = new Workspace();
+        var source = Image();
+        ws.Add(source);
+
+        ws.Remove(source.Id, RemovalPolicy.Cascade);
+
+        Assert.False(ws.IsLeased(source.Id));
+        Assert.Throws<ObjectDisposedException>(() => source.Data.Memory);
+        ws.Dispose();
     }
 
     /// <summary>An operation that holds until released, so "did the caller come back first" is answerable.</summary>

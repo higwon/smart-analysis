@@ -43,6 +43,12 @@ public sealed class Workspace : IDisposable
 {
     private readonly Dictionary<DatasetId, AfmDataset> _byId = [];
     private readonly List<DatasetId> _order = []; // stable insertion order for listing
+
+    // Leases and deferred disposals are the ONE part of this type touched from more than one thread: a lease is
+    // taken on the caller's thread and released on whichever thread finished the work.
+    private readonly object _gate = new();
+    private readonly Dictionary<DatasetId, int> _leases = [];
+    private readonly List<AfmDataset> _deferred = [];
     private ActiveContext _active = ActiveContext.Empty;
     private bool _disposed;
 
@@ -281,7 +287,7 @@ public sealed class Workspace : IDisposable
             if (_byId.Remove(removeId, out var dataset))
             {
                 _order.Remove(removeId);
-                dataset.Dispose(); // the workspace owned it
+                DisposeOrDefer(dataset); // the workspace owned it
             }
         }
 
@@ -312,7 +318,7 @@ public sealed class Workspace : IDisposable
         // not dispose the datasets we just adopted).
         foreach (var dataset in _byId.Values)
         {
-            dataset.Dispose();
+            DisposeOrDefer(dataset);
         }
 
         _byId.Clear();
@@ -334,6 +340,110 @@ public sealed class Workspace : IDisposable
         ActiveContextChanged?.Invoke(this, new ActiveContextChangedEventArgs(previous, newActive));
     }
 
+    /// <summary>
+    /// Keeps the storage of <paramref name="ids"/> alive until the returned handle is disposed.
+    /// <para>
+    /// The workspace disposes a dataset the moment it is removed, which was safe only while every reader held
+    /// the thread that could remove it. An operation now runs off that thread, so a removal can land in the
+    /// middle of one — and a <c>ScanBuffer</c> view must not outlive its owner. A cancellation token does not
+    /// close this: it asks the reader to stop, it does not wait for it, and <see cref="Remove"/> disposes before
+    /// anything downstream has even heard that the active context changed.
+    /// </para>
+    /// <para>
+    /// So a leased dataset is removed from the workspace immediately — it is gone from the UI the moment the
+    /// user says so — but its storage is disposed only once the last reader lets go.
+    /// </para>
+    /// </summary>
+    public IDisposable Lease(IEnumerable<DatasetId> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var held = ids.Distinct().ToArray();
+        lock (_gate)
+        {
+            foreach (var id in held)
+            {
+                _leases[id] = _leases.GetValueOrDefault(id) + 1;
+            }
+        }
+
+        return new Handle(this, held);
+    }
+
+    /// <summary>Whether anything is still reading <paramref name="id"/>. For tests and diagnostics.</summary>
+    public bool IsLeased(DatasetId id)
+    {
+        lock (_gate)
+        {
+            return _leases.ContainsKey(id);
+        }
+    }
+
+    // Disposes now, or hands the dataset to whoever holds the last lease on it.
+    private void DisposeOrDefer(AfmDataset dataset)
+    {
+        lock (_gate)
+        {
+            if (_leases.ContainsKey(dataset.Id))
+            {
+                _deferred.Add(dataset);
+                return;
+            }
+        }
+
+        dataset.Dispose();
+    }
+
+    private void Release(IReadOnlyList<DatasetId> ids)
+    {
+        var due = new List<AfmDataset>();
+        lock (_gate)
+        {
+            foreach (var id in ids)
+            {
+                int count = _leases.GetValueOrDefault(id);
+                if (count <= 1)
+                {
+                    _leases.Remove(id);
+                    for (int i = _deferred.Count - 1; i >= 0; i--)
+                    {
+                        if (_deferred[i].Id == id)
+                        {
+                            due.Add(_deferred[i]);
+                            _deferred.RemoveAt(i);
+                        }
+                    }
+                }
+                else
+                {
+                    _leases[id] = count - 1;
+                }
+            }
+        }
+
+        // Outside the lock: Dispose is the dataset's business, not this type's, and it must not run under a lock
+        // that a reader on another thread is waiting on.
+        foreach (var dataset in due)
+        {
+            dataset.Dispose();
+        }
+    }
+
+    private sealed class Handle(Workspace workspace, IReadOnlyList<DatasetId> ids) : IDisposable
+    {
+        private bool _released;
+
+        public void Dispose()
+        {
+            if (_released)
+            {
+                return;
+            }
+
+            _released = true;
+            workspace.Release(ids);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -344,7 +454,7 @@ public sealed class Workspace : IDisposable
         _disposed = true;
         foreach (var dataset in _byId.Values)
         {
-            dataset.Dispose();
+            DisposeOrDefer(dataset);
         }
 
         _byId.Clear();
