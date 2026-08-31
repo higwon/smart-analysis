@@ -15,6 +15,17 @@ namespace SmartAnalysis.Visualization.Rendering;
 /// scan): the physical span in base units is <c>|End−Start|·ScaleToBase</c>. Defaults to 1 for a unit-less axis.</param>
 public sealed record AxisView(string Title, string Unit, double Start, double End, int Count, double ScaleToBase = 1.0)
 {
+    /// <summary>
+    /// The value at a (possibly fractional) sample index, between <see cref="Start"/> and <see cref="End"/>.
+    /// <para>
+    /// Start and End are the <b>centres</b> of the first and last samples, so index 0 and index count-1 give them
+    /// back exactly and a fully zoomed-out ruler states the scan's own extent. A reversed axis needs no special
+    /// case: End is already the smaller number, and the same interpolation runs backwards.
+    /// </para>
+    /// </summary>
+    public double At(double index)
+        => Count <= 1 ? Start : Start + ((End - Start) * index / (Count - 1));
+
     public static AxisView FromAxis(Axis axis)
     {
         ArgumentNullException.ThrowIfNull(axis);
