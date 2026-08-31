@@ -77,6 +77,45 @@ public static class ImageViewportMath
         return px >= 0 && px < imageW && py >= 0 && py < imageH ? (px, py) : null;
     }
 
+    /// <summary>
+    /// Which part of the image the viewport is actually showing, in image pixels — fractional, and clipped to the
+    /// image itself. Null when none of it is on screen.
+    /// <para>
+    /// This is the seam a ruler hangs on. Handing it the whole image's extent instead would keep the ruler
+    /// describing the full scan while the viewer is zoomed into one corner: a caption for a picture that is no
+    /// longer there, and worse than no caption because it looks authoritative.
+    /// </para>
+    /// <para>
+    /// The bounds are pixel <b>indices</b>, 0 to count-1, which is what an axis's Start and End already describe
+    /// (the centres of the first and last samples). So a fully zoomed-out view comes back as exactly the image's
+    /// own extent, with no off-by-a-half to reconcile.
+    /// </para>
+    /// </summary>
+    public static (double Left, double Top, double Right, double Bottom)? VisiblePixels(
+        double viewportW, double viewportH, double scale, double translateX, double translateY,
+        int imageW, int imageH)
+    {
+        if (!(scale > 0) || !double.IsFinite(scale) || imageW <= 0 || imageH <= 0)
+        {
+            return null;
+        }
+
+        if (!(viewportW > 0) || !(viewportH > 0)
+            || !double.IsFinite(translateX) || !double.IsFinite(translateY))
+        {
+            return null;
+        }
+
+        double left = Math.Max(0.0, (0 - translateX) / scale);
+        double top = Math.Max(0.0, (0 - translateY) / scale);
+        double right = Math.Min(imageW - 1.0, (viewportW - translateX) / scale);
+        double bottom = Math.Min(imageH - 1.0, (viewportH - translateY) / scale);
+
+        // Panned entirely off screen: there is no visible part to describe, which is not the same as showing the
+        // whole thing.
+        return right >= left && bottom >= top ? (left, top, right, bottom) : null;
+    }
+
     /// <summary>The translate that centres an image of the given scale in the viewport.</summary>
     public static (double X, double Y) Center(double scale, double viewportW, double viewportH, int imageW, int imageH)
         => ((viewportW - (imageW * scale)) / 2.0, (viewportH - (imageH * scale)) / 2.0);
