@@ -25,7 +25,9 @@ namespace SmartAnalysis.Tests.Application;
 /// <para>
 /// So the operation declares what it <b>is</b> and the Application layer decides where it runs. An operation that
 /// waits on I/O rather than computing must not be handed to the thread pool — that would occupy a thread to do
-/// nothing — so the flag is not a synonym for "run it elsewhere".
+/// nothing — so the flag is not a synonym for "run it elsewhere". It is also not what decides whether the
+/// inputs need guarding: both kinds hand the caller back its thread, so both are leased for their lifetime, and
+/// the commit that follows comes back to the caller's context.
 /// </para>
 /// </summary>
 public sealed class OperationExecutionPolicyTests
@@ -199,10 +201,95 @@ public sealed class OperationExecutionPolicyTests
         ws.Dispose();
     }
 
+    [Fact]
+    public async Task An_operation_that_waits_keeps_its_dataset_alive_too()
+    {
+        // IsCpuBound decides whether the work goes to the pool. It does NOT decide whether the caller still holds
+        // its thread: an operation that awaits hands control back at its first await, so the dataset underneath
+        // it can be removed just as easily. The lease belongs to the operation's lifetime, not to its flavour.
+        var operation = new BlockingOperation("test.io", cpuBound: false, yields: true);
+        var (ws, launcher) = With(operation);
+        var source = ws.Datasets.OfType<ScanImageDataset>().Single();
+
+        var run = launcher.RunAsync("test.io", new Dictionary<string, object?>());
+        Assert.True(operation.Entered.Wait(TimeSpan.FromSeconds(5)));
+        Assert.False(run.IsCompleted);
+
+        ws.Remove(source.Id, RemovalPolicy.Cascade);
+
+        Assert.True(ws.IsLeased(source.Id));
+        _ = source.Data.Memory;
+
+        operation.Release();
+        await run;
+
+        Assert.False(ws.IsLeased(source.Id));
+        Assert.Throws<ObjectDisposedException>(() => source.Data.Memory);
+    }
+
+    [Fact]
+    public void The_workspace_is_committed_on_the_context_that_asked_for_the_run()
+    {
+        // The run leaves the caller's thread; the COMMIT must come back to it. Adding to the workspace moves the
+        // active context and raises both their events, and those are the shell's state — resuming on the pool is
+        // the cross-thread update this codebase has already been bitten by once.
+        var previous = SynchronizationContext.Current;
+        var context = new PumpedContext();
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            var operation = new BlockingOperation("test.cpu", holds: false);
+            var (ws, launcher) = With(operation);
+            int committedOn = 0;
+            ws.DatasetsChanged += (_, _) => committedOn = Environment.CurrentManagedThreadId;
+
+            var run = launcher.RunAsync("test.cpu", new Dictionary<string, object?>());
+
+            // Nothing finishes unless THIS thread pumps: that is what "came back to the caller's context" means.
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!run.IsCompleted && DateTime.UtcNow < deadline)
+            {
+                if (!context.PumpOnce())
+                {
+                    Thread.Sleep(1);
+                }
+            }
+
+            Assert.True(run.IsCompleted);
+            Assert.Equal(Environment.CurrentManagedThreadId, committedOn);
+            ws.Dispose();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    /// <summary>A context that runs nothing until the test thread pumps it, so "which thread" is answerable.</summary>
+    private sealed class PumpedContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<(SendOrPostCallback Work, object? State)> _queue = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => _queue.Enqueue((d, state));
+
+        public bool PumpOnce()
+        {
+            if (!_queue.TryDequeue(out var item))
+            {
+                return false;
+            }
+
+            item.Work(item.State);
+            return true;
+        }
+    }
+
     /// <summary>An operation that holds until released, so "did the caller come back first" is answerable.</summary>
-    private sealed class BlockingOperation(string id, bool cpuBound = true, bool holds = true) : IAnalysisOperation
+    private sealed class BlockingOperation(string id, bool cpuBound = true, bool holds = true, bool yields = false)
+        : IAnalysisOperation
     {
         private readonly ManualResetEventSlim _release = new(initialState: !holds);
+        private readonly TaskCompletionSource _yielded = new();
 
         public ManualResetEventSlim Entered { get; } = new(initialState: false);
 
@@ -228,11 +315,23 @@ public sealed class OperationExecutionPolicyTests
         {
             RanOnThread = Environment.CurrentManagedThreadId;
             Entered.Set();
+
+            // An I/O-shaped operation hands control back at its first await rather than blocking — which is
+            // exactly why it needs the same lease a computing one does.
+            if (yields)
+            {
+                return _yielded.Task.ContinueWith(_ => OperationResult.Derived(Image()), TaskScheduler.Default);
+            }
+
             // Bounded: a mutation that runs this on the caller's thread must fail the test, not hang it.
             _release.Wait(TimeSpan.FromSeconds(2), cancellationToken);
             return Task.FromResult(OperationResult.Derived(Image()));
         }
 
-        public void Release() => _release.Set();
+        public void Release()
+        {
+            _release.Set();
+            _yielded.TrySetResult();
+        }
     }
 }

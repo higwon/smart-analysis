@@ -42,20 +42,20 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
     private async Task<OperationResult> RunPreparedAsync(Prepared prepared, CancellationToken cancellationToken)
     {
         var operation = prepared.Operation!;
-        if (!operation.Descriptor.IsCpuBound)
-        {
-            // Still on the caller's thread, which cannot remove a dataset while it is here. Nothing to guard.
-            return await operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken)
-                .ConfigureAwait(false);
-        }
 
-        // The caller returns while this runs, so the datasets it reads can be removed underneath it. Leaving
-        // that to the cancellation token would not close it: a token asks a reader to stop, it does not wait for
+        // The lease covers BOTH paths. IsCpuBound decides only whether the work is pushed to the pool; it says
+        // nothing about whether the caller still holds its thread. An operation that awaits I/O hands control
+        // back at its first await, so the datasets it is reading can be removed underneath it just the same.
+        //
+        // A cancellation token does not close this either: a token asks a reader to stop, it does not wait for
         // one, and Workspace.Remove disposes before anything downstream hears the active context changed.
         using var lease = _workspace.Lease(Inputs(prepared.Input));
-        return await Task.Run(
-            () => operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken),
-            cancellationToken).ConfigureAwait(false);
+        return operation.Descriptor.IsCpuBound
+            ? await Task.Run(
+                () => operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken),
+                cancellationToken).ConfigureAwait(false)
+            : await operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken)
+                .ConfigureAwait(false);
     }
 
     private static IEnumerable<DatasetId> Inputs(OperationInput input)
@@ -140,7 +140,11 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         OperationResult result;
         try
         {
-            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(false);
+            // ConfigureAwait(TRUE), unlike everywhere else here: what follows adds to the workspace, moves the
+            // active context and raises both their events. Those are the shell's state, and a caller that has a
+            // context (the UI) must get them back on it — resuming on the pool is the cross-thread update this
+            // codebase has already been bitten by once.
+            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
