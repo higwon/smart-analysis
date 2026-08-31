@@ -44,6 +44,18 @@ public sealed class AfmRulerView : FrameworkElement
     {
         Edge = RulerEdge.Bottom;
         Foreground = Brushes.Gray;
+
+        // The theme's own axis colour, resolved once the control is in a tree that has the design system merged
+        // into it. Gray until then, and gray in a test host that has no resources — the doc comment above says
+        // "the theme's foreground colour", and it should not be the only place that is true.
+        Loaded += (_, _) =>
+        {
+            if (TryFindResource("SA.Brush.Chart.Axis") is Brush themed)
+            {
+                Foreground = themed;
+                InvalidateVisual();
+            }
+        };
     }
 
     public RulerEdge Edge { get; set; }

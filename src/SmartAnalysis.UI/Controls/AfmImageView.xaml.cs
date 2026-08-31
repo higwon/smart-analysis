@@ -551,8 +551,12 @@ public partial class AfmImageView : UserControl, IImageView
         // And the gutters follow the image rather than the control. A letterboxed image leaves margins inside the
         // viewport, and a ruler pinned to the control's own edge would float a few hundred pixels away from the
         // thing it is measuring — correct, and reading as decoration.
-        LeftRuler.Margin = new Thickness(xFrom, 0, -xFrom, 0);
-        BottomRuler.Margin = new Thickness(0, Math.Max(0, yTo - Viewport.ActualHeight), 0, 0);
+        //
+        // A transform rather than a margin, and the vertical shift is signed. The bottom ruler's row starts at the
+        // viewport's bottom edge, so an image that is letterboxed VERTICALLY sits above it and the shift needed is
+        // NEGATIVE. Clamping it at zero left that case exactly as broken as the horizontal one had been.
+        LeftRuler.RenderTransform = new TranslateTransform(xFrom, 0);
+        BottomRuler.RenderTransform = new TranslateTransform(0, yTo - Viewport.ActualHeight);
     }
 
     /// <summary>Fits the image to the viewport and centers it (also the double-click / toolbar Fit action).</summary>

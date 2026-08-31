@@ -1,4 +1,6 @@
+using System;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Controls;
 using SmartAnalysis.UI.Controls;
 using SmartAnalysis.Visualization.Colormaps;
@@ -35,20 +37,29 @@ public sealed class AfmImageViewRulerTests
             "nm");
     }
 
-    /// <summary>A laid-out view in a viewport WIDER than it is tall, so a square image is letterboxed.</summary>
-    private static T InLaidOutView<T>(Func<AfmImageView, T> read, bool rulers = true)
+    /// <summary>
+    /// A laid-out view of the given shape. A square image in a WIDE host is letterboxed left and right; in a TALL
+    /// host it is letterboxed top and bottom. Both have to be asked for, because a fix for one is not a fix for
+    /// the other — that is exactly how the vertical case survived the first round.
+    /// </summary>
+    private static T InLaidOutView<T>(
+        Func<AfmImageView, T> read, bool rulers = true, double width = 600, double height = 300)
         => WpfTestHost.Invoke(() =>
         {
             var view = new AfmImageView { ShowRulers = rulers };
-            var host = new Border { Width = 600, Height = 300, Child = view };
-            host.Measure(new Size(600, 300));
-            host.Arrange(new Rect(0, 0, 600, 300));
+            var host = new Border { Width = width, Height = height, Child = view };
+            host.Measure(new Size(width, height));
+            host.Arrange(new Rect(0, 0, width, height));
             host.UpdateLayout();
 
             view.Render(Input(64, 64));
             host.UpdateLayout();
             return read(view);
         });
+
+    /// <summary>How far a ruler was moved to meet the image, along the axis it runs across.</summary>
+    private static (double X, double Y) Shift(AfmRulerView ruler)
+        => ruler.RenderTransform is TranslateTransform t ? (t.X, t.Y) : (0, 0);
 
     private static AfmRulerView Ruler(AfmImageView view, string name)
         => (AfmRulerView)view.FindName(name)!;
@@ -121,13 +132,46 @@ public sealed class AfmImageViewRulerTests
     }
 
     [Fact]
-    public void The_vertical_ruler_follows_the_image_rather_than_the_control_edge()
+    public void The_vertical_ruler_follows_an_image_letterboxed_left_and_right()
     {
-        // A square image in a 600x300 viewport is letterboxed: it starts a long way in from the left. The ruler
-        // is shifted to meet it, so its margin is what says whether it did.
-        double shift = InLaidOutView(v => Ruler(v, "LeftRuler").Margin.Left);
+        // A square image in a 600x300 viewport starts a long way in from the left; the ruler moves right to meet
+        // it.
+        double shift = InLaidOutView(v => Shift(Ruler(v, "LeftRuler")).X, width: 600, height: 300);
 
         Assert.True(shift > 50, $"the vertical ruler sat {shift:0} px from the image it measures.");
+    }
+
+    [Fact]
+    public void The_horizontal_ruler_follows_an_image_letterboxed_top_and_bottom()
+    {
+        // The same thing turned ninety degrees, and the case the first fix missed. In a 300x600 viewport a square
+        // image ends WELL ABOVE the bottom edge, so the ruler has to move UP — a negative shift. Clamping it at
+        // zero left this exactly as broken as the horizontal case had been, and the only reason it looked fixed
+        // was that every test used a wide host.
+        double shift = InLaidOutView(v => Shift(Ruler(v, "BottomRuler")).Y, width: 300, height: 600);
+
+        Assert.True(shift < -50, $"the horizontal ruler sat {-shift:0} px below the image it measures.");
+    }
+
+    [Theory]
+    [InlineData(600, 300)]
+    [InlineData(300, 600)]
+    [InlineData(400, 400)]
+    public void A_ruler_only_ever_moves_towards_the_image(double width, double height)
+    {
+        // Whatever the shape, a fitted image sits INSIDE its viewport: never left of it, never below it. So the
+        // vertical ruler only ever moves right and the horizontal one only ever moves up. A shift the other way
+        // would put a ruler outside the picture it measures.
+        //
+        // There is no "no letterbox" case to test against — Fit leaves a margin on purpose — so this is the
+        // invariant that holds for every shape rather than one that only holds for a square.
+        var (x, y) = InLaidOutView(
+            v => (Shift(Ruler(v, "LeftRuler")).X, Shift(Ruler(v, "BottomRuler")).Y),
+            width: width,
+            height: height);
+
+        Assert.True(x >= 0, $"the vertical ruler moved {x:0} px away from the image.");
+        Assert.True(y <= 0, $"the horizontal ruler moved {y:0} px away from the image.");
     }
 
     [Fact]
