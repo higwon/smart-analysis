@@ -175,6 +175,31 @@ public sealed class AfmImageViewRulerTests
     }
 
     [Fact]
+    public void A_ruler_repaints_in_the_theme_the_user_switched_to()
+    {
+        // Switching Light to Dark swaps the whole palette dictionary — a NEW brush instance, not an edited one.
+        // Reading the resource once at load time and keeping the result leaves the ruler painting in the theme
+        // the user just left, on a background that has already changed.
+        var (before, after) = WpfTestHost.Invoke(() =>
+        {
+            var ruler = new AfmRulerView();
+            var host = new Border { Width = 200, Height = 40, Child = ruler };
+            host.Resources["SA.Brush.Chart.Axis"] = Brushes.Red;
+            host.Measure(new Size(200, 40));
+            host.Arrange(new Rect(0, 0, 200, 40));
+            host.UpdateLayout();
+
+            var first = ruler.Foreground;
+            host.Resources["SA.Brush.Chart.Axis"] = Brushes.Lime;   // the swap a theme change performs
+            host.UpdateLayout();
+            return (first, ruler.Foreground);
+        });
+
+        Assert.Equal(Brushes.Red, before);
+        Assert.Equal(Brushes.Lime, after);
+    }
+
+    [Fact]
     public void Rendering_without_rulers_still_works()
     {
         // The default path, which every other view in the product is on.
