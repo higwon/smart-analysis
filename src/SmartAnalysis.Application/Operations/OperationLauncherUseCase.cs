@@ -31,6 +31,42 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         _region = region ?? new RegionContext();
     }
 
+    /// <summary>
+    /// Runs a prepared operation, off the caller's thread when the operation says it computes.
+    /// <para>
+    /// The policy lives here rather than inside each operation because it is the <b>caller</b> that must stay
+    /// responsive; the arithmetic has no opinion about whose thread it is on. What the operation declares is
+    /// only what it is (<see cref="OperationDescriptor.IsCpuBound"/>), not where it should run.
+    /// </para>
+    /// </summary>
+    private async Task<OperationResult> RunPreparedAsync(Prepared prepared, CancellationToken cancellationToken)
+    {
+        var operation = prepared.Operation!;
+
+        // The lease covers BOTH paths. IsCpuBound decides only whether the work is pushed to the pool; it says
+        // nothing about whether the caller still holds its thread. An operation that awaits I/O hands control
+        // back at its first await, so the datasets it is reading can be removed underneath it just the same.
+        //
+        // A cancellation token does not close this either: a token asks a reader to stop, it does not wait for
+        // one, and Workspace.Remove disposes before anything downstream hears the active context changed.
+        using var lease = _workspace.Lease(Inputs(prepared.Input));
+        return operation.Descriptor.IsCpuBound
+            ? await Task.Run(
+                () => operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken),
+                cancellationToken).ConfigureAwait(false)
+            : await operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken)
+                .ConfigureAwait(false);
+    }
+
+    private static IEnumerable<DatasetId> Inputs(OperationInput input)
+    {
+        yield return input.Primary.Id;
+        foreach (var secondary in input.Secondary)
+        {
+            yield return secondary.Id;
+        }
+    }
+
     public IReadOnlyList<OperationLauncherItem> ApplicableToActive()
     {
         if (_workspace.Active.ActiveId is not { } id
@@ -104,7 +140,11 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         OperationResult result;
         try
         {
-            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            // ConfigureAwait(TRUE), unlike everywhere else here: what follows adds to the workspace, moves the
+            // active context and raises both their events. Those are the shell's state, and a caller that has a
+            // context (the UI) must get them back on it — resuming on the pool is the cross-thread update this
+            // codebase has already been bitten by once.
+            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -119,6 +159,16 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
 
         if (result.DerivedDataset is { } derived)
         {
+            // The run no longer holds the caller's thread, so the source can be removed while it is in flight.
+            // Committing then would leave a dataset whose provenance names a parent that is not there — lineage
+            // pointing at nothing, and a result nobody can now say what it was derived from.
+            if (!_workspace.TryGet(prepared.Input.Primary.Id, out _))
+            {
+                derived.Dispose();
+                return OperationRunResult.Failed(
+                    "The dataset this was running on was removed before it finished, so the result has nothing to belong to.");
+            }
+
             // Transform policy: the derived dataset is added and becomes active. It is NOT forced into a Before/After
             // comparison — comparing to the source is a live settings preview now, not a post-apply artifact split.
             // Ownership transfers to the workspace only on a successful Add; dispose on failure (W01).
@@ -161,7 +211,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         OperationResult result;
         try
         {
-            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -203,7 +253,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         OperationResult result;
         try
         {
-            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
