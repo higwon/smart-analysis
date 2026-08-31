@@ -422,6 +422,15 @@ public partial class MainWindow : Window
     private void ProvenanceList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => _viewModel.SelectStep(ProvenanceList.SelectedItem as HistoryRowViewModel);
 
+    // Rulers on or off, for the single stage and the spectroscopy surface alike — a force-volume map is measured
+    // at places on a sample too, and its picture says as little about its size as any other.
+    private void Rulers_Changed(object sender, RoutedEventArgs e)
+    {
+        bool on = RulersToggle.IsChecked == true;
+        SingleImage.ShowRulers = on;
+        SpectroscopySurface.ShowRulers = on;
+    }
+
     // Fit the active single-image viewer to the stage (toolbar Fit action).
     private void Fit_Click(object sender, RoutedEventArgs e) => SingleImage.Fit();
 

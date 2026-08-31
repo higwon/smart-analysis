@@ -32,6 +32,9 @@ namespace SmartAnalysis.UI.Controls;
 public partial class AfmImageView : UserControl, IImageView
 {
     private int _bmpW;
+    private AxisView? _axisX;
+    private AxisView? _axisY;
+    private bool _rulersVisible;
     private int _bmpH;
     private bool _needsFit;
     private readonly PressGesture _press = new();
@@ -110,6 +113,7 @@ public partial class AfmImageView : UserControl, IImageView
     {
         UpdateLineOverlay(); // the profile line tracks pan/zoom from the same call sites
         PositionPointMarkers(); // and so do the measurement-point markers
+        UpdateRulers();         // and so do the rulers: what they state is what is on screen, not what was loaded
         if (_regionPreview is not { } r || _bmpW <= 0 || _bmpH <= 0)
         {
             HideOverlay();
@@ -439,6 +443,7 @@ public partial class AfmImageView : UserControl, IImageView
         Img.Source = null;
         Palette.Clear();
         _bmpW = _bmpH = 0;
+        _axisX = _axisY = null;
         UpdateOverlay(); // hides the region overlay when there is no image
     }
 
@@ -463,6 +468,8 @@ public partial class AfmImageView : UserControl, IImageView
         Img.Source = bitmap;
         _bmpW = w;
         _bmpH = h;
+        _axisX = input.X;
+        _axisY = input.Y;
 
         Palette.Update(input.Colormap, input.DataRange, input.Range, input.ChannelUnit, input.HasUnmeasured);
 
@@ -474,6 +481,78 @@ public partial class AfmImageView : UserControl, IImageView
         {
             _needsFit = true;
         }
+    }
+
+    /// <summary>
+    /// Whether the image states its size, with rulers along the left and bottom edges (doc 24, amended in V12).
+    /// Off by default: the gutters take 30 px each, and a view embedded in a compare pane or an Inspector has
+    /// little enough room already.
+    /// </summary>
+    public bool ShowRulers
+    {
+        get => _rulersVisible;
+        set
+        {
+            if (_rulersVisible == value)
+            {
+                return;
+            }
+
+            _rulersVisible = value;
+            var visibility = value ? Visibility.Visible : Visibility.Collapsed;
+            LeftRuler.Visibility = visibility;
+            BottomRuler.Visibility = visibility;
+            RulerColumn.Width = new GridLength(value ? RulerGutter : 0);
+            RulerRow.Height = new GridLength(value ? RulerGutter : 0);
+            UpdateRulers();
+        }
+    }
+
+    /// <summary>Legacy's gutter, and about what two digits and a tick need.</summary>
+    private const double RulerGutter = 30.0;
+
+    // The rulers state the VISIBLE span, so they are refreshed from the same place the overlays are — every
+    // zoom, pan, fit and re-render. Handing them the whole image's extent would keep them describing the full
+    // scan while the viewer is zoomed into a corner.
+    private void UpdateRulers()
+    {
+        if (!_rulersVisible)
+        {
+            return;
+        }
+
+        if (_axisX is not { } x || _axisY is not { } y
+            || ImageViewportMath.VisibleSampleIndices(
+                Viewport.ActualWidth, Viewport.ActualHeight, ImgScale.ScaleX,
+                ImgTranslate.X, ImgTranslate.Y, _bmpW, _bmpH) is not { } visible)
+        {
+            BottomRuler.SetTicks(RulerTicks.None, 0, 0);
+            LeftRuler.SetTicks(RulerTicks.None, 0, 0);
+            return;
+        }
+
+        // Where the visible part of the image sits on screen. A fitted image is letterboxed, so this is NOT the
+        // whole viewport — a ruler drawn across the gutter would put its 0 mark out in the margin.
+        double scale = ImgScale.ScaleX;
+        double xFrom = ImgTranslate.X + ((visible.Left + 0.5) * scale);
+        double xTo = ImgTranslate.X + ((visible.Right + 0.5) * scale);
+        double yFrom = ImgTranslate.Y + ((visible.Top + 0.5) * scale);
+        double yTo = ImgTranslate.Y + ((visible.Bottom + 0.5) * scale);
+
+        BottomRuler.SetTicks(
+            AxisRuler.For(x.At(visible.Left), x.At(visible.Right), x.Unit, xTo - xFrom),
+            xFrom,
+            xTo - xFrom);
+        LeftRuler.SetTicks(
+            AxisRuler.For(y.At(visible.Top), y.At(visible.Bottom), y.Unit, yTo - yFrom),
+            yFrom,
+            yTo - yFrom);
+
+        // And the gutters follow the image rather than the control. A letterboxed image leaves margins inside the
+        // viewport, and a ruler pinned to the control's own edge would float a few hundred pixels away from the
+        // thing it is measuring — correct, and reading as decoration.
+        LeftRuler.Margin = new Thickness(xFrom, 0, -xFrom, 0);
+        BottomRuler.Margin = new Thickness(0, Math.Max(0, yTo - Viewport.ActualHeight), 0, 0);
     }
 
     /// <summary>Fits the image to the viewport and centers it (also the double-click / toolbar Fit action).</summary>
