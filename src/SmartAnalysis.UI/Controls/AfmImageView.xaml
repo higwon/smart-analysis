@@ -5,12 +5,23 @@
              Background="{DynamicResource SA.Brush.Chart.Background}">
     <Grid>
         <Grid.ColumnDefinitions>
+            <!-- The vertical ruler's gutter. Collapsed to nothing when rulers are off. -->
+            <ColumnDefinition x:Name="RulerColumn" Width="0"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition x:Name="RulerRow" Height="0"/>
+        </Grid.RowDefinitions>
+
+        <!-- Rulers live OUTSIDE the image, as legacy draws them: nothing is painted over pixel data, so nothing
+             needs a halo to stay legible against an arbitrary colormap. -->
+        <ctl:AfmRulerView x:Name="LeftRuler" Grid.Column="0" Grid.Row="0" Edge="Left" Visibility="Collapsed"/>
+        <ctl:AfmRulerView x:Name="BottomRuler" Grid.Column="1" Grid.Row="1" Edge="Bottom" Visibility="Collapsed"/>
 
         <!-- Image viewport (zoom/pan) -->
-        <Border x:Name="Viewport" Grid.Column="0" ClipToBounds="True" Background="Transparent"
+        <Border x:Name="Viewport" Grid.Column="1" Grid.Row="0" ClipToBounds="True" Background="Transparent"
                 MouseWheel="Viewport_MouseWheel"
                 MouseLeftButtonDown="Viewport_MouseLeftButtonDown"
                 MouseLeftButtonUp="Viewport_MouseLeftButtonUp"
@@ -56,7 +67,7 @@
         </Border>
 
         <!-- Interactive colormap legend / palette bar (draggable min/max handles set the value window) -->
-        <ctl:PaletteBar x:Name="Palette" Grid.Column="1" Margin="{DynamicResource SA.Gap.3}"
+        <ctl:PaletteBar x:Name="Palette" Grid.Column="2" Grid.Row="0" Margin="{DynamicResource SA.Gap.3}"
                         VerticalAlignment="Stretch"/>
     </Grid>
 </UserControl>

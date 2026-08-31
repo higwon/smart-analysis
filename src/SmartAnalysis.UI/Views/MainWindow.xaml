@@ -247,6 +247,10 @@
                                         <TextBlock Text="Fit" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
+                                <CheckBox x:Name="RulersToggle" Style="{StaticResource SA.CheckBox}" Content="Rulers"
+                                          VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
+                                          Checked="Rulers_Changed" Unchecked="Rulers_Changed"
+                                          Visibility="{Binding Is3D, Converter={StaticResource NotBool2Vis}}"/>
                                 <CheckBox Style="{StaticResource SA.CheckBox}" Content="3D" VerticalAlignment="Center"
                                           Margin="{DynamicResource SA.Gap.Left2}" IsChecked="{Binding Is3D}"
                                           Visibility="{Binding CanToggle3D, Converter={StaticResource Bool2Vis}}"
