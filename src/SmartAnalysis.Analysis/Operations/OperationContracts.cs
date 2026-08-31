@@ -152,7 +152,8 @@ public sealed record OperationDescriptor
         bool isDeterministic = true,
         IReadOnlyList<string>? tags = null,
         bool usesRegion = false,
-        DataKind? derivedKind = null)
+        DataKind? derivedKind = null,
+        bool isCpuBound = true)
     {
         Id = AnalysisGuard.Text(id, nameof(id));
         Version = AnalysisGuard.NonNegative(version, nameof(version));
@@ -162,6 +163,7 @@ public sealed record OperationDescriptor
         Output = AnalysisGuard.DefinedEnum(output, nameof(output));
         IsDeterministic = isDeterministic;
         UsesRegion = usesRegion;
+        IsCpuBound = isCpuBound;
 
         // The derived kind is only meaningful for a dataset-deriving op — reject a kind on a measurement so the
         // metadata can't lie about what a Measure produces.
@@ -190,6 +192,23 @@ public sealed record OperationDescriptor
         AcceptedInputs = Array.AsReadOnly(acceptedInputs.Distinct().ToArray());
         Tags = tags is null ? [] : Array.AsReadOnly(tags.Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
     }
+
+    /// <summary>
+    /// Whether <c>RunAsync</c> <b>computes</b> rather than waiting on something else.
+    /// <para>
+    /// Every operation here computes straight through and hands back an already-completed task, so awaiting one
+    /// on the thread that asked for it holds that thread for the whole computation. On a UI thread that means
+    /// nothing repaints and nothing responds, and it gets linearly worse with the data: a 64x64 force-volume map
+    /// is 4096 curves. So the Application layer runs a CPU-bound operation off the caller's thread — and it is
+    /// declared HERE because only the operation knows which it is, while only the caller knows whether it can
+    /// afford to wait.
+    /// </para>
+    /// <para>
+    /// An operation that genuinely awaits I/O sets this <c>false</c>: handing it to the thread pool would occupy
+    /// a thread to do nothing, which is the opposite of the point.
+    /// </para>
+    /// </summary>
+    public bool IsCpuBound { get; }
 
     public string Id { get; }
 

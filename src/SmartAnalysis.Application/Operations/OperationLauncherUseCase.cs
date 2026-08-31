@@ -31,6 +31,24 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         _region = region ?? new RegionContext();
     }
 
+    /// <summary>
+    /// Runs a prepared operation, off the caller's thread when the operation says it computes.
+    /// <para>
+    /// The policy lives here rather than inside each operation because it is the <b>caller</b> that must stay
+    /// responsive; the arithmetic has no opinion about whose thread it is on. What the operation declares is
+    /// only what it is (<see cref="OperationDescriptor.IsCpuBound"/>), not where it should run.
+    /// </para>
+    /// </summary>
+    private static Task<OperationResult> RunPreparedAsync(Prepared prepared, CancellationToken cancellationToken)
+    {
+        var operation = prepared.Operation!;
+        return operation.Descriptor.IsCpuBound
+            ? Task.Run(
+                () => operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken),
+                cancellationToken)
+            : operation.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken);
+    }
+
     public IReadOnlyList<OperationLauncherItem> ApplicableToActive()
     {
         if (_workspace.Active.ActiveId is not { } id
@@ -104,7 +122,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         OperationResult result;
         try
         {
-            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -161,7 +179,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         OperationResult result;
         try
         {
-            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -203,7 +221,7 @@ public sealed class OperationLauncherUseCase : IOperationLauncher
         OperationResult result;
         try
         {
-            result = await prepared.Operation!.RunAsync(prepared.Input, prepared.Parameters, progress: null, cancellationToken).ConfigureAwait(false);
+            result = await RunPreparedAsync(prepared, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
