@@ -1,0 +1,4 @@
+# TIFF fixtures are binary. Never let text/eol conversion touch them: a mangled fixture fails as a
+# reader bug, a long way from the line that broke it.
+*.tiff binary
+*.tif binary
