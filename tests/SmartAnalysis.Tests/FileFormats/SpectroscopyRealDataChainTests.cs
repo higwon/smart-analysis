@@ -63,7 +63,14 @@ public sealed class SpectroscopyRealDataChainTests(ITestOutputHelper output)
         return Directory.Exists(def) ? def : null;
     }
 
-    private static async Task<List<RealCurve>> CurvesAsync()
+    // Read ONCE for the whole class. Every TIFF under the samples root is opened to find the force curves among
+    // them — on this machine 142 files for 5 curves — and doing that per test spends most of the run re-reading
+    // the same disk. The curves are copied out of their datasets anyway, so there is nothing to share but arrays.
+    private static readonly Lazy<Task<List<RealCurve>>> Corpus = new(ReadCurvesAsync);
+
+    private static Task<List<RealCurve>> CurvesAsync() => Corpus.Value;
+
+    private static async Task<List<RealCurve>> ReadCurvesAsync()
     {
         var curves = new List<RealCurve>();
         if (SamplesRoot() is not { } root)
@@ -74,7 +81,18 @@ public sealed class SpectroscopyRealDataChainTests(ITestOutputHelper output)
         var reader = new PsiaTiffReader(StandardUnits.CreateRegistry());
         foreach (var path in Directory.EnumerateFiles(root, "*.tif*", SearchOption.AllDirectories).OrderBy(p => p))
         {
-            var result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+            FileReadResult result;
+            try
+            {
+                result = await reader.ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
+            }
+            catch
+            {
+                // A sample tree is whatever happens to be on the machine. One file this reader cannot open is
+                // not a reason to report no corpus at all.
+                continue;
+            }
+
             if (result.Dataset is ForceCurveDataset curve)
             {
                 curves.Add(new RealCurve(
