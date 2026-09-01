@@ -20,7 +20,7 @@ public enum RulerEdge
 /// <para>
 /// Drawn <b>outside</b> the image, as legacy does, which is why nothing here needs a halo or an outline: a bar
 /// sitting over pixel data would, because the colormap can be any colour under it. Out here the control paints on
-/// the window's own background and the theme's foreground colour is legible by construction.
+/// the window's own background in the theme's own axis colour, which is legible there by construction.
 /// </para>
 /// <para>
 /// It knows nothing about scans, zoom or units — it is handed <see cref="RulerTicks"/> and draws them. Where the
@@ -40,27 +40,35 @@ public sealed class AfmRulerView : FrameworkElement
     private double _offset;
     private double _length;
 
+    /// <summary>
+    /// The colour of the line, the ticks and the numbers.
+    /// <para>
+    /// A dependency property, and set by <b>reference</b> to the theme's axis brush rather than copied from it.
+    /// Switching Light to Dark swaps the whole palette dictionary — a new <see cref="Brush"/> instance, not an
+    /// edited one — so anything that read the old instance once keeps painting in the theme the user just left.
+    /// </para>
+    /// </summary>
+    public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
+        nameof(Foreground),
+        typeof(Brush),
+        typeof(AfmRulerView),
+        new FrameworkPropertyMetadata(Brushes.Gray, FrameworkPropertyMetadataOptions.AffectsRender));
+
     public AfmRulerView()
     {
         Edge = RulerEdge.Bottom;
-        Foreground = Brushes.Gray;
 
-        // The theme's own axis colour, resolved once the control is in a tree that has the design system merged
-        // into it. Gray until then, and gray in a test host that has no resources — the doc comment above says
-        // "the theme's foreground colour", and it should not be the only place that is true.
-        Loaded += (_, _) =>
-        {
-            if (TryFindResource("SA.Brush.Chart.Axis") is Brush themed)
-            {
-                Foreground = themed;
-                InvalidateVisual();
-            }
-        };
+        // Gray stays the fallback for a host with no design system merged in, which is what the test host is.
+        SetResourceReference(ForegroundProperty, "SA.Brush.Chart.Axis");
     }
 
     public RulerEdge Edge { get; set; }
 
-    public Brush Foreground { get; set; }
+    public Brush Foreground
+    {
+        get => (Brush)GetValue(ForegroundProperty);
+        set => SetValue(ForegroundProperty, value);
+    }
 
     /// <summary>
     /// Replaces the marks and redraws. Passing <see cref="RulerTicks.None"/> leaves a blank gutter.
