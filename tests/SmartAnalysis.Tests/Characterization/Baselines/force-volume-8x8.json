@@ -3,9 +3,9 @@
   "Task": "T01",
   "LegacyValidated": false,
   "Means": "The output of the approved implementation named below, frozen to catch unintended numerical drift. NOT checked against the legacy engine: this baseline cannot say whether these numbers match legacy, only whether they have changed since the commit recorded here.",
-  "GeneratedAtUtc": "2026-09-01T04:33:11.6397800\u002B00:00",
+  "GeneratedAtUtc": "2026-09-01T04:46:19.5766580\u002B00:00",
   "Implementation": {
-    "Commit": "93505e17df5dbd0aef843323ecddad97c9d6af43",
+    "Commit": "5cb02c5851dd2768bfed724e24ea19480c926c2b",
     "Branch": "feature/T01-characterization-baseline",
     "Dirty": false
   },
@@ -32,7 +32,7 @@
         "baseline": 20
       },
       "Unit": "nN",
-      "MaxAbs": 92.37736511230469,
+      "Range": 27.252639770507812,
       "Pixels": [
         87.75411987304688,
         89.19935607910156,
@@ -109,7 +109,7 @@
         "baseline": 20
       },
       "Unit": "nN",
-      "MaxAbs": 36.854766845703125,
+      "Range": 20.83025360107422,
       "Pixels": [
         29.917221069335938,
         30.464542388916016,
@@ -186,7 +186,7 @@
         "baseline": 20
       },
       "Unit": "nN/um",
-      "MaxAbs": 17747.927734375,
+      "Range": 14801.212890625,
       "Pixels": [
         16017.16796875,
         16835.52734375,
@@ -263,7 +263,7 @@
         "baseline": 20
       },
       "Unit": "um",
-      "MaxAbs": 0.011050394736230373,
+      "Range": 0.008599740220233798,
       "Pixels": [
         0.0027393768541514874,
         0.00264914077706635,

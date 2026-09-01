@@ -18,9 +18,14 @@ adds the second axis.
 
 Provenance enough to reproduce or discard it: the fixture's name and SHA-256, the implementation
 commit and whether `src/` was clean when it ran, the operation id and version, the parameter set and
-unit per case, and the generation time. A case also records `MaxAbs` — a pixel may drift by
-`RelativeTolerance` of the map's own range, not of the pixel, so a near-zero pixel in a map with a
-wide range is not held to an impossible standard.
+unit per case, and the generation time. A case also records `Range` — the span between its lowest
+and highest measured pixel. A pixel may drift by `RelativeTolerance` of that span, not of the pixel
+itself, so a near-zero pixel in a wide-ranging map is not held to an impossible standard. The span
+is deliberately not the largest absolute value: a map sitting between 65 and 92 varies by 27, and
+scaling by 92 would allow more than three times the drift the policy states.
+
+`RelativeTolerance` is recorded and asserted against the constant the replay actually applies, so
+the two cannot drift apart.
 
 ## Regenerating
 

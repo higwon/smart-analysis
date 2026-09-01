@@ -75,6 +75,10 @@ public sealed class ForceVolumeCharacterizationTests(ITestOutputHelper output)
         Assert.Equal(descriptor.Id, operation.GetProperty("Id").GetString());
         Assert.Equal(descriptor.Version, operation.GetProperty("Version").GetInt32());
 
+        // The replay applies the constant, so a baseline recording a different one is documenting a policy that
+        // is not in force — loosening the constant alone would leave the file still claiming the tight number.
+        Assert.Equal(RelativeTolerance, root.GetProperty("RelativeTolerance").GetDouble());
+
         Assert.True(
             DateTimeOffset.TryParse(
                 root.GetProperty("GeneratedAtUtc").GetString(),
@@ -118,7 +122,7 @@ public sealed class ForceVolumeCharacterizationTests(ITestOutputHelper output)
             var recorded = Case(root, id);
             var (pixels, _) = await RunAsync(map, measure, phase);
             var expected = Pixels(recorded);
-            double range = recorded.GetProperty("MaxAbs").GetDouble();
+            double range = recorded.GetProperty("Range").GetDouble();
             double allowed = range * RelativeTolerance;
 
             Assert.Equal(expected.Length, pixels.Length);
@@ -164,12 +168,14 @@ public sealed class ForceVolumeCharacterizationTests(ITestOutputHelper output)
         {
             var (pixels, unit) = await RunAsync(map, measure, phase);
             var values = new JsonArray();
-            double maxAbs = 0.0;
+            double low = double.PositiveInfinity;
+            double high = double.NegativeInfinity;
             foreach (float pixel in pixels)
             {
                 if (float.IsFinite(pixel))
                 {
-                    maxAbs = Math.Max(maxAbs, Math.Abs(pixel));
+                    low = Math.Min(low, pixel);
+                    high = Math.Max(high, pixel);
                     values.Add(JsonValue.Create((double)pixel));
                 }
                 else
@@ -177,6 +183,10 @@ public sealed class ForceVolumeCharacterizationTests(ITestOutputHelper output)
                     values.Add(JsonValue.Create("NaN"));
                 }
             }
+
+            // The span the signal actually covers, not its distance from zero: a map sitting at 65-92 varies by
+            // 27, and scaling the tolerance by 92 would allow three times the drift the policy says it does.
+            double range = double.IsFinite(low) ? high - low : 0.0;
 
             cases.Add(new JsonObject
             {
@@ -189,7 +199,7 @@ public sealed class ForceVolumeCharacterizationTests(ITestOutputHelper output)
                     ["baseline"] = ForceDistanceMeasures.DefaultBaselinePercent,
                 },
                 ["Unit"] = unit,
-                ["MaxAbs"] = maxAbs,
+                ["Range"] = range,
                 ["Pixels"] = values,
             });
         }
