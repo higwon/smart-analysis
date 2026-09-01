@@ -28,9 +28,11 @@ namespace SmartAnalysis.Tests.FileFormats;
 /// adhesion is larger than the peak push, which no fixture here produces.
 /// </para>
 /// <para>
-/// The sample tree holds <b>no force-volume map</b> — only single curves. So the map these tests drive the volume
-/// image through is a grid of real curves: the shapes are real acquisitions, only their arrangement is made up.
-/// That is enough for what the picture is: one measure of one curve per pixel.
+/// These are the <b>single-curve</b> properties: the measures, the threshold window and the baseline heuristic,
+/// which are about the shape of a curve rather than about a map. The map this file builds is a grid of real
+/// curves — real shapes on an arrangement made up here — which is enough for what a volume pixel is (one measure
+/// of one curve) and deliberately NOT enough for anything about layout. A real force-volume map, with the reader,
+/// the geometry and the acquisition order that come with it, is covered in <see cref="RealForceVolumeMapTests"/>.
 /// </para>
 /// <para>
 /// What can be asserted on data whose right answers are unknown is limited to properties that must hold for any
