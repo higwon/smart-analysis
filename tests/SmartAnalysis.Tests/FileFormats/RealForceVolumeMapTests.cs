@@ -24,44 +24,22 @@ namespace SmartAnalysis.Tests.FileFormats;
 /// a made-up grid has no acquisition order to disagree with.
 /// </para>
 /// <para>
-/// The file is located rather than assumed: the committed fixture first, then the machine's own copy. So the
-/// tests are the same whether or not the binary is in the repository, and adding it later changes nothing here.
+/// The fixture is <b>required</b>, not looked for. A test that skips when its fixture is missing is a test that
+/// goes green when someone drops the fixture, which is the one failure it exists to prevent. Exploring some other
+/// map on a developer's machine is a different job and lives in
+/// <see cref="ExploratoryForceVolumeMapTests"/>.
 /// </para>
 /// </summary>
 public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
 {
-    private const string MapFile = "Spectroscopy.tiff";
+    internal const string MapFile = "Spectroscopy.tiff";
 
-    /// <summary>
-    /// Where the map might be, in order of preference: the fixture, then the machine that has the original.
-    /// </summary>
-    private static string? MapPath()
+    private static string FixturePath() => Path.Combine(AppContext.BaseDirectory, "Fixtures", "Tiff", MapFile);
+
+    private static async Task<ForceVolumeDataset> ReadMapAsync()
     {
-        var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Tiff", MapFile);
-        if (File.Exists(fixture))
-        {
-            return fixture;
-        }
-
-        var env = Environment.GetEnvironmentVariable("SMARTANALYSIS_FORCE_VOLUME_MAP");
-        if (!string.IsNullOrWhiteSpace(env) && File.Exists(env))
-        {
-            return env;
-        }
-
-        string demo = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            "SmartAnalysis", "설명회", MapFile);
-
-        return File.Exists(demo) ? demo : null;
-    }
-
-    private static async Task<ForceVolumeDataset?> ReadMapAsync()
-    {
-        if (MapPath() is not { } path)
-        {
-            return null;
-        }
+        string path = FixturePath();
+        Assert.True(File.Exists(path), $"the required fixture is missing: {path}");
 
         var result = await new PsiaTiffReader(StandardUnits.CreateRegistry())
             .ReadAsync(path, ScanReadOptions.Default, CancellationToken.None);
@@ -72,18 +50,7 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
         }
 
         (result.Dataset as IDisposable)?.Dispose();
-        return null;
-    }
-
-    private bool Skip(ForceVolumeDataset? map, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
-    {
-        if (map is not null)
-        {
-            return false;
-        }
-
-        output.WriteLine($"{test}: no real force-volume map available — skipping.");
-        return true;
+        throw new Xunit.Sdk.XunitException($"{MapFile} no longer reads as a force-volume map with a grid.");
     }
 
     [Fact]
@@ -92,15 +59,11 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
         // The floor for everything below: without a grid there is no picture, and without recorded positions
         // there is nothing for the layout to disagree with.
         using var map = await ReadMapAsync();
-        if (Skip(map))
-        {
-            return;
-        }
 
-        Assert.NotNull(map!.Geometry);
+        Assert.NotNull(map.Geometry);
         Assert.NotNull(map.PointLayout);
-        Assert.Equal(map.PointCount, map.Geometry!.Columns * map.Geometry.Rows);
-        Assert.Equal(map.PointCount, map.PointLayout!.Count);
+        Assert.Equal(map.PointCount, map.Geometry.Columns * map.Geometry.Rows);
+        Assert.Equal(map.PointCount, map.PointLayout.Count);
 
         output.WriteLine(
             $"{map.Geometry.Columns}x{map.Geometry.Rows} grid, {map.PointCount} points, "
@@ -114,16 +77,12 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
         // UX12's policy against the file it was written for: the positions must lay one curve on each cell, or
         // the volume image is refused rather than drawn in acquisition order.
         using var map = await ReadMapAsync();
-        if (Skip(map))
-        {
-            return;
-        }
 
         Assert.True(
-            MapGridIndex.TryCreate(map!.Geometry!, map.PointLayout, map.PointCount, out var cells, out var problem),
+            MapGridIndex.TryCreate(map.Geometry!, map.PointLayout, map.PointCount, out var cells, out var problem),
             $"the real map's own positions were refused: {problem}");
 
-        Assert.Equal(MapGridSource.RecordedPositions, cells!.Source);
+        Assert.Equal(MapGridSource.RecordedPositions, cells.Source);
     }
 
     [Fact]
@@ -132,16 +91,12 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
         // The defect itself, on the acquisition it was found on. This asserts the file IS boustrophedon — if a
         // future fixture is not, the test says so instead of quietly passing on a map that cannot show the bug.
         using var map = await ReadMapAsync();
-        if (Skip(map))
-        {
-            return;
-        }
 
-        MapGridIndex.TryCreate(map!.Geometry!, map.PointLayout, map.PointCount, out var cells, out _);
+        MapGridIndex.TryCreate(map.Geometry!, map.PointLayout, map.PointCount, out var cells, out _);
         int columns = map.Geometry!.Columns;
 
         var moved = Enumerable.Range(0, map.PointCount)
-            .Where(p => cells!.CellOf(p) != (p % columns, p / columns))
+            .Where(p => cells.CellOf(p) != (p % columns, p / columns))
             .ToArray();
 
         output.WriteLine($"{moved.Length} of {map.PointCount} points are not where their index would put them");
@@ -150,7 +105,7 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
             "this map is plain row-major, so it cannot demonstrate the ordering defect it was chosen for.");
 
         // And every point still lands somewhere on the grid exactly once.
-        var cellsUsed = Enumerable.Range(0, map.PointCount).Select(p => cells!.CellOf(p)).ToHashSet();
+        var cellsUsed = Enumerable.Range(0, map.PointCount).Select(p => cells.CellOf(p)).ToHashSet();
         Assert.Equal(map.PointCount, cellsUsed.Count);
     }
 
@@ -160,10 +115,6 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
         // The whole chain in one assertion: reader -> geometry -> ordering -> volume image. The pixel at a cell
         // must be what the curve RECORDED at that cell measures, not what the curve with that index measures.
         using var map = await ReadMapAsync();
-        if (Skip(map))
-        {
-            return;
-        }
 
         var result = await new VolumeImageOperation(new FixedEnvironment()).RunAsync(
             new OperationInput(map!),
@@ -177,12 +128,12 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
 
         using var image = (ScanImageDataset)result.DerivedDataset!;
         var pixels = image.Data.Memory.Span;
-        MapGridIndex.TryCreate(map!.Geometry!, map.PointLayout, map.PointCount, out var cells, out _);
+        MapGridIndex.TryCreate(map.Geometry!, map.PointLayout, map.PointCount, out var cells, out _);
 
         int checkedPoints = 0;
         for (int p = 0; p < map.PointCount; p++)
         {
-            var (column, row) = cells!.CellOf(p);
+            var (column, row) = cells.CellOf(p);
             float pixel = pixels[(row * map.Geometry!.Columns) + column];
             if (!float.IsFinite(pixel))
             {
@@ -202,10 +153,6 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
     public async Task A_real_map_yields_a_picture_with_something_measured_in_it()
     {
         using var map = await ReadMapAsync();
-        if (Skip(map))
-        {
-            return;
-        }
 
         foreach (var measure in Enum.GetValues<VolumeMeasure>())
         {
