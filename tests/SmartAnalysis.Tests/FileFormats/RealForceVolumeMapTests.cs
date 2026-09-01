@@ -130,28 +130,31 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
         var pixels = image.Data.Memory.Span;
         MapGridIndex.TryCreate(map.Geometry!, map.PointLayout, map.PointCount, out var cells, out _);
 
+        // EVERY pixel, not "at least one". This is a frozen fixture whose 64 points all measure today, so that
+        // is the contract to hold it to — skipping the holes would let a regression turn 63 of them to NaN and
+        // still pass on the one that survived. A test named "every pixel" that checks one is worse than no test.
         int checkedPoints = 0;
         for (int p = 0; p < map.PointCount; p++)
         {
             var (column, row) = cells.CellOf(p);
             float pixel = pixels[(row * map.Geometry!.Columns) + column];
-            if (!float.IsFinite(pixel))
-            {
-                continue;
-            }
 
-            double expected = Measured(map, p);
-            Assert.Equal(expected, pixel, 3);
+            Assert.True(
+                float.IsFinite(pixel),
+                $"point {p + 1} came out as a hole at column {column + 1}, row {row + 1}.");
+            Assert.Equal(Measured(map, p), pixel, 3);
             checkedPoints++;
         }
 
         output.WriteLine($"{checkedPoints} of {map.PointCount} pixels cross-checked against their own curve");
-        Assert.True(checkedPoints > 0, "no pixel of a real map could be cross-checked against its curve.");
+        Assert.Equal(map.PointCount, checkedPoints);
     }
 
     [Fact]
-    public async Task A_real_map_yields_a_picture_with_something_measured_in_it()
+    public async Task Every_measure_of_a_real_map_is_measured_at_every_one_of_its_points()
     {
+        // Again the frozen-fixture contract rather than the unknown-corpus one: all four measures give a value
+        // at all 64 points today, so a single hole appearing anywhere is a regression worth failing on.
         using var map = await ReadMapAsync();
 
         foreach (var measure in Enum.GetValues<VolumeMeasure>())
@@ -178,7 +181,7 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
             }
 
             output.WriteLine($"{measure}: {finite}/{pixels.Length} measured");
-            Assert.True(finite > 0, $"{measure}: every point of a real map came out as a hole.");
+            Assert.Equal(map.PointCount, finite);
         }
     }
 
