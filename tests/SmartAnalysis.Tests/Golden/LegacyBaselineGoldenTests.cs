@@ -11,6 +11,12 @@ namespace SmartAnalysis.Tests.Golden;
 /// <b>without</b> the legacy engine, so it runs in CI. The golden itself is produced offline by
 /// <c>tools/legacy-baseline</c> against the real legacy primitives; these tests ensure it stays
 /// well-formed and internally consistent, and are the seam the parity tests (T02/A01/A02) build on.
+/// <para>
+/// Everything here is referenced to the <b>legacy engine</b>. Baselines referenced to our own current output
+/// are a different thing and live apart, in
+/// <see cref="SmartAnalysis.Tests.Characterization.ForceVolumeCharacterizationTests"/> — they detect drift and
+/// prove nothing about parity.
+/// </para>
 /// </summary>
 public sealed class LegacyBaselineGoldenTests
 {
