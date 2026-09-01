@@ -32,3 +32,6 @@ project.fragment.lock.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Legacy engine exports kept for reference, too large to commit
+tools/legacy-baseline/legacy-export/
