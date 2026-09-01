@@ -86,9 +86,14 @@ state, both themes, rendered from the real tokens). This doc is its written spec
 > `Image.RoiBorder/RoiFill` tokens exist in doc 23 for V06 but are **not used** on any MVP screen.
 
 - **Data area first.** A thin `h=40` toolbar with **view actions only: Zoom-fit · Cursor · Colormap
-  picker · Scalebar toggle** (no ROI); `Surface.Default` toolbar, `Border.Subtle` divider.
-- **2D AFM image** fills the region, painted with the **domain colormap** (theme-independent). A
-  `Chart.Axis` scale bar + `Micro` unit label sit in a corner with a contrasting halo.
+  picker · Ruler toggle** (no ROI); `Surface.Default` toolbar, `Border.Subtle` divider.
+- **2D AFM image** fills the region, painted with the **domain colormap** (theme-independent).
+  Its size is stated by **rulers along the left and bottom edges** — tick marks, labels on round numbers, and
+  the unit named once as a caption.
+  > Amended (V12). This said "a `Chart.Axis` scale bar + `Micro` unit label sit in a corner with a contrasting
+  > halo". Legacy has no scale bar at all: it draws rulers OUTSIDE the image edges (`FW.UI.Controls/Ruler`),
+  > and the halo the old wording called for exists only because a bar sits over pixel data — a ruler outside the
+  > image needs none. Both the request and the reference pointed at rulers, so the doc follows them.
 - **Cursor / crosshair** — `Image.Crosshair` with a 1px opposite-tone halo (stays visible over any
   colormap pixel). (A read-only value cursor is fine in V02; region selection is V06.)
 - **Colormap legend** — a vertical ramp + min/max in `Numeric` mono, right edge; **unchanged by theme**.

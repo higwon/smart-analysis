@@ -528,7 +528,7 @@ That workflow is right and this product should have it. Three steps, in order:
 
 | | |
 |---|---|
-| **1. The curve stays** | The selected point's curve is visible in the Inspector in **both** views. It is what the parameters act on; it cannot be the thing that disappears when you go to set them. |
+| **1. The curve stays** | The selected point's curve is visible in **both** views. It is what the parameters act on; it cannot be the thing that disappears when you go to set them. It lives **under the picture, across the Stage** — the first attempt put it in the Inspector rail, where it had 271px of width to say everything in, and a force curve read at that width says nothing. Height did not rescue it: a taller sliver is still a sliver. |
 | **2. The parameters are drawn on it** | The threshold appears as the force level it means and the window it selects. A point that yields nothing shows **no window** — which is the explanation for its hole. |
 | **3. The parameters are dragged on it** | As legacy does. Deferred: the value of 1 and 2 does not depend on it, and a control you can drag is worth less than a control whose meaning you can see. |
 

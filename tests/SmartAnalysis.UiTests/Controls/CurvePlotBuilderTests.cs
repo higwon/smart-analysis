@@ -21,7 +21,11 @@ public sealed class CurvePlotBuilderTests
         var series = Enumerable.Range(0, seriesCount)
             .Select(i => new XySeries($"s{i}", x, new double[] { 0, i + 1, i, i + 2 }))
             .ToArray();
-        return new CurveRenderInput(series, new AxisView("Position", "nm", 0, 3, 4), new AxisView("Height", "nm", 0, 5, 4), markers);
+        return new CurveRenderInput(
+            series,
+            new AxisView("Position", "nm", 0, 3, 4),
+            new AxisView("Height", "nm", 0, 5, 4),
+            markers?.Select(m => new CurveMark(m, "mark", CurveMarkKind.Setting)).ToArray());
     }
 
     [Theory]
@@ -45,6 +49,49 @@ public sealed class CurvePlotBuilderTests
 
         Assert.Equal("Position (nm)", plot.Axes.Bottom.Label.Text);
         Assert.Equal("Height (nm)", plot.Axes.Left.Label.Text);
+    }
+
+    [Fact]
+    public void Each_mark_is_drawn_with_its_own_name()
+    {
+        // Four unlabelled dashes is four lines a viewer cannot tell apart. The name has to be ON the plot.
+        var plot = new ScottPlot.Plot();
+        var input = new CurveRenderInput(
+            [new XySeries("s", new double[] { 0, 1, 2, 3 }, new double[] { 0, 1, 2, 3 })],
+            new AxisView("Position", "nm", 0, 3, 4),
+            new AxisView("Height", "nm", 0, 5, 4),
+            [new CurveMark(1.0, "peak", CurveMarkKind.Feature)],
+            [new CurveMark(2.0, "baseline", CurveMarkKind.Reference)]);
+
+        CurvePlotBuilder.Configure(plot, input, Theme());
+
+        var texts = plot.GetPlottables<ScottPlot.Plottables.AxisLine>().Select(l => l.Text).ToArray();
+        Assert.Equal(["peak", "baseline"], texts);
+    }
+
+    [Fact]
+    public void The_three_kinds_of_mark_are_drawn_three_ways()
+    {
+        // The pattern is what survives a label clipped at the plot edge, so the kinds must not collapse to one.
+        var plot = new ScottPlot.Plot();
+        var input = new CurveRenderInput(
+            [new XySeries("s", new double[] { 0, 1, 2, 3 }, new double[] { 0, 1, 2, 3 })],
+            new AxisView("Position", "nm", 0, 3, 4),
+            new AxisView("Height", "nm", 0, 5, 4),
+            [
+                new CurveMark(1.0, "peak", CurveMarkKind.Feature),
+                new CurveMark(1.5, "window edge", CurveMarkKind.Setting),
+                new CurveMark(2.0, "baseline", CurveMarkKind.Reference),
+            ]);
+
+        CurvePlotBuilder.Configure(plot, input, Theme());
+
+        var patterns = plot.GetPlottables<ScottPlot.Plottables.AxisLine>()
+            .Select(l => l.LinePattern)
+            .ToArray();
+
+        Assert.Equal(3, patterns.Length);
+        Assert.Equal(3, patterns.Distinct().Count());
     }
 
     [Fact]

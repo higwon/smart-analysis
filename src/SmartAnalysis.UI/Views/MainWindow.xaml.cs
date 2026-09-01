@@ -422,6 +422,15 @@ public partial class MainWindow : Window
     private void ProvenanceList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => _viewModel.SelectStep(ProvenanceList.SelectedItem as HistoryRowViewModel);
 
+    // Rulers on or off, for the single stage and the spectroscopy surface alike — a force-volume map is measured
+    // at places on a sample too, and its picture says as little about its size as any other.
+    private void Rulers_Changed(object sender, RoutedEventArgs e)
+    {
+        bool on = RulersToggle.IsChecked == true;
+        SingleImage.ShowRulers = on;
+        SpectroscopySurface.ShowRulers = on;
+    }
+
     // Fit the active single-image viewer to the stage (toolbar Fit action).
     private void Fit_Click(object sender, RoutedEventArgs e) => SingleImage.Fit();
 
@@ -540,9 +549,9 @@ public partial class MainWindow : Window
 
     // The vertical marker X positions (axis units) for a crop form's kept range on the source curve, clamped the same
     // way the crop op clamps (start ∈ [0, n-1], count ∈ [1, n-start]). False when no crop form is open.
-    private bool TryCropRangeMarkers(LineProfileDataset curve, out double[] markers)
+    private bool TryCropRangeMarkers(LineProfileDataset curve, out CurveMark[] markers)
     {
-        markers = Array.Empty<double>();
+        markers = [];
         int n = curve.X.Count;
         if (_rangeFields.Count == 0 || n <= 0)
         {
@@ -551,7 +560,11 @@ public partial class MainWindow : Window
 
         int start = Math.Clamp(AsInt(_rangeFields.FirstOrDefault(f => f.Name == "start")?.Value), 0, n - 1);
         int count = Math.Clamp(AsInt(_rangeFields.FirstOrDefault(f => f.Name == "count")?.Value), 1, n - start);
-        markers = new[] { curve.X.RawToReal(start), curve.X.RawToReal(start + count - 1) };
+        markers =
+        [
+            new(curve.X.RawToReal(start), "keep from", CurveMarkKind.Setting),
+            new(curve.X.RawToReal(start + count - 1), "keep to", CurveMarkKind.Setting),
+        ];
         return true;
     }
 
@@ -728,8 +741,10 @@ public partial class MainWindow : Window
             {
                 SpectroscopySurface.Render(picture);
             }
-            else if (_viewModel.HasVolumeUnavailable)
+            else if (_viewModel.HasVolumeUnavailable || _viewModel.IsVolumeComputing)
             {
+                // Nothing to draw yet. Leaving the SURFACE up would put a picture of the sample on a stage whose
+                // panel describes a volume image — the two look alike enough that only the colour bar says which.
                 SpectroscopySurface.Clear();
             }
 
@@ -754,9 +769,9 @@ public partial class MainWindow : Window
     {
         SpectroscopyCurve.Render(input);
 
-        if (_viewModel.InspectorCurveFollowsChannelPicker)
+        if (_viewModel.CurveFollowsChannelPicker)
         {
-            InspectorCurve.Render(input);
+            PointCurve.Render(input);
             return;
         }
 
@@ -766,7 +781,7 @@ public partial class MainWindow : Window
         // measured. The stage's copy is unmarked: there the curve is the subject, not the thing being tuned.
         if (_viewModel.ActiveForceVolume is { } map)
         {
-            InspectorCurve.Render(
+            PointCurve.Render(
                 RenderInputFactory.ForForceVolumePoint(map, _viewModel.SelectedMapPoint)
                     .WithMarkers(_viewModel.CurveVerticalMarkers, _viewModel.CurveHorizontalMarkers));
         }
@@ -775,7 +790,7 @@ public partial class MainWindow : Window
     private void ClearSpectroscopyCurve()
     {
         SpectroscopyCurve.Clear();
-        InspectorCurve.Clear();
+        PointCurve.Clear();
     }
 
     // In the Volume view every pixel is a point, so clicking one is the shortest route from a value on the

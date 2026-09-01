@@ -77,6 +77,52 @@ public static class ImageViewportMath
         return px >= 0 && px < imageW && py >= 0 && py < imageH ? (px, py) : null;
     }
 
+    /// <summary>
+    /// Which part of the image the viewport is showing, as <b>sample indices</b> — fractional, and clipped to the
+    /// image. Null when none of it is on screen.
+    /// <para>
+    /// This is the seam a ruler hangs on. Handing it the whole image's extent instead would keep the ruler
+    /// describing the full scan while the viewer is zoomed into one corner: a caption for a picture that is no
+    /// longer there, and worse than no caption because it looks authoritative.
+    /// </para>
+    /// <para>
+    /// <b>Sample indices, not bitmap coordinates.</b> The two are half a sample apart and both are doubles, so
+    /// nothing would complain if they were swapped. In bitmap coordinates sample <c>i</c> owns the cell
+    /// <c>[i, i+1)</c> — that is what <see cref="PixelAt"/> floors — so its centre is at <c>i + 0.5</c>. An axis's
+    /// Start and End are the centres of the first and last samples. A viewport edge at bitmap 25.0 is the boundary
+    /// BETWEEN samples 24 and 25; read as an index it would claim the centre of sample 25, half a sample more of
+    /// the surface than is on screen. Hence the shift here, and the name.
+    /// </para>
+    /// </summary>
+    public static (double Left, double Top, double Right, double Bottom)? VisibleSampleIndices(
+        double viewportW, double viewportH, double scale, double translateX, double translateY,
+        int imageW, int imageH)
+    {
+        if (!(scale > 0) || !double.IsFinite(scale) || imageW <= 0 || imageH <= 0)
+        {
+            return null;
+        }
+
+        if (!(viewportW > 0) || !(viewportH > 0)
+            || !double.IsFinite(translateX) || !double.IsFinite(translateY))
+        {
+            return null;
+        }
+
+        double left = Math.Max(0.0, CentreIndex((0 - translateX) / scale));
+        double top = Math.Max(0.0, CentreIndex((0 - translateY) / scale));
+        double right = Math.Min(imageW - 1.0, CentreIndex((viewportW - translateX) / scale));
+        double bottom = Math.Min(imageH - 1.0, CentreIndex((viewportH - translateY) / scale));
+
+        // Panned entirely off screen: there is no visible part to describe, which is not the same as showing the
+        // whole thing.
+        return right >= left && bottom >= top ? (left, top, right, bottom) : null;
+    }
+
+    /// <summary>A bitmap coordinate read as a sample index: the cell edge at <c>u</c> sits half a sample before
+    /// the centre that owns it.</summary>
+    private static double CentreIndex(double bitmapCoordinate) => bitmapCoordinate - 0.5;
+
     /// <summary>The translate that centres an image of the given scale in the viewport.</summary>
     public static (double X, double Y) Center(double scale, double viewportW, double viewportH, int imageW, int imageH)
         => ((viewportW - (imageW * scale)) / 2.0, (viewportH - (imageH * scale)) / 2.0);

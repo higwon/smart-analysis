@@ -14,6 +14,7 @@
         <conv:BooleanToOpacityConverter x:Key="Bool2Dim"/>
         <conv:ResourceKeyToGeometryConverter x:Key="Key2Geo"/>
         <conv:RatioToHeightConverter x:Key="Ratio2H"/>
+        <conv:BooleanToGridLengthConverter x:Key="Bool2Row"/>
 
         <!-- Explorer lineage node -->
         <HierarchicalDataTemplate DataType="{x:Type vm:DatasetNodeViewModel}" ItemsSource="{Binding Children}">
@@ -246,6 +247,10 @@
                                         <TextBlock Text="Fit" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
+                                <CheckBox x:Name="RulersToggle" Style="{StaticResource SA.CheckBox}" Content="Rulers"
+                                          VerticalAlignment="Center" Margin="{DynamicResource SA.Gap.Left2}"
+                                          Checked="Rulers_Changed" Unchecked="Rulers_Changed"
+                                          Visibility="{Binding Is3D, Converter={StaticResource NotBool2Vis}}"/>
                                 <CheckBox Style="{StaticResource SA.CheckBox}" Content="3D" VerticalAlignment="Center"
                                           Margin="{DynamicResource SA.Gap.Left2}" IsChecked="{Binding Is3D}"
                                           Visibility="{Binding CanToggle3D, Converter={StaticResource Bool2Vis}}"
@@ -333,6 +338,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
+                                <RowDefinition Height="{Binding ShowCurveBelowStage, Converter={StaticResource Bool2Row}, ConverterParameter=0.55}"/>
                             </Grid.RowDefinitions>
                             <Border Grid.Row="0" Background="{DynamicResource SA.Brush.Surface.Raised}"
                                     Visibility="{Binding ShowSpectroscopyToolbar, Converter={StaticResource Bool2Vis}}"
@@ -364,6 +370,28 @@
                                               Visibility="{Binding ShowSpectroscopyImage, Converter={StaticResource Bool2Vis}}"/>
                             <ctl:AfmCurveView Grid.Row="1" x:Name="SpectroscopyCurve"
                                               Visibility="{Binding ShowCurveOnStage, Converter={StaticResource Bool2Vis}}"/>
+
+                            <!-- doc 26 SS22.6: the selected point's curve belongs to the POINT, not to a role, so
+                                 it survives every view switch. It sits under the picture and across the Stage
+                                 because a force curve is wide: in the Inspector rail it had 271px to say
+                                 everything in, and making it taller there only made it a taller sliver. -->
+                            <Grid Grid.Row="2" Margin="{DynamicResource SA.Gap.Top2}"
+                                  Visibility="{Binding ShowCurveBelowStage, Converter={StaticResource Bool2Vis}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="CURVE" Style="{StaticResource SA.Text.SectionLabel}"
+                                           Margin="{DynamicResource SA.Gap.Bottom1}"/>
+                                <ctl:AfmCurveView Grid.Row="1" x:Name="PointCurve" MinHeight="180"/>
+                            </Grid>
+
+                            <!-- Until the first picture arrives there is nothing on the stage. Saying so is the
+                                 difference between "working" and "nothing happened". -->
+                            <TextBlock Grid.Row="1" Text="Measuring the map…"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Style="{StaticResource SA.Text.Secondary}"
+                                       Visibility="{Binding IsVolumeComputing, Converter={StaticResource Bool2Vis}}"/>
 
                             <!-- A setting the map cannot be measured with leaves no picture. Saying so beats an
                                  empty stage, and both beat the previous settings' picture left standing. -->
@@ -437,7 +465,6 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <!-- The roles overlay each other; only one is visible at a time. -->
@@ -537,9 +564,11 @@
                             <StackPanel Visibility="{Binding CanPickChannels, Converter={StaticResource Bool2Vis}}">
                                 <TextBlock Text="CHANNEL PAIR" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Top2}"/>
                                 <TextBlock Text="X" Style="{StaticResource SA.Text.Caption}"/>
-                                <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedXChannel}"/>
+                                <ComboBox ItemsSource="{Binding ChannelChoices}" DisplayMemberPath="Label"
+                                          SelectedItem="{Binding SelectedXChannelItem}"/>
                                 <TextBlock Text="Y" Style="{StaticResource SA.Text.Caption}" Margin="{DynamicResource SA.Gap.Top1}"/>
-                                <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedIndex="{Binding SelectedYChannel}"/>
+                                <ComboBox ItemsSource="{Binding ChannelChoices}" DisplayMemberPath="Label"
+                                          SelectedItem="{Binding SelectedYChannelItem}"/>
                             </StackPanel>
 
                             <Button Content="Extract this point" Style="{StaticResource SA.Button.Primary}"
@@ -754,15 +783,6 @@
                         </Border>
                     </StackPanel>
                     </Grid>
-
-                    <!-- doc 26 SS22.6: the selected point curve belongs to the POINT, not to a role. It is what
-                         the volume image parameters act on, so it cannot be the thing that disappears when you
-                         switch to the view that sets them. -->
-                    <StackPanel Grid.Row="1" Margin="{DynamicResource SA.Pad.Panel}"
-                                Visibility="{Binding ShowCurveInInspector, Converter={StaticResource Bool2Vis}}">
-                        <TextBlock Text="CURVE" Style="{StaticResource SA.Text.SectionLabel}" Margin="{DynamicResource SA.Gap.Bottom1}"/>
-                        <ctl:AfmCurveView x:Name="InspectorCurve" Height="180"/>
-                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>

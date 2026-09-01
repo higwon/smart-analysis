@@ -66,6 +66,8 @@ public sealed class ShellViewModel : ObservableObject
     private LineProfileDataset? _activeCurve;
     private ForceCurveDataset? _activeForceCurve;
     private ForceVolumeDataset? _activeForceVolume;
+    private MapGridIndex? _mapCells;
+    private bool _mapCellsComputed;
     private int _selectedMapPoint;
     private int _selectedXChannel;
     private int _selectedYChannel;
@@ -95,6 +97,7 @@ public sealed class ShellViewModel : ObservableObject
     private Func<DatasetId, CancellationToken, Task<PreviewOutput>>? _computePreview;
     private CancellationTokenSource? _previewCts;
     private int _previewGeneration;
+    private bool _previewInFlight;
     private HistoryRowViewModel? _selectedStep;
     private Colormap _colormap = ColormapCatalog.Default.Map;
     private string _colormapName = ColormapCatalog.Default.Name;
@@ -239,6 +242,13 @@ public sealed class ShellViewModel : ObservableObject
             IsInteractiveImageEditing = IsImageOverlayEditor(value);
             SetProperty(ref _operationEditor, value);
             SetOperationPreview(value);
+
+            // An Operation role with no editor draws nothing at all — the Inspector goes blank with no way back.
+            if (value is null && _inspectorRole == InspectorRole.Operation)
+            {
+                InspectorRole = InspectorRole.DatasetProperties;
+            }
+
             RaiseVolumeViewChanged();
         }
     }
@@ -361,6 +371,7 @@ public sealed class ShellViewModel : ObservableObject
         CancelOperationPreview();
         _previewCts = new CancellationTokenSource();
         var generation = ++_previewGeneration;
+        SetPreviewInFlight(true);
         _operationPreviewTask = ComputeOperationPreviewAsync(compute, id, generation, _previewCts.Token);
     }
 
@@ -373,36 +384,48 @@ public sealed class ShellViewModel : ObservableObject
 
     private async Task ComputeOperationPreviewAsync(Func<DatasetId, CancellationToken, Task<PreviewOutput>> compute, DatasetId id, int generation, CancellationToken cancellationToken)
     {
+        PreviewOutput output;
+
+        // ONLY the run is best-effort. Wrapping the bookkeeping below in the same catch hid a real failure once:
+        // the picture never reached the stage and nothing said so, because the exception that explained it was
+        // swallowed on its way out. A preview swallows a cancelled or failed RUN, not a bug in itself.
         try
         {
-            var output = await compute(id, cancellationToken).ConfigureAwait(true);
-
-            // Apply only if this is still the newest request for the still-previewed active dataset. The generation
-            // check is what defeats out-of-order completion; the ActiveId check drops a preview for a replaced dataset.
-            if (_isOperationPreview && generation == _previewGeneration && _workspace.Active.ActiveId == id)
-            {
-                _operationPreviewInput = output.Image;
-                _operationPreviewCurve = output.Curve;
-
-                // An attempt that produced nothing is not the same as no attempt yet. On the Volume view the
-                // preview IS the stage, so leaving the previous picture up would show one set of settings while
-                // another is on screen beside it.
-                SetVolumeUnavailable(
-                    IsVolumeView && output.Image is null
-                        // Only the launcher can name a cause. A preview also fails on an unexpected error,
-                        // which is not the settings' fault, so the fallback says what happened and no more.
-                        ? ExplainVolume() ?? "No picture could be computed for this map."
-                        : null);
-
-                OnPropertyChanged(nameof(OperationPreviewInput));
-                OnPropertyChanged(nameof(OperationPreviewCurve));
-                ImagesChanged?.Invoke(this, EventArgs.Empty);
-            }
+            output = await compute(id, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;   // superseded, or the dataset went away; whoever superseded it owns the stage now
         }
         catch
         {
-            // Best-effort preview: a cancellation or failure just shows no PREVIEW, never an error banner.
+            output = default;   // a failed run shows no picture, never an error banner
         }
+
+        // Apply only if this is still the newest request for the still-previewed active dataset. The generation
+        // check is what defeats out-of-order completion; the ActiveId check drops a preview for a replaced dataset.
+        if (!_isOperationPreview || generation != _previewGeneration || _workspace.Active.ActiveId != id)
+        {
+            return;
+        }
+
+        SetPreviewInFlight(false);
+        _operationPreviewInput = output.Image;
+        _operationPreviewCurve = output.Curve;
+
+        // An attempt that produced nothing is not the same as no attempt yet. On the Volume view the
+        // preview IS the stage, so leaving the previous picture up would show one set of settings while
+        // another is on screen beside it.
+        SetVolumeUnavailable(
+            IsVolumeView && output.Image is null
+                // Only the launcher can name a cause. A preview also fails on an unexpected error,
+                // which is not the settings' fault, so the fallback says what happened and no more.
+                ? ExplainVolume() ?? "No picture could be computed for this map."
+                : null);
+
+        OnPropertyChanged(nameof(OperationPreviewInput));
+        OnPropertyChanged(nameof(OperationPreviewCurve));
+        ImagesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Whether an interactive image-overlay operation (region or line profile) editor is open. While it
@@ -652,6 +675,7 @@ public sealed class ShellViewModel : ObservableObject
                             RefreshOperationPreview();
                         }
                     };
+                    SeedMapSelection(editor);
                     OperationEditor = editor;
                     InspectorRole = InspectorRole.Operation;
                 }
@@ -817,6 +841,7 @@ public sealed class ShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanStepMapPointBack));
                 OnPropertyChanged(nameof(CanStepMapPointForward));
                 RaiseCurveMarkersChanged();
+                SeedMapSelection(OperationEditor as ParameterFormViewModel);
                 MapPointChanged?.Invoke();
             }
         }
@@ -845,11 +870,14 @@ public sealed class ShellViewModel : ObservableObject
             }
 
             string label = $"Point {_selectedMapPoint + 1} of {map.PointCount}";
-            if (map.Geometry is { } cells)
+
+            // The cell it was MEASURED in, not the one its acquisition index falls on. Deriving the column one
+            // way and the position beside it another is how "col 7/8 · surface (0.375, …)" reached the screen:
+            // two coordinate frames in one line, disagreeing.
+            if (MapCells() is { } cells && _selectedMapPoint < map.PointCount)
             {
-                int column = (_selectedMapPoint % cells.Columns) + 1;
-                int row = (_selectedMapPoint / cells.Columns) + 1;
-                label += $" · col {column}/{cells.Columns}, row {row}/{cells.Rows}";
+                var (column, row) = cells.CellOf(_selectedMapPoint);
+                label += $" · col {column + 1}/{cells.Columns}, row {row + 1}/{cells.Rows}";
             }
 
             if (map.PointLayout is { } layout && _selectedMapPoint < layout.Count)
@@ -871,6 +899,29 @@ public sealed class ShellViewModel : ObservableObject
     private static string Position(double x, double y, Unit unit)
         => $"({x.ToString("0.###", CultureInfo.InvariantCulture)}, "
             + $"{y.ToString("0.###", CultureInfo.InvariantCulture)}) {unit.Symbol}";
+
+    /// <summary>
+    /// The Volume view has asked for a picture and none has arrived yet.
+    /// <para>
+    /// Entering the view clears the preview, and until the first one lands there is nothing to draw — so the
+    /// Stage kept showing the SURFACE while the panel beside it described a volume image. On a small map that
+    /// window is a few milliseconds; on a large one it is long enough to read as nothing having happened. A
+    /// re-compute is not this state: the previous picture is still the same map, so it stays up rather than
+    /// flickering through a blank on every keystroke.
+    /// </para>
+    /// </summary>
+    public bool IsVolumeComputing => IsVolumeView && _previewInFlight && _operationPreviewInput is null;
+
+    private void SetPreviewInFlight(bool inFlight)
+    {
+        if (_previewInFlight == inFlight)
+        {
+            return;
+        }
+
+        _previewInFlight = inFlight;
+        OnPropertyChanged(nameof(IsVolumeComputing));
+    }
 
     /// <summary>Why the Volume view has no picture for the current settings, or null when it has one.</summary>
     public string? VolumeUnavailable => _volumeUnavailable;
@@ -902,18 +953,30 @@ public sealed class ShellViewModel : ObservableObject
     /// of a measurement nothing made.
     /// </para>
     /// </summary>
-    public bool InspectorCurveFollowsChannelPicker => !IsVolumeView;
+    public bool CurveFollowsChannelPicker => !IsVolumeView;
 
     /// <summary>
     /// Separations at which to mark the selected point's curve: where the threshold window begins and ends.
     /// Empty unless the Volume view is showing, because the marks belong to ITS settings (doc 26 §22.6).
     /// </summary>
-    public IReadOnlyList<double> CurveVerticalMarkers
-        => CurrentWindow() is { } w ? [w.PeakSeparation, w.WindowSeparation] : [];
+    public IReadOnlyList<CurveMark> CurveVerticalMarkers
+        => CurrentWindow() is { } w
+            ?
+            [
+                new(w.PeakSeparation, "peak", CurveMarkKind.Feature),
+                new(w.WindowSeparation, "window edge", CurveMarkKind.Setting),
+            ]
+            : [];
 
     /// <summary>Force levels to mark: the non-contact level every force is measured from, and what the threshold means.</summary>
-    public IReadOnlyList<double> CurveHorizontalMarkers
-        => CurrentWindow() is { } w ? [w.Baseline, w.ThresholdForce] : [];
+    public IReadOnlyList<CurveMark> CurveHorizontalMarkers
+        => CurrentWindow() is { } w
+            ?
+            [
+                new(w.Baseline, "baseline", CurveMarkKind.Reference),
+                new(w.ThresholdForce, "threshold force", CurveMarkKind.Setting),
+            ]
+            : [];
 
     // Both marker lists describe one window, and a drag will ask for them many times a second. Computed once
     // per refresh and dropped whenever anything it depends on moves.
@@ -961,11 +1024,12 @@ public sealed class ShellViewModel : ObservableObject
     private void RaiseVolumeViewChanged()
     {
         OnPropertyChanged(nameof(IsVolumeView));
+        OnPropertyChanged(nameof(IsVolumeComputing));
         OnPropertyChanged(nameof(CanShowVolume));
         OnPropertyChanged(nameof(ShowSpectroscopyImage));
         OnPropertyChanged(nameof(ShowCurveOnStage));
-        OnPropertyChanged(nameof(ShowCurveInInspector));
-        OnPropertyChanged(nameof(InspectorCurveFollowsChannelPicker));
+        OnPropertyChanged(nameof(ShowCurveBelowStage));
+        OnPropertyChanged(nameof(CurveFollowsChannelPicker));
         OnPropertyChanged(nameof(PointMarkers));
         OnPropertyChanged(nameof(VolumeUnavailable));
         OnPropertyChanged(nameof(HasVolumeUnavailable));
@@ -992,17 +1056,37 @@ public sealed class ShellViewModel : ObservableObject
     /// </summary>
     public void SelectMapPointAt(int column, int row)
     {
-        if (!IsVolumeView || _activeForceVolume?.Geometry is not { } grid)
+        if (!IsVolumeView || MapCells() is not { } cells)
         {
             return;
         }
 
-        if (column < 0 || column >= grid.Columns || row < 0 || row >= grid.Rows)
+        if (cells.PointAt(column, row) is var point && point >= 0)
         {
-            return;
+            SelectedMapPoint = point;
+        }
+    }
+
+    /// <summary>
+    /// Which cell of the grid each curve was measured in — the picture's layout, not the acquisition order.
+    /// Null when the file's own positions contradict the grid: no cell can be named, and naming one anyway
+    /// would make every reader of this agree on the same wrong place. Cached — the layout cannot change while
+    /// a map is active.
+    /// </summary>
+    private MapGridIndex? MapCells()
+    {
+        if (_mapCellsComputed)
+        {
+            return _mapCells;
         }
 
-        SelectedMapPoint = (row * grid.Columns) + column;
+        _mapCellsComputed = true;
+        if (_activeForceVolume is { Geometry: { } grid } map)
+        {
+            MapGridIndex.TryCreate(grid, map.PointLayout, map.PointCount, out _mapCells, out _);
+        }
+
+        return _mapCells;
     }
 
     public void StepMapPoint(int delta) => SelectedMapPoint = _selectedMapPoint + delta;
@@ -1015,6 +1099,8 @@ public sealed class ShellViewModel : ObservableObject
         ActiveForceVolume = map;
         if (changed)
         {
+            _mapCells = null;
+            _mapCellsComputed = false;
             _selectedMapPoint = 0;
             OnPropertyChanged(nameof(SelectedMapPoint));
         }
@@ -1051,10 +1137,11 @@ public sealed class ShellViewModel : ObservableObject
     public bool ShowCurveOnStage => IsSpectroscopy && !HasReferenceSurface && !IsVolumeView;
 
     /// <summary>
-    /// The Inspector previews the selected point's curve only when the stage is showing the surface instead —
-    /// a map with no surface already has the curve on the stage, and drawing it twice says nothing new.
+    /// The selected point's curve sits under the picture, across the Stage, only when the picture is what the
+    /// Stage is showing — a map with no surface already has the curve ON the stage, and drawing it twice says
+    /// nothing new.
     /// </summary>
-    public bool ShowCurveInInspector => IsForceVolume && !ShowCurveOnStage;
+    public bool ShowCurveBelowStage => IsForceVolume && !ShowCurveOnStage;
 
     /// <summary>
     /// The placeholder is for having nothing to inspect, not for the active dataset being something other than
@@ -1091,6 +1178,35 @@ public sealed class ShellViewModel : ObservableObject
         {
             StatusMessage = result.Error;
             OnPropertyChanged(nameof(HasStatus));
+        }
+    }
+
+    /// <summary>
+    /// Fills a form's map-point fields from the selection the Stage already holds (doc 26 SS22.2).
+    /// <para>
+    /// The toolbar arrows and the map markers ARE the point selector, so a form launched over a map must not ask
+    /// for the number again — it opened on a point the viewer had already chosen. Fields the form does not have
+    /// are skipped, so this is a no-op for every operation that is not about a map point.
+    /// </para>
+    /// </summary>
+    private void SeedMapSelection(ParameterFormViewModel? form)
+    {
+        if (form is null || _activeForceVolume is null)
+        {
+            return;
+        }
+
+        bool kept = SpectroscopyChannels is not null;
+        Set("point", _selectedMapPoint);
+        Set("xChannel", kept ? _selectedXChannel : -1);
+        Set("yChannel", kept ? _selectedYChannel : -1);
+
+        void Set(string name, int value)
+        {
+            if (form.Fields.FirstOrDefault(f => f.Name == name) is { } field)
+            {
+                field.Value = value;
+            }
         }
     }
 
@@ -1182,10 +1298,13 @@ public sealed class ShellViewModel : ObservableObject
             // image does not share — mixing them is what put a stray mark in the far corner.
             if (IsVolumeView)
             {
-                return _activeForceVolume?.Geometry is { } cells
-                    && _selectedMapPoint >= 0 && _selectedMapPoint < cells.Columns * cells.Rows
-                        ? [((_selectedMapPoint % cells.Columns) + 0.5, (_selectedMapPoint / cells.Columns) + 0.5, _selectedMapPoint)]
-                        : [];
+                if (MapCells() is not { } cells || _selectedMapPoint < 0 || _selectedMapPoint >= MapPointCount)
+                {
+                    return [];
+                }
+
+                var (column, row) = cells.CellOf(_selectedMapPoint);
+                return [(column + 0.5, row + 0.5, _selectedMapPoint)];
             }
 
             var layout = _activeForceVolume?.PointLayout ?? _activeForceCurve?.PointLayout;
@@ -1265,7 +1384,32 @@ public sealed class ShellViewModel : ObservableObject
         => _activeForceVolume?.Channels ?? _activeForceCurve?.Channels;
 
     /// <summary>What a channel picker lists, in the order the instrument declared them.</summary>
-    public IReadOnlyList<string> ChannelChoices { get; private set; } = [];
+    public IReadOnlyList<ChannelChoice> ChannelChoices { get; private set; } = [];
+
+    /// <summary>
+    /// The picker's selection as the <b>item</b> it shows, not as a position into a list that gets replaced.
+    /// <para>
+    /// A selector rebuilds when the active dataset changes, and a position that comes back unchanged is invisible
+    /// to the binding: the control had already dropped the item it resolved that position to, so it kept an index
+    /// with nothing behind it and drew an empty box beside a populated one. An item differs from the null the
+    /// control is left holding, so it is always re-read.
+    /// </para>
+    /// </summary>
+    public ChannelChoice? SelectedXChannelItem
+    {
+        get => ChoiceAt(_selectedXChannel);
+        set => SelectedXChannel = value?.Index ?? _selectedXChannel;
+    }
+
+    /// <inheritdoc cref="SelectedXChannelItem"/>
+    public ChannelChoice? SelectedYChannelItem
+    {
+        get => ChoiceAt(_selectedYChannel);
+        set => SelectedYChannel = value?.Index ?? _selectedYChannel;
+    }
+
+    private ChannelChoice? ChoiceAt(int index)
+        => index >= 0 && index < ChannelChoices.Count ? ChannelChoices[index] : null;
 
     /// <summary>Whether there is more than one channel to plot, and so anything worth choosing between.</summary>
     public bool CanPickChannels => ChannelChoices.Count > 1;
@@ -1300,6 +1444,7 @@ public sealed class ShellViewModel : ObservableObject
         if (SpectroscopyChannels is not { } set)
         {
             OnPropertyChanged(name);
+            OnPropertyChanged(name + "Item");
             return;
         }
 
@@ -1309,14 +1454,18 @@ public sealed class ShellViewModel : ObservableObject
             if (clamped != value)
             {
                 OnPropertyChanged(name);
+                OnPropertyChanged(name + "Item");
             }
 
             return;
         }
 
+        OnPropertyChanged(name + "Item");
+
         OnPropertyChanged(nameof(IsDesignatedChannelPair));
         OnPropertyChanged(nameof(SpectroscopyLabel));
         OnPropertyChanged(nameof(ShowSpectroscopyToolbar));
+        SeedMapSelection(OperationEditor as ParameterFormViewModel);
         MapPointChanged?.Invoke(); // the stage redraws for a channel change the same way it does for a point
     }
 
@@ -1327,7 +1476,7 @@ public sealed class ShellViewModel : ObservableObject
         var set = SpectroscopyChannels;
         ChannelChoices = set is null
             ? []
-            : [.. set.Channels.Select(c => $"{c.DisplayName} [{c.Unit.Symbol}]")];
+            : [.. set.Channels.Select((c, i) => new ChannelChoice(i, $"{c.DisplayName} [{c.Unit.Symbol}]"))];
 
         // The file's own designated pair is the starting point; a set whose keys do not match falls back to the
         // first two channels rather than to an arbitrary single one.
@@ -1341,12 +1490,14 @@ public sealed class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPickChannels));
         OnPropertyChanged(nameof(SelectedXChannel));
         OnPropertyChanged(nameof(SelectedYChannel));
+        OnPropertyChanged(nameof(SelectedXChannelItem));
+        OnPropertyChanged(nameof(SelectedYChannelItem));
         OnPropertyChanged(nameof(IsDesignatedChannelPair));
         OnPropertyChanged(nameof(IsSpectroscopy));
         OnPropertyChanged(nameof(SpectroscopyReferenceImage));
         OnPropertyChanged(nameof(HasReferenceSurface));
         OnPropertyChanged(nameof(ShowCurveOnStage));
-        OnPropertyChanged(nameof(ShowCurveInInspector));
+        OnPropertyChanged(nameof(ShowCurveBelowStage));
         OnPropertyChanged(nameof(HasNothingToInspect));
         OnPropertyChanged(nameof(MapSummary));
         OnPropertyChanged(nameof(PointMarkers));

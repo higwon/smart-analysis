@@ -112,8 +112,11 @@ public sealed class RenderInputTests
 
     // --- Curve reference lines ---
 
+    private static CurveMark[] Marks(params double[] positions)
+        => [.. positions.Select(p => new CurveMark(p, "mark", CurveMarkKind.Setting))];
+
     private static CurveRenderInput Curve(
-        IReadOnlyList<double>? vertical = null, IReadOnlyList<double>? horizontal = null)
+        IReadOnlyList<CurveMark>? vertical = null, IReadOnlyList<CurveMark>? horizontal = null)
         => new(
             [new XySeries("s", new double[] { 0.0, 1.0 }, new double[] { 0.0, 1.0 })],
             new AxisView("X", "nm", 0, 1, 2),
@@ -127,11 +130,11 @@ public sealed class RenderInputTests
         // "There is no window on this curve" arrives as NaN. Kept, it would draw a line at whichever edge the
         // axis happens to end on — an explanation of a measurement that was never made.
         var input = Curve(
-            vertical: [1.0, double.NaN, 2.0],
-            horizontal: [double.NaN, 5.0, double.PositiveInfinity]);
+            vertical: Marks(1.0, double.NaN, 2.0),
+            horizontal: Marks(double.NaN, 5.0, double.PositiveInfinity));
 
-        Assert.Equal([1.0, 2.0], input.VerticalMarkers);
-        Assert.Equal([5.0], input.HorizontalMarkers);
+        Assert.Equal([1.0, 2.0], input.VerticalMarkers.Select(m => m.Position));
+        Assert.Equal([5.0], input.HorizontalMarkers.Select(m => m.Position));
     }
 
     [Fact]
@@ -150,13 +153,13 @@ public sealed class RenderInputTests
         // marks must not rebuild anything else.
         var plain = Curve();
 
-        var marked = plain.WithMarkers([1.0], [2.0]);
+        var marked = plain.WithMarkers(Marks(1.0), Marks(2.0));
 
         Assert.Equal(plain.Series, marked.Series);
         Assert.Same(plain.X, marked.X);
         Assert.Same(plain.Y, marked.Y);
-        Assert.Equal([1.0], marked.VerticalMarkers);
-        Assert.Equal([2.0], marked.HorizontalMarkers);
+        Assert.Equal([1.0], marked.VerticalMarkers.Select(m => m.Position));
+        Assert.Equal([2.0], marked.HorizontalMarkers.Select(m => m.Position));
     }
 
     // --- AxisView ---
@@ -360,10 +363,10 @@ public sealed class RenderInputTests
 
         Assert.Empty(new CurveRenderInput(series, x, y).VerticalMarkers);
 
-        var source = new List<double> { 0.5, 2.5 };
+        var source = new List<CurveMark>(Marks(0.5, 2.5));
         var input = new CurveRenderInput(series, x, y, source);
-        source.Add(9.0); // mutating the caller's list must not affect the input (defensive copy)
-        Assert.Equal([0.5, 2.5], input.VerticalMarkers);
+        source.Add(new CurveMark(9.0, "mark", CurveMarkKind.Setting)); // mutating the caller's list must not affect the input (defensive copy)
+        Assert.Equal([0.5, 2.5], input.VerticalMarkers.Select(m => m.Position));
     }
 
     [Fact]

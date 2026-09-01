@@ -70,23 +70,40 @@ public static class CurvePlotBuilder
 
         // Vertical reference lines (e.g. a crop range's boundaries on the source curve), drawn after auto-scale so they
         // span the data area without widening it.
-        foreach (var x in input.VerticalMarkers)
+        foreach (var mark in input.VerticalMarkers)
         {
-            var marker = plot.Add.VerticalLine(x);
-            marker.Color = theme.Axis;
-            marker.LineWidth = 1.5f;
-            marker.LinePattern = ScottPlot.LinePattern.Dashed;
+            Style(plot.Add.VerticalLine(mark.Position), mark, theme);
         }
 
         // Horizontal reference lines (e.g. the non-contact level, and the force a threshold percentage means).
-        foreach (var y in input.HorizontalMarkers)
+        foreach (var mark in input.HorizontalMarkers)
         {
-            var marker = plot.Add.HorizontalLine(y);
-            marker.Color = theme.Axis;
-            marker.LineWidth = 1.5f;
-            marker.LinePattern = ScottPlot.LinePattern.Dashed;
+            Style(plot.Add.HorizontalLine(mark.Position), mark, theme);
         }
     }
+    // Four lines in one style are four lines nobody can tell apart, so each says what it is and a pattern
+    // separates the three kinds even where the text is clipped: dotted for the level a measure is taken FROM,
+    // dashed for a setting the viewer chose, solid for something the curve itself has.
+    private static void Style(ScottPlot.Plottables.AxisLine line, CurveMark mark, CurveTheme theme)
+    {
+        line.Color = theme.Axis;
+        line.LineWidth = mark.Kind == CurveMarkKind.Feature ? 1f : 1.5f;
+        line.LinePattern = mark.Kind switch
+        {
+            CurveMarkKind.Reference => ScottPlot.LinePattern.Dotted,
+            CurveMarkKind.Feature => ScottPlot.LinePattern.Solid,
+            _ => ScottPlot.LinePattern.Dashed,
+        };
+
+        // On the far side: the near edges already carry the tick numbers, and a name dropped among them reads
+        // as one more tick.
+        line.LabelOppositeAxis = true;
+        line.Text = mark.Label;
+        line.LabelStyle.ForeColor = theme.Axis;
+        line.LabelStyle.BackgroundColor = theme.DataArea;
+        line.LabelStyle.FontSize = 11f;
+    }
+
     // Strictly ascending, which is what SignalXY needs. A single non-finite sample makes the answer false,
     // because SignalXY cannot order what it cannot compare.
     private static bool IsAscending(IReadOnlyList<double> xs)

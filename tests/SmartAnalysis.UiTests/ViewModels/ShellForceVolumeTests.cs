@@ -459,6 +459,78 @@ public sealed class ShellForceVolumeTests
     }
 
     [Fact]
+    public void A_picker_holds_the_item_it_shows_not_a_position_in_a_list_that_gets_replaced()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        Assert.Equal(vm.ChannelChoices[vm.SelectedXChannel], vm.SelectedXChannelItem);
+        Assert.Equal(vm.ChannelChoices[vm.SelectedYChannel], vm.SelectedYChannelItem);
+    }
+
+    [Fact]
+    public void Coming_back_to_a_map_re_announces_the_item_even_when_the_position_did_not_move()
+    {
+        // The defect, at the seam the control depends on. Switching away and back rebuilds the list, and the
+        // selector drops the item it had resolved. A position that comes back UNCHANGED tells it nothing, so it
+        // kept an index with nothing behind it and drew an empty box beside a populated one — which is exactly
+        // what Y did while X, whose position differed, came back fine.
+        var ws = new Workspace();
+        var map = MapWithChannels(2);
+        var other = Map(3);
+        var vm = NewShell(ws);
+        ws.Add(map);
+        ws.Add(other);
+        ws.SetActive(map.Id);
+
+        int before = vm.SelectedYChannel;
+        ws.SetActive(other.Id);
+
+        var raised = new List<string>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName!);
+        ws.SetActive(map.Id);
+
+        Assert.Equal(before, vm.SelectedYChannel);   // the position did not move ...
+        Assert.Contains(nameof(vm.SelectedYChannelItem), raised);   // ... and the item was still announced
+        Assert.Equal(vm.ChannelChoices[before], vm.SelectedYChannelItem);
+    }
+
+    [Fact]
+    public void Choosing_an_item_moves_the_selection_to_that_channel()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        vm.SelectedYChannelItem = vm.ChannelChoices[2];
+
+        Assert.Equal(2, vm.SelectedYChannel);
+        Assert.False(vm.IsDesignatedChannelPair);
+    }
+
+    [Fact]
+    public void A_selector_clearing_itself_does_not_move_the_channel()
+    {
+        // A control writes null while its list is being swapped. Taking that as "channel 0" would silently
+        // re-plot a different quantity every time the viewer looked at another dataset and came back.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, MapWithChannels(2));
+
+        vm.SelectedYChannelItem = null;
+
+        Assert.Equal(1, vm.SelectedYChannel);
+    }
+
+    [Fact]
+    public void A_dataset_with_no_channels_has_no_item_to_show()
+    {
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, Map(3));
+
+        Assert.Null(vm.SelectedXChannelItem);
+        Assert.Null(vm.SelectedYChannelItem);
+    }
+
+    [Fact]
     public void A_dataset_that_kept_no_channels_offers_no_choice()
     {
         var ws = new Workspace();
@@ -562,6 +634,62 @@ public sealed class ShellForceVolumeTests
         Assert.False(vm.HasReferenceSurface);
         Assert.Null(vm.SpectroscopyReferenceImage);
     }
+    /// <summary>
+    /// A 4x2 map scanned boustrophedon: row 0 left to right, row 1 right to left. Points are 1 um apart, on the
+    /// 4x4-pixel/4 um surface MapOnSurface builds, so a position is also a surface pixel.
+    /// </summary>
+    private static ForceVolumeDataset SnakeMap()
+        => MapOnSurface(
+            Layout((0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (2, 1), (1, 1), (0, 1)),
+            points: 8,
+            geometry: new ForceVolumeGeometry(4, 2, 3.0, 1.0, 0.0, 0.0, StandardUnits.Micrometre));
+
+    [Fact]
+    public void The_column_a_point_is_called_is_the_column_it_was_measured_in()
+    {
+        // "col 7/8 · surface (0.375, ...)" reached the screen on a real file: the column came from the
+        // acquisition index and the position beside it from the recorded layout, and on a boustrophedon scan
+        // those are different places. One line cannot hold two frames.
+        var ws = new Workspace();
+        var vm = WithActiveMap(ws, SnakeMap());
+        vm.SelectedMapPoint = 4;   // first of the second row, measured at its RIGHT-hand end
+
+        Assert.Contains("col 4/4, row 2/2", vm.MapPointLabel);
+        Assert.Contains("(3, 1)", vm.MapPointLabel);
+    }
+
+    [Fact]
+    public void The_mark_on_a_volume_picture_is_in_the_cell_the_curve_was_measured_in()
+    {
+        var launcher = new VolumeLauncher();
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = SnakeMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+        vm.SelectedMapPoint = 4;
+
+        // Centre of cell (3,1), not of cell (0,1) where its index would put it.
+        Assert.Equal([(3.5, 1.5, 4)], vm.PointMarkers);
+    }
+
+    [Fact]
+    public void Clicking_a_pixel_selects_the_curve_that_pixel_was_measured_from()
+    {
+        var launcher = new VolumeLauncher();
+        var ws = new Workspace();
+        var vm = NewShell(ws, launcher);
+        var map = SnakeMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        vm.SelectMapPointAt(3, 1);
+
+        Assert.Equal(4, vm.SelectedMapPoint);
+    }
+
     private static MapPointLayout Layout(params (double X, double Y)[] points)
         => Layout(StandardUnits.Micrometre, points);
 
@@ -721,11 +849,11 @@ public sealed class ShellForceVolumeTests
     {
         // Drawing the same curve on the stage AND in the Inspector says nothing the stage did not already say.
         var onSurface = WithActiveMap(new Workspace(), MapOnSurface(Layout((1, 1), (3, 2))));
-        Assert.True(onSurface.ShowCurveInInspector);
+        Assert.True(onSurface.ShowCurveBelowStage);
 
         var noSurface = WithActiveMap(new Workspace(), Map(3));
         Assert.True(noSurface.ShowCurveOnStage);
-        Assert.False(noSurface.ShowCurveInInspector);
+        Assert.False(noSurface.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -852,12 +980,12 @@ public sealed class ShellForceVolumeTests
         ws.Add(map);
         ws.SetActive(map.Id);
 
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
 
         vm.ShowVolumeCommand.Execute(null);
 
         Assert.True(vm.IsVolumeView);
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -872,12 +1000,12 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
 
         Assert.True(vm.ShowCurveOnStage);
-        Assert.False(vm.ShowCurveInInspector);
+        Assert.False(vm.ShowCurveBelowStage);
 
         vm.ShowVolumeCommand.Execute(null);
 
         Assert.False(vm.ShowCurveOnStage);
-        Assert.True(vm.ShowCurveInInspector);
+        Assert.True(vm.ShowCurveBelowStage);
     }
 
     [Fact]
@@ -895,7 +1023,7 @@ public sealed class ShellForceVolumeTests
 
         vm.ShowVolumeCommand.Execute(null);
 
-        Assert.Contains(nameof(vm.ShowCurveInInspector), raised);
+        Assert.Contains(nameof(vm.ShowCurveBelowStage), raised);
     }
 
     [Fact]
@@ -1095,14 +1223,55 @@ public sealed class ShellForceVolumeTests
         Assert.Equal(2, vm.CurveHorizontalMarkers.Count);
 
         // The baseline is the curve's own out-of-contact level, not zero.
-        Assert.Equal(267.0, vm.CurveHorizontalMarkers[0], 3);
-        Assert.True(vm.CurveHorizontalMarkers[1] > vm.CurveHorizontalMarkers[0]);
+        Assert.Equal(267.0, vm.CurveHorizontalMarkers[0].Position, 3);
+        Assert.True(vm.CurveHorizontalMarkers[1].Position > vm.CurveHorizontalMarkers[0].Position);
 
         // And the threshold line is where the BOX says, not where a default says.
-        double atHalf = vm.CurveHorizontalMarkers[1];
+        double atHalf = vm.CurveHorizontalMarkers[1].Position;
         ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "threshold").Value = 25.0;
 
-        Assert.True(vm.CurveHorizontalMarkers[1] < atHalf);
+        Assert.True(vm.CurveHorizontalMarkers[1].Position < atHalf);
+    }
+
+    [Fact]
+    public void Every_mark_says_what_it_is()
+    {
+        // Four lines at once. Drawn in one style with no names they are four identical dashes: a viewer can see
+        // that something was marked but not which one is the baseline and which is the threshold.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = RoundTripMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        var labels = vm.CurveVerticalMarkers.Concat(vm.CurveHorizontalMarkers).Select(m => m.Label).ToArray();
+
+        Assert.Equal(4, labels.Length);
+        Assert.Equal(4, labels.Distinct().Count());
+        Assert.All(labels, l => Assert.False(string.IsNullOrWhiteSpace(l)));
+        Assert.Contains("baseline", labels);
+        Assert.Contains("peak", labels);
+    }
+
+    [Fact]
+    public void A_level_a_measure_is_taken_from_is_not_drawn_like_a_setting()
+    {
+        // The kinds are what the pattern separates, so a label clipped at the plot edge still leaves the three
+        // apart. The baseline is the curve's own level; the threshold is a number the viewer typed.
+        var ws = new Workspace();
+        var vm = NewShell(ws, new VolumeLauncher());
+        var map = RoundTripMap();
+        ws.Add(map);
+        ws.SetActive(map.Id);
+        vm.ShowVolumeCommand.Execute(null);
+
+        Assert.Equal(CurveMarkKind.Reference, vm.CurveHorizontalMarkers[0].Kind);
+        Assert.Equal(CurveMarkKind.Setting, vm.CurveHorizontalMarkers[1].Kind);
+
+        // The peak is where the curve puts it; no setting moved it there.
+        Assert.Equal(CurveMarkKind.Feature, vm.CurveVerticalMarkers[0].Kind);
+        Assert.Equal(CurveMarkKind.Setting, vm.CurveVerticalMarkers[1].Kind);
     }
 
     [Fact]
@@ -1117,13 +1286,13 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
         vm.ShowVolumeCommand.Execute(null);
 
-        double onApproach = vm.CurveHorizontalMarkers[1];
+        double onApproach = vm.CurveHorizontalMarkers[1].Position;
 
         var phase = ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "phase");
         phase.Value = "Retract";
 
         // The retract pushes half as hard, so 50% of ITS peak is a lower force.
-        Assert.True(vm.CurveHorizontalMarkers[1] < onApproach);
+        Assert.True(vm.CurveHorizontalMarkers[1].Position < onApproach);
     }
 
     [Fact]
@@ -1155,13 +1324,13 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
         vm.ShowVolumeCommand.Execute(null);
 
-        double narrow = vm.CurveHorizontalMarkers[0];
+        double narrow = vm.CurveHorizontalMarkers[0].Position;
 
         var baseline = ((ParameterFormViewModel)vm.OperationEditor!).Fields.Single(f => f.Name == "baseline");
         baseline.Value = 60.0;
 
         // A wider window reaches further down the ramp, so the level it averages is higher up the force axis.
-        Assert.True(vm.CurveHorizontalMarkers[0] > narrow);
+        Assert.True(vm.CurveHorizontalMarkers[0].Position > narrow);
     }
 
     [Fact]
@@ -1177,16 +1346,16 @@ public sealed class ShellForceVolumeTests
         ws.Add(map);
         ws.SetActive(map.Id);
 
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+        Assert.True(vm.CurveFollowsChannelPicker);
 
         // Leave the picker somewhere other than the designated pair, the way UX04 lets a viewer do.
         vm.SelectedYChannel = 2;
         Assert.False(vm.IsDesignatedChannelPair);
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);   // the Surface view is still the picker's
+        Assert.True(vm.CurveFollowsChannelPicker);   // the Surface view is still the picker's
 
         vm.ShowVolumeCommand.Execute(null);
 
-        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+        Assert.False(vm.CurveFollowsChannelPicker);
     }
 
     [Fact]
@@ -1199,11 +1368,11 @@ public sealed class ShellForceVolumeTests
         ws.SetActive(map.Id);
 
         vm.ShowVolumeCommand.Execute(null);
-        Assert.False(vm.InspectorCurveFollowsChannelPicker);
+        Assert.False(vm.CurveFollowsChannelPicker);
 
         vm.ShowSurfaceCommand.Execute(null);
 
-        Assert.True(vm.InspectorCurveFollowsChannelPicker);
+        Assert.True(vm.CurveFollowsChannelPicker);
     }
 
     [Fact]
