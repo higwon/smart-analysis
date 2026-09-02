@@ -34,4 +34,4 @@ project.fragment.lock.json
 Thumbs.db
 
 # Legacy engine exports kept for reference, too large to commit
-tools/legacy-baseline/legacy-export/
+tools/legacy-baseline/legacy-export/*.tsv

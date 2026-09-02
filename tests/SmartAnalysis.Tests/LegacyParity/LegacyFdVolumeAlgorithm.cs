@@ -1,26 +1,38 @@
 using SmartAnalysis.Domain.Datasets;
+using SmartAnalysis.Domain.Spectroscopy;
 
 namespace SmartAnalysis.Tests.LegacyParity;
 
 /// <summary>
-/// The legacy engine's force-volume measures, transcribed from its source so its output can be predicted
-/// without running it.
+/// The legacy engine's force-volume measures, transcribed from its source.
 /// <para>
 /// The legacy calculators cannot be compiled by path the way the MV00 goldens are: the arithmetic sits in
 /// <c>FDSpectroscopyCalculator</c>, but the decisions that feed it — which channel, which half of the curve,
 /// which defaults — live in <c>SpectroscopyAnalysisModel</c> (FW.UI.Common) and pull in DevExpress, SciChart
-/// and WPF. This class is therefore a <b>reading</b> of that code, not a run of it, and its authority is only
-/// as good as the transcription. Every method names the legacy method it came from so a reviewer can check it
-/// against the original.
+/// and WPF. This is therefore a <b>reading</b> of that code rather than a run of it, so every method names the
+/// legacy method it came from and a reviewer can check it against the original.
 /// </para>
 /// <para>
-/// What it is <b>not</b>: a parity baseline. Nothing here has been compared against a number the legacy engine
-/// actually produced. It states what legacy <i>should</i> produce for the committed fixture, so that when real
-/// legacy output arrives it either confirms this or refutes it — and either outcome is informative.
+/// It is not taken on trust: <see cref="LegacyFdVolumeParityTests"/> holds it against the numbers the legacy
+/// application actually exported for the committed fixture, and it reproduces all three maps at all 64 points
+/// to the precision that export prints.
 /// </para>
 /// </summary>
 internal static class LegacyFdVolumeAlgorithm
 {
+    /// <summary>
+    /// The names <c>SpectroscopyLineModel.GetIsZDetector</c> accepts. <b>"separation" is in this list</b>, and
+    /// that matters: the file carries both a <c>Z Height</c> and a <c>Separation</c> channel, both match, and
+    /// the caller uses <c>LastOrDefault</c> — so the abscissa is whichever the file declares <b>later</b>.
+    /// <para>
+    /// The near-identical list in <c>LIB.File.Tiff/Spectroscopy/SpectroscopyLine.cs</c> omits "separation" and
+    /// is the wrong one to read: the analysis model works on <c>SpectroscopyLineModel</c>. Reading that other
+    /// list puts <c>Z Height</c> on the abscissa, which is a plausible-looking answer that gets stiffness and
+    /// deformation wrong by a factor of about four in opposite directions.
+    /// </para>
+    /// </summary>
+    private static readonly string[] ZDetectorNames = ["z detector", "height", "z height", "zheight", "separation"];
+
     /// <summary>
     /// Legacy's default force threshold for both stiffness and deformation.
     /// <c>SpectroscopyFDViewModel.Initialize()</c> sets <c>DeformationThreshold = 0</c>, and
@@ -37,16 +49,35 @@ internal static class LegacyFdVolumeAlgorithm
     public const double DefaultOffsetThreshold = 0.0;
 
     /// <summary>
+    /// The abscissa legacy measures against: <c>LastOrDefault(t =&gt; t.GetIsZDetector())</c> over the file's
+    /// channels, in declaration order.
+    /// </summary>
+    public static int AbscissaIndex(SpectroscopyChannelSet channels)
+    {
+        int found = -1;
+        for (int c = 0; c < channels.ChannelCount; c++)
+        {
+            if (ZDetectorNames.Contains(channels.Channels[c].DisplayName.Trim().ToLowerInvariant()))
+            {
+                found = c;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// The approach half of a curve. <c>SpectroscopyDataService.GetTraceData</c> only consults the
     /// approach/retract classifier when <c>OpenFileType == PS_PPT</c>; for a plain TIFF it takes the else
     /// branch and returns <c>channelData[0 .. length/2)</c> verbatim. The segmentation modes and their
     /// parameters are PinPoint-only and do not apply to this fixture.
     /// </summary>
-    public static (double[] Force, double[] Separation) Trace(ForceVolumeDataset map, int point)
+    public static (double[] Force, double[] Separation) Trace(
+        ForceVolumeDataset map, SpectroscopyChannelSet channels, int point)
     {
         int half = map.SampleCount / 2;
         var f = map.ForceAt(point).Span;
-        var s = map.SeparationAt(point).Span;
+        var s = channels.At(AbscissaIndex(channels), point).Span;
         var force = new double[half];
         var separation = new double[half];
         for (int i = 0; i < half; i++)
