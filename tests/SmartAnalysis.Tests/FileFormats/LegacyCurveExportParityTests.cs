@@ -40,13 +40,15 @@ public sealed class LegacyCurveExportParityTests
     };
 
     [Fact]
-    public async Task The_analysis_runs_on_the_force_the_instrument_measured_not_one_recomputed_here()
+    public async Task The_analysis_runs_on_the_channels_the_instrument_measured_not_ones_recomputed_here()
     {
         using var map = await ReadAsync();
 
+        // Neither designated channel is the one the file flags. It flags Vertical (A-B) [V] and Z Height, and
+        // carries a measured Force and a measured Separation alongside them.
         Assert.Equal("Force", map.ForceChannel.DisplayName);
         Assert.Equal("nN", map.ForceChannel.Unit.Symbol);
-        Assert.Equal("Z Height", map.SeparationChannel.DisplayName);
+        Assert.Equal("Separation", map.SeparationChannel.DisplayName);
         Assert.Equal("um", map.SeparationChannel.Unit.Symbol);
 
         // Provenance has to say which channel the numbers came from: the flagged source alone would attribute
@@ -55,6 +57,10 @@ public sealed class LegacyCurveExportParityTests
         Assert.Equal("Force [nN]", map.Metadata.Extended["psia.spect.forceSource"]);
         Assert.Equal("Vertical (A-B)", map.Metadata.Extended["psia.spect.ySource"]);
         Assert.DoesNotContain("psia.spect.forceDerivedFrom", map.Metadata.Extended.Keys);
+
+        Assert.Equal("true", map.Metadata.Extended["psia.spect.separationWasMeasured"]);
+        Assert.Equal("Separation [µm]", map.Metadata.Extended["psia.spect.separationSource"]);
+        Assert.Equal("Z Height", map.Metadata.Extended["psia.spect.xSource"]);
     }
 
     [Theory]
@@ -67,7 +73,11 @@ public sealed class LegacyCurveExportParityTests
         Assert.Equal(64, map.PointCount);
         Assert.Equal(4096, map.SampleCount);
 
-        var z = map.SeparationAt(point).Span;
+        // The export's X is Z Height, which is no longer the designated abscissa — the analysis measures against
+        // the file's Separation. The anchors still pin Z Height, because what they exist to check is that this
+        // reader lifts the file's planes the way legacy does, not which of them the analysis then chooses.
+        var channels = map.Channels!;
+        var z = channels.At(channels.IndexOf("Z Height"), point).Span;
         var force = map.ForceAt(point).Span;
 
         // Exact, not approximate: both sides are the file's own float32 samples, so anything but equality is a
