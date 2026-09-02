@@ -85,6 +85,66 @@ public sealed class VolumeImageOperationTests
             geometry, ScanMetadata.Unknown, ProvenanceRecord.Root);
     }
 
+    /// <summary>
+    /// One curve whose retract is split into <b>two</b> runs by a brief re-approach, with the deepest pull-off in
+    /// the <b>shorter</b> of them. 400 samples so both runs clear the segmenter's look-ahead window comfortably.
+    /// <code>
+    ///   0..119   separation 100 -> 20   approach
+    /// 120..199   separation  20 -> 60   retract A, 80 long, pull-off -50
+    /// 200..259   separation  60 -> 30   approach again
+    /// 260..399   separation  30 -> 100  retract B, 140 long, pull-off -8
+    /// </code>
+    /// </summary>
+    private static ForceVolumeDataset MapWhoseDeepestPullOffIsNotInItsLongestRetractRun()
+    {
+        const int n = 400;
+        var separation = new float[n];
+        var force = new float[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            separation[i] = i switch
+            {
+                < 120 => 100f - (i * 80f / 120f),
+                < 200 => 20f + ((i - 120) * 40f / 80f),
+                < 260 => 60f - ((i - 200) * 30f / 60f),
+                _ => 30f + ((i - 260) * 70f / 140f),
+            };
+
+            force[i] = 0f;
+        }
+
+        // Wide enough that neither valley can be missed for want of a sample, and well inside its own run so the
+        // look-ahead window cannot smear it across the boundary.
+        for (int i = 135; i < 145; i++) force[i] = -50f;
+        for (int i = 300; i < 310; i++) force[i] = -8f;
+
+        return new ForceVolumeDataset(
+            DatasetId.New(), new DataSource("test", null),
+            ScanBuffer<float>.TakeOwnership(separation, n, 1),
+            ScanBuffer<float>.TakeOwnership(force, n, 1),
+            new ChannelDescriptor("separation", ChannelKind.Topography, StandardUnits.Nanometre, "Z"),
+            new ChannelDescriptor("force", ChannelKind.Force, StandardUnits.Nanonewton, "Force"),
+            Grid(1, 1), ScanMetadata.Unknown, ProvenanceRecord.Root);
+    }
+
+    [Fact]
+    public async Task Adhesion_is_the_deepest_pull_off_of_the_retract_and_not_of_its_longest_run()
+    {
+        // A phase can come out as several runs, and picking the LONGEST one measures a slice that need not hold
+        // the sample the measure is about. Here the deepest pull-off is -50 in the shorter run and the longest
+        // run only reaches -8: reading 8 back would be a plausible number about the wrong part of the curve.
+        // The real 8x8 fixture cannot catch this — on its own abscissa every deepest pull-off happens to fall
+        // inside the longest run — so the case is built rather than looked for.
+        using var map = MapWhoseDeepestPullOffIsNotInItsLongestRetractRun();
+
+        using var image = await RunAsync(map, VolumeMeasure.Adhesion, CurvePhase.Retract);
+
+        float pixel = image.Data.Memory.Span[0];
+        Assert.True(float.IsFinite(pixel), $"the only point came out as a hole ({pixel}).");
+        Assert.Equal(50.0, pixel, 3);
+    }
+
     private static ParameterSet Params(
         VolumeMeasure measure = VolumeMeasure.MaxForce,
         CurvePhase phase = CurvePhase.Retract,

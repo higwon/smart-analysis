@@ -260,21 +260,20 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         var segmentation = ApproachRetractSegmentation.BySeparationTrend(separation);
         var wanted = phase == CurvePhase.Approach ? SegmentKind.Approach : SegmentKind.Retract;
 
-        CurveSegment? longest = null;
-        foreach (var segment in segmentation.OfKind(wanted))
-        {
-            if (longest is null || segment.Length > longest.Length)
-            {
-                longest = segment;
-            }
-        }
+        // A phase can come out as several runs, and every one of these measures is defined against one sample of
+        // it: adhesion against the deepest pull-off, the other three against the force peak. Taking the LONGEST
+        // run instead measures a slice that need not contain that sample at all — on a real curve the deepest
+        // pull-off has been found in a shorter retract run, and the measure then reports the longest run's own
+        // (undramatic) extremum, which is a plausible number about the wrong place. Pick the run that holds the
+        // sample being measured.
+        var chosen = SegmentHolding(segmentation, wanted, force, deepest: measure == VolumeMeasure.Adhesion);
 
-        if (longest is null)
+        if (chosen is null)
         {
             return (double.NaN, true);   // nothing was measured here, so nothing was measured from a bad level
         }
 
-        int start = longest.Start, length = longest.Length;
+        int start = chosen.Start, length = chosen.Length;
         var measures = ForceDistanceMeasures.Of(
             force.Slice(start, length), separation.Slice(start, length), threshold, baselinePercent);
 
@@ -288,6 +287,37 @@ public sealed class VolumeImageOperation : IAnalysisOperation
         };
 
         return (value, measures.BaselineIsFlat);
+    }
+
+    /// <summary>
+    /// The run of <paramref name="wanted"/> holding that phase's extreme force — its lowest when
+    /// <paramref name="deepest"/>, otherwise its highest. Null when the phase has no run, or none with a finite
+    /// sample, which is the same "nothing to measure" the caller already reports as a hole.
+    /// </summary>
+    private static CurveSegment? SegmentHolding(
+        CurveSegmentation segmentation, SegmentKind wanted, ReadOnlySpan<float> force, bool deepest)
+    {
+        CurveSegment? chosen = null;
+        double extreme = deepest ? double.PositiveInfinity : double.NegativeInfinity;
+
+        foreach (var segment in segmentation.OfKind(wanted))
+        {
+            for (int i = segment.Start; i < segment.Start + segment.Length; i++)
+            {
+                if (!float.IsFinite(force[i]))
+                {
+                    continue;
+                }
+
+                if (deepest ? force[i] < extreme : force[i] > extreme)
+                {
+                    extreme = force[i];
+                    chosen = segment;
+                }
+            }
+        }
+
+        return chosen;
     }
 
     // Only what actually shaped the picture. A step naming a threshold the measure never read would put a false
