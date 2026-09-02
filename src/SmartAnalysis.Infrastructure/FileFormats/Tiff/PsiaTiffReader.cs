@@ -262,14 +262,14 @@ public sealed class PsiaTiffReader : IScanFileReader
             return FileReadResult.Failure(FileReadErrorKind.Corrupt, "No spectroscopy channel is flagged as the X axis.");
         }
 
-        int yIndex = FindAxis(spectroscopy, isXAxis: false);
-        if (yIndex < 0)
+        int flaggedYIndex = FindAxis(spectroscopy, isXAxis: false);
+        if (flaggedYIndex < 0)
         {
             return FileReadResult.Failure(FileReadErrorKind.Corrupt, "No spectroscopy channel is flagged as the Y axis.");
         }
 
         var xLine = spectroscopy.Lines[xIndex];
-        var yLine = spectroscopy.Lines[yIndex];
+        var yLine = spectroscopy.Lines[flaggedYIndex];
 
         var separationUnit = ResolveUnit(xLine.Unit, out bool xKnown);
         var ordinateUnit = ResolveUnit(yLine.Unit, out bool yKnown);
@@ -299,6 +299,15 @@ public sealed class PsiaTiffReader : IScanFileReader
 
             calibration = cal;
         }
+
+        // A file that flags a deflection voltage may still carry a channel the instrument already measured in force
+        // units. Recomputing the force from the probe calibration then throws away the instrument's own number for a
+        // reconstruction of it — and the two are not the same curve: on the 8x8 fixture the recomputed one differs
+        // from the stored Force channel by a per-curve factor of 1.66-1.71 that no single constant undoes. Prefer
+        // what was measured; the flagged pair remains the fallback for a file that stores no force at all.
+        int measuredForceIndex = isDeflection ? FindMeasuredForce(spectroscopy) : -1;
+        int yIndex = measuredForceIndex >= 0 ? measuredForceIndex : flaggedYIndex;
+        var forceLine = spectroscopy.Lines[yIndex];
 
         var dataEntry = ifd.FindEntry((TiffTag)PsiaTiff.TagSpectroscopyData);
         if (dataEntry.Tag == TiffTag.None || dataEntry.ValueCount == 0)
@@ -338,10 +347,10 @@ public sealed class PsiaTiffReader : IScanFileReader
         float[] separationValues = ReadPlanes(
             dataBytes, spectroscopy, xIndex, dataType, bytesPerValue, xLine.DataGain, spectroscopy.Offsets[xIndex]);
         float[] forceValues = ReadPlanes(
-            dataBytes, spectroscopy, yIndex, dataType, bytesPerValue, yLine.DataGain, spectroscopy.Offsets[yIndex]);
+            dataBytes, spectroscopy, yIndex, dataType, bytesPerValue, forceLine.DataGain, spectroscopy.Offsets[yIndex]);
 
-        var forceUnit = ordinateUnit;
-        if (calibration is { } probe)
+        var forceUnit = measuredForceIndex >= 0 ? ResolveUnit(forceLine.Unit, out _) : ordinateUnit;
+        if (measuredForceIndex < 0 && calibration is { } probe)
         {
             // The stored gain and offset already put the ordinate in its own unit, so the volts are scaled to the
             // base volt before the calibration is applied — a channel recorded in mV must not be read as V.
@@ -356,10 +365,10 @@ public sealed class PsiaTiffReader : IScanFileReader
         var separationChannel = new ChannelDescriptor(
             Key(xLine.SourceName, "separation"), ChannelKind.Topography, separationUnit, displayName: xLine.SourceName);
         var forceChannel = new ChannelDescriptor(
-            Key(yLine.SourceName, "force"), ChannelKind.Force, forceUnit, displayName: yLine.SourceName);
+            Key(forceLine.SourceName, "force"), ChannelKind.Force, forceUnit, displayName: forceLine.SourceName);
 
         var metadata = BuildSpectroscopyMetadata(
-            header, spectroscopy, xLine, yLine, dataType, calibration, contentHash);
+            header, spectroscopy, xLine, yLine, forceLine, measuredForceIndex >= 0, dataType, calibration, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
         // The surface the points were placed on, when the file carries one. Most spectroscopy files do:
@@ -372,7 +381,7 @@ public sealed class PsiaTiffReader : IScanFileReader
         // Everything the acquisition measured, not just the two the file flagged as axes. Half of a typical
         // file is other channels, and some of them — a populated Separation, say — are better than the flagged
         // ones for the analysis that follows.
-        var channelSet = ReadChannelSet(dataBytes, spectroscopy, dataType, bytesPerValue, calibration, ordinateUnit, yIndex);
+        var channelSet = ReadChannelSet(dataBytes, spectroscopy, dataType, bytesPerValue, calibration, ordinateUnit, flaggedYIndex);
 
         var separation = ScanBuffer<float>.TakeOwnership(separationValues, count, points);
         ScanBuffer<float>? force = null;
@@ -618,6 +627,31 @@ public sealed class PsiaTiffReader : IScanFileReader
         => unit.Dimension == StandardUnits.Voltage
            && line.SourceName.Contains("Vertical", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Index of a channel the instrument recorded in force units, or -1. A file carrying several prefers the one
+    /// plainly named <c>Force</c>: a lateral or friction channel is also a force and is not the normal load.
+    /// </summary>
+    private int FindMeasuredForce(PsiaSpectroscopyHeader header)
+    {
+        int candidate = -1;
+        for (int i = 0; i < header.SourceCount; i++)
+        {
+            if (ResolveUnit(header.Lines[i].Unit, out bool known).Dimension != StandardUnits.Force || !known)
+            {
+                continue;
+            }
+
+            if (string.Equals(header.Lines[i].SourceName, "Force", StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+
+            candidate = candidate < 0 ? i : candidate;
+        }
+
+        return candidate;
+    }
+
     /// <summary>Index of the first declared source the file flags as the requested axis, or -1.</summary>
     private static int FindAxis(PsiaSpectroscopyHeader header, bool isXAxis)
     {
@@ -678,6 +712,8 @@ public sealed class PsiaTiffReader : IScanFileReader
         PsiaSpectroscopyHeader spectroscopy,
         PsiaSpectroscopyLine xLine,
         PsiaSpectroscopyLine yLine,
+        PsiaSpectroscopyLine forceLine,
+        bool forceWasMeasured,
         int dataType,
         CantileverCalibration? calibration,
         string contentHash)
@@ -703,15 +739,25 @@ public sealed class PsiaTiffReader : IScanFileReader
                 spectroscopy.ForceConstantNewtonPerMetre.ToString(CultureInfo.InvariantCulture);
         }
 
-        // A force this reader COMPUTED must never be indistinguishable from one the instrument stored:
-        // record that it was derived, and the two numbers it was derived with.
+        // Which channel the analysis actually runs on. It is not always the flagged one, so a reader who finds
+        // only ySource would attribute the numbers to the wrong measurement.
+        extended["psia.spect.forceSource"] = $"{forceLine.SourceName} [{forceLine.Unit}]";
+        extended["psia.spect.forceWasMeasured"] = forceWasMeasured ? "true" : "false";
+
+        // The calibration still converts the deflection channel inside the channel set, so its two numbers are
+        // recorded whenever they were used at all.
         if (calibration is { } probe)
         {
-            extended["psia.spect.forceDerivedFrom"] = $"{yLine.SourceName} [{yLine.Unit}]";
             extended["psia.spect.springConstant_N_per_m"] =
                 probe.SpringConstantNewtonPerMetre.ToString(CultureInfo.InvariantCulture);
             extended["psia.spect.sensitivity_V_per_um"] =
                 probe.SensitivityVoltPerMicrometre.ToString(CultureInfo.InvariantCulture);
+
+            // A force this reader COMPUTED must never be indistinguishable from one the instrument stored.
+            if (!forceWasMeasured)
+            {
+                extended["psia.spect.forceDerivedFrom"] = $"{yLine.SourceName} [{yLine.Unit}]";
+            }
         }
 
         return new ScanMetadata(model, DateTimeOffset.MinValue, extended);

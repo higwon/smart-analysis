@@ -142,7 +142,10 @@ public sealed class RealForceVolumeMapTests(ITestOutputHelper output)
             Assert.True(
                 float.IsFinite(pixel),
                 $"point {p + 1} came out as a hole at column {column + 1}, row {row + 1}.");
-            Assert.Equal(Measured(map, p), pixel, 3);
+            // The pixel is this double narrowed to float32, so the comparison allows float32's own resolution and
+            // nothing more. A fixed decimal count would test where the narrowing rounds, not what the chain built.
+            double expected = Measured(map, p);
+            Assert.Equal(expected, pixel, Math.Max(1e-6, Math.Abs(expected) * 1e-6));
             checkedPoints++;
         }
 
