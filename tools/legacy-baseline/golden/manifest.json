@@ -1,27 +1,276 @@
 {
   "Task": "MV00",
-  "GeneratedAtUtc": "2026-08-25T01:44:16.4456165\u002B00:00",
+  "GeneratedAtUtc": "2026-09-02T04:23:45.8569523\u002B00:00",
   "Legacy": {
     "Commit": "1451945acdbcd0949ef0a62d4e070fd9eb4e7107",
     "Branch": "develop",
     "Dirty": false,
-    "SourceSet": "FW.Analysis.Calculate",
+    "SourceSet": "FW.Analysis.Calculate \u002B FW.Data.Quantity (Model/Value/Interface)",
     "Sources": [
       {
+        "Set": "FW.Analysis.Calculate",
         "Name": "SummaryStatisticsCalculator.cs",
         "Sha256": "093CF2690109D55994980B50035D8D081043B4254273FC3BB774EDAA048944F8"
       },
       {
+        "Set": "FW.Analysis.Calculate",
         "Name": "PolynomialLeastSquaresRegression.cs",
         "Sha256": "BBF8730CD9FAC3D2683405AB0B549C925ABA6B318978576F0CDA7C770D8758F4"
       },
       {
+        "Set": "FW.Analysis.Calculate",
         "Name": "MultiplePolynomialRegression.cs",
         "Sha256": "876C358F7F6F11467C9592DA48506D0014CAD20F762A2328EAB94A4BC2FE9E0A"
       },
       {
+        "Set": "FW.Analysis.Calculate",
         "Name": "BaselineCorrction.cs",
         "Sha256": "8E2AF5AF909B49379261B296D14E72924BFBF14C2A6F597551DDCA635E0487B9"
+      },
+      {
+        "Set": "FW.Analysis.Calculate",
+        "Name": "RoughnessCalculator.cs",
+        "Sha256": "9536AA20E9508122FF4E738F1729C9630438FA20BACC91B17978DCF2862AB903"
+      },
+      {
+        "Set": "FW.Analysis.Calculate",
+        "Name": "LinePowerSpectrumCalculator.cs",
+        "Sha256": "BF946749C9D998565155AB69888EA5D2ACBC3536201AA82B6567AB1B65886F81"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "IAffineTransform1D.cs",
+        "Sha256": "71E27E32E77E131409CD52C7ADAA7AC801B013582065F44BBB076E5A528268D5"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "AffineTransform1D.cs",
+        "Sha256": "B4726D0D44FEE865C2943677CCB0A1B4DE8D1223275332A255D3E5C34E67241C"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Angle.cs",
+        "Sha256": "81B32BA3CA573096022026AFA06D5CD53DA518CDE05A0E90E5E0C13286823B37"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "BaseDimension.cs",
+        "Sha256": "8B9C784A1FAC168149B07921465673CDCE2CD44CBB822A865132695D74C16F5B"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "BasicAffineTransform1D.cs",
+        "Sha256": "D48E6CC214D4BAF6B4501DBF73C4913165A0EC4596E8686F26DD32DF7C66FCDB"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Capacitance.cs",
+        "Sha256": "4123D899670C0C7376DC379514AD0D21E2D2CBE5F1CE5EBAAA22FB188ED2942E"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Count.cs",
+        "Sha256": "73F9274C3AC50176A23E005F130F04034BFC273C3217F58551B9AACEA26A9C9B"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Current.cs",
+        "Sha256": "6CB683AE0644CAF4C2DA1F5DAA52D0CA24B4BE7A70E4B4C4028D7EA20C02ACEF"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Decibel.cs",
+        "Sha256": "9D26E0F2912A6B76961A86EE405A9BD493C5F6DDE97A1D5ACE50798074BF6885"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "DerivedPhysicalDimension.cs",
+        "Sha256": "73B153E18608CBEB00CC399507074C6ADF9C1C8B41A2799B75A31030CB82E7DA"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "DerivedUnit.cs",
+        "Sha256": "E30AFF46CDBAB55A738CFF872F56E4075EA608B47036E54CE78C35F7F62BE1EB"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "DimensionUnit.cs",
+        "Sha256": "872C8DC8FAB568751F013033A1EE1D0C4CF5CD7A19ADE59077EE7466A70DD6F5"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "EnergyElectronVolt.cs",
+        "Sha256": "C890B0FF0DC0773194459C3A1D4A968C51CBD9A66383C3F86AC2603481141C88"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "EnergyJoule.cs",
+        "Sha256": "61E5B8AF17E119F488E49C7EC9C409FD253D246F9F3056D8FABB9C8599C62704"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Force.cs",
+        "Sha256": "9CEC5C4B9BDBB33F437DC68F9AD3D4CEBB267DD2E514F7B6EF0515B60DF05F16"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Frequency.cs",
+        "Sha256": "2F39435699E86BA59B9F4958D1EF353EE0BF08F0B421FCDDC2FBEEAD19CD0723"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "HomogeneousDerivedDimension.cs",
+        "Sha256": "36042D1449AA7B7FAE8CA4C37E74912B2623B9715F746762E957DBDDA326B42F"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Length.cs",
+        "Sha256": "D905F005BE3CEE74EB6088CD473D76B0B839E3AA4202CCACC8439E0763DE521D"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Mass.cs",
+        "Sha256": "071A1C4684FD2A8EDEDEC7B36B6C76D96D7E96596416C9B1BF605D18CC54B2C1"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "NewtonPerMeter.cs",
+        "Sha256": "EECED9C533357AE408438B170385FEB7FA3959CE66925CCF6E5896ABCE8B9C52"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Percent.cs",
+        "Sha256": "4594A387A68B571C48D039841922F33D9E59761A1366CBAFF80AF71212F3F231"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PhysicalDimension.cs",
+        "Sha256": "ABF8C879ADBE3E77AC3FACA76B614CFCACDCF4946F8984D40991015DAACBB91D"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PhysicalDimensionBuffer.cs",
+        "Sha256": "F5D5A1BEFB444A62FD4FDC680A85EE393EC2F9B8E61894E3927C2D4FE1B62FDE"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Pixel.cs",
+        "Sha256": "F8A7A8CDB58DC0DBB462FC94214B315E7A0338B3E8A67FEA429FAB8B52F91A71"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PrefixMultiplier.cs",
+        "Sha256": "8B0A4E582D14141BE59DA03B3EE9099C9430E0507C383C8C39AF6BDC13C5A2CA"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Pressure.cs",
+        "Sha256": "90F92B67F7B0EDC74C0792B5927B4526A6070A5184809A459C161E2A55624803"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PureNumber.cs",
+        "Sha256": "28DA307603301AAC072B13AE9BF89E3A873D4064753F6256469BB3F1B7D9144A"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Resistance.cs",
+        "Sha256": "36C268F0CE543667FAD1D00B4730A8CE0C85831B28AEEB3D5A4BAE9BDEF5F024"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Siemens.cs",
+        "Sha256": "906300BB0910A86E42D3DD89B8F736CFCDC73D5D4DC55BDE4FBED82D81AC9F04"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Slope.cs",
+        "Sha256": "EB3C7161E0E9B57FBA3A6D61191F7A7EE635B1FA03C2B60E11977C214AC7E706"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Temperature.cs",
+        "Sha256": "7C8DF207F24BAE4071F4BE1712709A19DCFEA632BF30CD009815652DBE52D5F0"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Time.cs",
+        "Sha256": "8D20EDC785073F4D19D64343C60E74AA5C6ACF452186FF86CF4A965E295CC2C7"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Unit.cs",
+        "Sha256": "4AF770BCEA4BAD174FD6DFA5F5D9B3403D9F8B948854711C6D49D56E89F597A1"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "UnitConverter.cs",
+        "Sha256": "A2EE1E766B9E4D421FCB68995FAD64C031DECC16CE7D2237AFDC3CCB9E5596D6"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "UnitHelper.cs",
+        "Sha256": "8CFE861ED6775C7AB8A9494935BC2B3B563436A745DC76335E2E2F15C5899D10"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "UnitInfo.cs",
+        "Sha256": "E9F194A0ECFCE1C5CA62496B8B9EC759D960FD23C84BBEE195C76C67121D332D"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "UnknownQuantity.cs",
+        "Sha256": "1CBC3E3F661D8CE9DD1C6BA28468695BFD2A39E53CAE33321A973A1805AAF3F7"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "VoltMeter.cs",
+        "Sha256": "79B79F65D54603AF74705FB065FBD81D82D7700B62F7AE670DC36622A4EBC475"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "VoltPerMeter.cs",
+        "Sha256": "BF47397933436B1F9B3C5DAB38B89A8E256F131D1A70F18FE45595E0683B40F5"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "VoltSquarePerFrequency.cs",
+        "Sha256": "E307840C99F8F0DCE7753B43CFFFE24D504064278B4A6B5C73E285243CA113EB"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "Voltage.cs",
+        "Sha256": "D4342A6AFDB770CB0F6CBF9D731FB80F0816F007A2C612072C8EF3788A608C3E"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "WaveNumber.cs",
+        "Sha256": "BA23BC76AAA9A645392C9203EE141C52BC0182A897C03F6E8CA3B1556DE974D8"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PhysicalValue.cs",
+        "Sha256": "2A03ED84EC9BA8778F677489C0D9B8E36FB0E348145824895DB45B46FCAD35BE"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PhysicalValueCollection.cs",
+        "Sha256": "CE113175ACA3DAA75C125B5BF5C6FE34974DC8D3EFC0F8D06D79B608C9B9C343"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PhysicalValueRange.cs",
+        "Sha256": "A055C0B910285C7D62D20E1AA1253565539CA00F1443E6FB3BB668B25192AB6F"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PhysicalVector.cs",
+        "Sha256": "63B4E8BE08924CC48769F3AC0B2E9EC2AACF40AA1ACCC22B9B1B304F18709ECA"
+      },
+      {
+        "Set": "FW.Data.Quantity",
+        "Name": "PhysicalVectorCollection.cs",
+        "Sha256": "B5C16CF510497B2DF8D7C21C649E1CC725EA75197668F340D9757B2F77F4FF93"
       }
     ]
   },

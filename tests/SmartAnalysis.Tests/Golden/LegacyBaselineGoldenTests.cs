@@ -32,6 +32,14 @@ public sealed class LegacyBaselineGoldenTests
         return Path.Combine(dir!.FullName, "tools", "legacy-baseline", "golden");
     }
 
+    /// <summary>The recorded file names of one source set, sorted — the manifest's order is not a contract.</summary>
+    private static string[] Named(IEnumerable<JsonElement> sources, string set)
+        => sources
+            .Where(s => s.GetProperty("Set").GetString() == set)
+            .Select(s => s.GetProperty("Name").GetString() ?? string.Empty)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
     private static JsonDocument Load(string name)
     {
         var path = Path.Combine(GoldenDir(), name);
@@ -55,16 +63,37 @@ public sealed class LegacyBaselineGoldenTests
 
         // Provenance guarantees: a baseline must come from a clean tree and name its source set + hashes.
         Assert.False(legacy.GetProperty("Dirty").GetBoolean());
-        Assert.Equal("FW.Analysis.Calculate", legacy.GetProperty("SourceSet").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(legacy.GetProperty("SourceSet").GetString()));
         var sources = legacy.GetProperty("Sources").EnumerateArray().ToList();
 
         // EVERY legacy file the harness compiles must be hashed here: a golden whose producing source is not
         // recorded cannot be reproduced or audited, which is the whole point of MV00. (BaselineCorrction was once
         // compiled without being listed, so the ALS golden had no source provenance.)
-        var names = sources.Select(s => s.GetProperty("Name").GetString() ?? string.Empty).ToArray();
+        //
+        // The calculators are pinned by name — they are what produces the numbers, and a new one appearing or an
+        // old one vanishing should have to be said out loud here. Their support types are pinned as a set instead:
+        // FW.Data.Quantity's Model/Value/Interface folders come in whole, because the quantity types
+        // cross-reference each other freely and a hand-listed closure would go stale the first time legacy adds a
+        // unit. What is asserted of them is that they are present, hashed, and include the ones the calculators
+        // actually name.
+        var calculators = Named(sources, "FW.Analysis.Calculate");
         Assert.Equal(
-            ["BaselineCorrction.cs", "MultiplePolynomialRegression.cs", "PolynomialLeastSquaresRegression.cs", "SummaryStatisticsCalculator.cs"],
-            names.Order().ToArray());
+            [
+                "BaselineCorrction.cs", "LinePowerSpectrumCalculator.cs", "MultiplePolynomialRegression.cs",
+                "PolynomialLeastSquaresRegression.cs", "RoughnessCalculator.cs", "SummaryStatisticsCalculator.cs",
+            ],
+            calculators);
+
+        var quantity = Named(sources, "FW.Data.Quantity");
+        Assert.NotEmpty(quantity);
+        foreach (string required in new[] { "PhysicalValue.cs", "PhysicalValueCollection.cs", "Length.cs", "Pixel.cs", "Unit.cs" })
+        {
+            Assert.Contains(required, quantity);
+        }
+
+        // The one file in those folders that reaches outside them — it needs FW.Data.Common and the WPF-dependent
+        // RawToReal* types — is deliberately not compiled, so it must not be recorded as if it were.
+        Assert.DoesNotContain("IRawToRealManager.cs", quantity);
         foreach (var s in sources)
         {
             Assert.False(string.IsNullOrWhiteSpace(s.GetProperty("Name").GetString()));

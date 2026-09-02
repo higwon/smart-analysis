@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -33,7 +33,16 @@ string[] compiledSources =
     "PolynomialLeastSquaresRegression.cs",
     "MultiplePolynomialRegression.cs",
     "BaselineCorrction.cs",
+    "RoughnessCalculator.cs",
+    "LinePowerSpectrumCalculator.cs",
 ];
+
+// Those last two speak in FW.Data.Quantity types, so its Model/Value/Interface folders are compiled with
+// them and belong under the same dirty-tree guard — a golden generated over edited quantity source would
+// record a commit that does not reproduce it. Null when the harness was built without them.
+var legacyQuantityDir = Assembly.GetExecutingAssembly()
+    .GetCustomAttributes<AssemblyMetadataAttribute>()
+    .FirstOrDefault(a => a.Key == "LegacyQuantityDir")?.Value;
 
 // Repo root of the SAME directory the source was compiled from — provenance and source are one repo.
 string repoRoot = Git(legacyCalcDir, "rev-parse --show-toplevel");
@@ -44,7 +53,18 @@ if (repoRoot is "unknown" or "")
 }
 
 // Refuse a dirty tree for the exact files we compiled — a baseline must reproduce from its commit.
-var compiledPaths = compiledSources.Select(s => Path.Combine(legacyCalcDir, s)).ToArray();
+var compiledPaths = compiledSources.Select(s => Path.Combine(legacyCalcDir, s)).ToList();
+if (!string.IsNullOrWhiteSpace(legacyQuantityDir))
+{
+    // Enumerated, not the folders themselves: these paths are also what the manifest hashes, and only the
+    // files the csproj actually compiles belong in either list — IRawToRealManager is excluded there too.
+    compiledPaths.AddRange(new[] { "Model", "Value", "Interface" }
+        .Select(f => Path.Combine(legacyQuantityDir, f))
+        .Where(Directory.Exists)
+        .SelectMany(d => Directory.EnumerateFiles(d, "*.cs"))
+        .Where(p => !string.Equals(Path.GetFileName(p), "IRawToRealManager.cs", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(p => p, StringComparer.Ordinal));
+}
 string dirtyProbe = Git(repoRoot, $"status --porcelain -- {string.Join(' ', compiledPaths.Select(p => $"\"{p}\""))}");
 if (!string.IsNullOrWhiteSpace(dirtyProbe))
 {
@@ -149,7 +169,10 @@ Als("single-iteration", "edge", alsSignal, 1e5, 0.01, 1);
 
 // ---------- Manifest (provenance: same repo as the compiled source; clean tree; source hashes) ----------
 var sources = compiledPaths
-    .Select(p => new SourceFile(Path.GetFileName(p), Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p)))))
+    .Select(p => new SourceFile(
+        p.StartsWith(legacyCalcDir, StringComparison.OrdinalIgnoreCase) ? "FW.Analysis.Calculate" : "FW.Data.Quantity",
+        Path.GetFileName(p),
+        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p)))))
     .ToArray();
 
 var manifest = new GoldenManifest(
@@ -159,7 +182,7 @@ var manifest = new GoldenManifest(
         Commit: Git(repoRoot, "rev-parse HEAD"),
         Branch: Git(repoRoot, "rev-parse --abbrev-ref HEAD"),
         Dirty: false,
-        SourceSet: "FW.Analysis.Calculate",
+        SourceSet: "FW.Analysis.Calculate + FW.Data.Quantity (Model/Value/Interface)",
         Sources: sources),
     MathNet: "5.0.0",
     Notes: "Legacy numeric primitives from FW.Analysis.Calculate driven on synthetic inputs. "
@@ -226,7 +249,7 @@ static string Git(string dir, string cmdArgs)
 
 sealed record GoldenManifest(string Task, string GeneratedAtUtc, LegacyInfo Legacy, string MathNet, string Notes);
 sealed record LegacyInfo(string Commit, string Branch, bool Dirty, string SourceSet, SourceFile[] Sources);
-sealed record SourceFile(string Name, string Sha256);
+sealed record SourceFile(string Set, string Name, string Sha256);
 
 sealed record StatCase(string Id, string Class, double[] Input, string InputSha256, string Unit, double Tolerance, StatOutputs Outputs);
 sealed record StatOutputs(
