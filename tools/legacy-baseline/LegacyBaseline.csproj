@@ -17,6 +17,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <LegacyCalcDir Condition="'$(LegacyCalcDir)' == ''">$(LEGACY_CALC_DIR)</LegacyCalcDir>
+
+    <!-- Two calculators (A03 roughness, A08 line power spectrum) speak in FW.Data.Quantity types, so the
+         harness needs that project's Model/Value/Interface folders as well. Those three are plain BCL code —
+         the WPF and System.Drawing dependencies its csproj declares are reached only from the RawToReal*
+         files at the project root, which are not compiled here and which nothing below needs. Derived from
+         LegacyCalcDir rather than supplied separately: the manifest's git provenance comes from that same
+         directory, and two paths could name two different checkouts. -->
+    <LegacyQuantityDir Condition="'$(LegacyQuantityDir)' == '' and '$(LegacyCalcDir)' != ''">$([System.IO.Path]::GetFullPath('$(LegacyCalcDir)\..\..\Data\FW.Data.Quantity'))</LegacyQuantityDir>
   </PropertyGroup>
 
   <Target Name="_RequireLegacyCalcDir" BeforeTargets="CoreCompile" Condition="'$(LegacyCalcDir)' == ''">
@@ -33,6 +41,12 @@
     <AssemblyMetadata Include="LegacyCalcDir" Value="$(LegacyCalcDir)" />
   </ItemGroup>
 
+  <!-- The quantity folders are compiled too, so the dirty-tree guard has to see them: a golden generated
+       over edited quantity source would record a commit that does not reproduce it. -->
+  <ItemGroup Condition="'$(LegacyQuantityDir)' != ''">
+    <AssemblyMetadata Include="LegacyQuantityDir" Value="$(LegacyQuantityDir)" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(LegacyCalcDir)' != ''">
     <!-- Legacy numeric primitives, compiled by path (NOT copied into this repo). -->
     <Compile Include="$(LegacyCalcDir)\SummaryStatisticsCalculator.cs">
@@ -47,6 +61,30 @@
     <Compile Include="$(LegacyCalcDir)\MultiplePolynomialRegression.cs">
       <Link>Legacy\MultiplePolynomialRegression.cs</Link>
     </Compile>
+    <Compile Include="$(LegacyCalcDir)\RoughnessCalculator.cs">
+      <Link>Legacy\RoughnessCalculator.cs</Link>
+    </Compile>
+    <Compile Include="$(LegacyCalcDir)\LinePowerSpectrumCalculator.cs">
+      <Link>Legacy\LinePowerSpectrumCalculator.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(LegacyQuantityDir)' != ''">
+    <!-- Whole folders rather than a hand-listed closure: the quantity types cross-reference each other
+         freely, and a list would go stale the first time legacy adds a unit. -->
+    <Compile Include="$(LegacyQuantityDir)\Model\*.cs">
+      <Link>Legacy\Quantity\Model\%(Filename)%(Extension)</Link>
+    </Compile>
+    <Compile Include="$(LegacyQuantityDir)\Value\*.cs">
+      <Link>Legacy\Quantity\Value\%(Filename)%(Extension)</Link>
+    </Compile>
+    <Compile Include="$(LegacyQuantityDir)\Interface\*.cs">
+      <Link>Legacy\Quantity\Interface\%(Filename)%(Extension)</Link>
+    </Compile>
+    <!-- The one file in those folders that reaches outside them: it needs FW.Data.Common's EAxisName and the
+         RawToReal* types at the project root, which is the WPF-dependent corner. Nothing the calculators use
+         refers to it, so it is dropped rather than dragging that corner in behind it. -->
+    <Compile Remove="$(LegacyQuantityDir)\Interface\IRawToRealManager.cs" />
   </ItemGroup>
 
 </Project>
