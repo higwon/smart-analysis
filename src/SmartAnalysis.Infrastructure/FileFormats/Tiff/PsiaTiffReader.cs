@@ -309,6 +309,19 @@ public sealed class PsiaTiffReader : IScanFileReader
         int yIndex = measuredForceIndex >= 0 ? measuredForceIndex : flaggedYIndex;
         var forceLine = spectroscopy.Lines[yIndex];
 
+        // The same substitution on the abscissa, and for the same reason. A file commonly flags the raw piezo
+        // travel (Z Height) while also carrying the tip-sample Separation the instrument measured. Contact
+        // mechanics is defined against separation: the two differ by the cantilever's own deflection, which is
+        // exactly the part that changes while the tip is in contact — on the 8x8 fixture that is up to 4.5 nm,
+        // enough to move deformation by a factor of four. The flagged channel remains the fallback.
+        int measuredSeparationIndex = FindMeasuredSeparation(spectroscopy, xIndex);
+        int abscissaIndex = measuredSeparationIndex >= 0 ? measuredSeparationIndex : xIndex;
+        var separationLine = spectroscopy.Lines[abscissaIndex];
+        if (measuredSeparationIndex >= 0)
+        {
+            separationUnit = ResolveUnit(separationLine.Unit, out _);
+        }
+
         var dataEntry = ifd.FindEntry((TiffTag)PsiaTiff.TagSpectroscopyData);
         if (dataEntry.Tag == TiffTag.None || dataEntry.ValueCount == 0)
         {
@@ -345,7 +358,7 @@ public sealed class PsiaTiffReader : IScanFileReader
         int count = spectroscopy.DataPoints;
         int points = spectroscopy.SpectroscopyPoints;
         float[] separationValues = ReadPlanes(
-            dataBytes, spectroscopy, xIndex, dataType, bytesPerValue, xLine.DataGain, spectroscopy.Offsets[xIndex]);
+            dataBytes, spectroscopy, abscissaIndex, dataType, bytesPerValue, separationLine.DataGain, spectroscopy.Offsets[abscissaIndex]);
         float[] forceValues = ReadPlanes(
             dataBytes, spectroscopy, yIndex, dataType, bytesPerValue, forceLine.DataGain, spectroscopy.Offsets[yIndex]);
 
@@ -363,12 +376,13 @@ public sealed class PsiaTiffReader : IScanFileReader
         }
 
         var separationChannel = new ChannelDescriptor(
-            Key(xLine.SourceName, "separation"), ChannelKind.Topography, separationUnit, displayName: xLine.SourceName);
+            Key(separationLine.SourceName, "separation"), ChannelKind.Topography, separationUnit, displayName: separationLine.SourceName);
         var forceChannel = new ChannelDescriptor(
             Key(forceLine.SourceName, "force"), ChannelKind.Force, forceUnit, displayName: forceLine.SourceName);
 
         var metadata = BuildSpectroscopyMetadata(
-            header, spectroscopy, xLine, yLine, forceLine, measuredForceIndex >= 0, dataType, calibration, contentHash);
+            header, spectroscopy, xLine, yLine, separationLine, measuredSeparationIndex >= 0,
+            forceLine, measuredForceIndex >= 0, dataType, calibration, contentHash);
         var source = new DataSource("psia-tiff", originalFilePath: path, contentHash: contentHash);
 
         // The surface the points were placed on, when the file carries one. Most spectroscopy files do:
@@ -652,6 +666,29 @@ public sealed class PsiaTiffReader : IScanFileReader
         return candidate;
     }
 
+    /// <summary>
+    /// Index of a channel holding the measured tip-sample separation, or -1 when the file has none or already
+    /// flags it. Matched by name and checked to be a length: a channel called <c>Separation</c> carrying anything
+    /// else is not the quantity this substitutes for.
+    /// </summary>
+    private int FindMeasuredSeparation(PsiaSpectroscopyHeader header, int flaggedIndex)
+    {
+        for (int i = 0; i < header.SourceCount; i++)
+        {
+            if (i == flaggedIndex || !string.Equals(header.Lines[i].SourceName, "Separation", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (ResolveUnit(header.Lines[i].Unit, out bool known).Dimension == StandardUnits.Length && known)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>Index of the first declared source the file flags as the requested axis, or -1.</summary>
     private static int FindAxis(PsiaSpectroscopyHeader header, bool isXAxis)
     {
@@ -712,6 +749,8 @@ public sealed class PsiaTiffReader : IScanFileReader
         PsiaSpectroscopyHeader spectroscopy,
         PsiaSpectroscopyLine xLine,
         PsiaSpectroscopyLine yLine,
+        PsiaSpectroscopyLine separationLine,
+        bool separationWasMeasured,
         PsiaSpectroscopyLine forceLine,
         bool forceWasMeasured,
         int dataType,
@@ -743,6 +782,8 @@ public sealed class PsiaTiffReader : IScanFileReader
         // only ySource would attribute the numbers to the wrong measurement.
         extended["psia.spect.forceSource"] = $"{forceLine.SourceName} [{forceLine.Unit}]";
         extended["psia.spect.forceWasMeasured"] = forceWasMeasured ? "true" : "false";
+        extended["psia.spect.separationSource"] = $"{separationLine.SourceName} [{separationLine.Unit}]";
+        extended["psia.spect.separationWasMeasured"] = separationWasMeasured ? "true" : "false";
 
         // The calibration still converts the deflection channel inside the channel set, so its two numbers are
         // recorded whenever they were used at all.
