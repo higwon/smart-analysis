@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FW.Analysis.Calculate;
+using FW.Data.Quantity.Model;
+using FW.Data.Quantity.Value;
 
 // TASK-MV00 — freeze the legacy numeric ground truth for the MVP operations.
 // Usage: dotnet run --project tools/legacy-baseline -- <outputDir>
@@ -167,6 +169,54 @@ Als("flat", "edge", Enumerable.Repeat(3.0, 20).ToArray(), 1e5, 0.01, 10);
 Als("too-short", "edge", [1.0, 2.0], 1e5, 0.01, 10);                   // n < 3 → returned unchanged
 Als("single-iteration", "edge", alsSignal, 1e5, 0.01, 1);
 
+// ---------- Areal roughness (enables A03) ----------
+// Legacy assumes micrometres and converts anything else, so the inputs are stated in um and the golden says so.
+// The whole region is measured (ComputeRegion over the full extent) unless the case names a sub-region: the
+// region arithmetic is part of what parity has to agree on, not a detail of the caller.
+var roughCases = new List<RoughCase>();
+void Rough(string id, string cls, double[] z, int width, int height, double xPerWidth, double yPerHeight,
+    int? h0 = null, int? v0 = null, int? h1 = null, int? v1 = null)
+{
+    var calc = new RoughnessCalculator();
+    calc.SetData(new PhysicalValueCollection(z, Length.Unit.MICRO_METER), width, height, xPerWidth, yPerHeight);
+
+    int hs = h0 ?? 0, vs = v0 ?? 0, he = h1 ?? width - 1, ve = v1 ?? height - 1;
+    calc.ComputeRegion(hs, vs, he, ve);
+
+    roughCases.Add(new RoughCase(
+        id, cls, z, width, height, Sha256(z), xPerWidth, yPerHeight,
+        new Region(hs, vs, he, ve), "um", Tolerance,
+        new RoughOutputs(
+            calc.GetSq(), calc.GetSa(), calc.GetSp(), calc.GetSv(), calc.GetSz(),
+            calc.GetSsk(), calc.GetSku(), calc.GetSdq(), calc.GetSdr())));
+}
+
+// A tilt has a known gradient, so Sdq/Sdr are not merely whatever the code returns.
+double[] Grid(int w, int h, Func<int, int, double> f)
+{
+    var z = new double[w * h];
+    for (int r = 0; r < h; r++)
+    {
+        for (int c = 0; c < w; c++)
+        {
+            z[(r * w) + c] = f(c, r);
+        }
+    }
+
+    return z;
+}
+
+Rough("tilt-8x8", "normal", Grid(8, 8, (c, r) => (0.01 * c) + (0.02 * r)), 8, 8, 0.1, 0.1);
+Rough("bumps-16x16", "normal",
+    Grid(16, 16, (c, r) => (0.05 * Math.Sin(c * Math.PI / 4.0)) + (0.03 * Math.Cos(r * Math.PI / 3.0)) + (0.002 * c * r)),
+    16, 16, 0.05, 0.05);
+// The same data measured over part of itself: region handling is where a reimplementation drifts first.
+Rough("bumps-16x16-region", "normal",
+    Grid(16, 16, (c, r) => (0.05 * Math.Sin(c * Math.PI / 4.0)) + (0.03 * Math.Cos(r * Math.PI / 3.0)) + (0.002 * c * r)),
+    16, 16, 0.05, 0.05, 4, 4, 11, 11);
+Rough("constant-4x4", "edge", Grid(4, 4, (_, _) => 2.5), 4, 4, 0.25, 0.25);
+Rough("with-nan-4x4", "edge", Grid(4, 4, (c, r) => c == 1 && r == 1 ? double.NaN : (0.1 * c) - (0.05 * r)), 4, 4, 0.25, 0.25);
+
 // ---------- Manifest (provenance: same repo as the compiled source; clean tree; source hashes) ----------
 var sources = compiledPaths
     .Select(p => new SourceFile(
@@ -194,10 +244,11 @@ Write("summary-statistics.json", statCases);
 Write("polynomial-fit-1d.json", polyCases);
 Write("polynomial-fit-2d.json", multiCases);
 Write("als-baseline.json", alsCases);
+Write("roughness.json", roughCases);
 
 Console.WriteLine($"Wrote golden data to {Path.GetFullPath(outputDir)}");
 Console.WriteLine($"  legacy: {manifest.Legacy.Branch} @ {manifest.Legacy.Commit} (clean)");
-Console.WriteLine($"  stats={statCases.Count} poly1d={polyCases.Count} poly2d={multiCases.Count}");
+Console.WriteLine($"  stats={statCases.Count} poly1d={polyCases.Count} poly2d={multiCases.Count} roughness={roughCases.Count}");
 return 0;
 
 void Write(string name, object value) => File.WriteAllText(Path.Combine(outputDir, name), JsonSerializer.Serialize(value, json));
@@ -250,6 +301,13 @@ static string Git(string dir, string cmdArgs)
 sealed record GoldenManifest(string Task, string GeneratedAtUtc, LegacyInfo Legacy, string MathNet, string Notes);
 sealed record LegacyInfo(string Commit, string Branch, bool Dirty, string SourceSet, SourceFile[] Sources);
 sealed record SourceFile(string Set, string Name, string Sha256);
+
+sealed record RoughCase(
+    string Id, string Class, double[] Input, int Width, int Height, string InputSha256,
+    double XPerWidth, double YPerHeight, Region Region, string Unit, double Tolerance, RoughOutputs Outputs);
+sealed record Region(int HStart, int VStart, int HEnd, int VEnd);
+sealed record RoughOutputs(
+    double Sq, double Sa, double Sp, double Sv, double Sz, double Ssk, double Sku, double Sdq, double SdrPercent);
 
 sealed record StatCase(string Id, string Class, double[] Input, string InputSha256, string Unit, double Tolerance, StatOutputs Outputs);
 sealed record StatOutputs(
